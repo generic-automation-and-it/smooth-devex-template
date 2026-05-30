@@ -2,8 +2,6 @@
 
 The pipeline is a single PR gate that builds and tests every change before it can merge to `main`.
 
-> _Template note: this describes the intended pipeline. The `.github/workflows/pr-gate.yml` and `.github/actions/aspire-test-with-coverage` files are created when the template is instantiated into a real project._
-
 ## PR Gate
 
 - **Workflow:** `.github/workflows/pr-gate.yml`

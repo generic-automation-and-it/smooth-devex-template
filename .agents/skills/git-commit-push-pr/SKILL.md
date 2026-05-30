@@ -30,7 +30,8 @@ PRs are created as **draft by default**. The state is controlled by two switches
 
 Invoke the **git-commit-push** skill:
 - If commit message provided, pass it to git-commit-push
-- This handles staging, committing with conventional format, and pushing to remote
+- If `--issue <number>` was passed, forward it to git-commit-push so the branch is renamed before the push
+- This handles staging, committing with conventional format, branch renaming (when `--issue` is passed), and pushing to remote
 - Respects logical units of work
 - If there are no changes to commit or push, continue gracefully (not an error)
 
@@ -63,7 +64,7 @@ This title becomes the squash commit message on `main`, so it must be descriptiv
 
 ### Step 5: Fill Template Sections
 
-- **Description**: Replace placeholder with bullet points of actual changes made
+- **Description**: Replace placeholder with bullet points of actual changes made. If `--issue <number>` was passed, append `Closes #<number>` as the last bullet point in the Description section.
 - **Type of Change**: Check the appropriate checkbox(es)
 - **Testing**: Check applicable test levels and describe test details
 - **Checklist**: Complete all items appropriately
@@ -117,6 +118,9 @@ If a PR already exists for the current branch (detected in Step 2):
 - Optional: pre-defined commit message (if not provided, will analyze changes and generate appropriate conventional commit message)
 - `--draft` — create the PR as a draft (this is the **default** behavior)
 - `--ready` — create the PR ready for review (or mark an existing draft PR ready). Mutually exclusive with `--draft`
+- `--issue <number>` — two effects:
+  1. Renames the local branch to `<type>/<number>-short-description` before pushing (delegated to **git-commit-push**)
+  2. Appends `Closes #<number>` as the last bullet in the PR description's Description section so GitHub auto-closes the issue on merge
 
 ## Usage Examples
 
@@ -125,6 +129,8 @@ If a PR already exists for the current branch (detected in Step 2):
 /git-commit-push-pr --ready                          # commit, push, open a READY PR
 /git-commit-push-pr feat: add user authentication    # draft PR with a pre-defined commit message
 /git-commit-push-pr --ready feat: add auth system    # ready PR with a pre-defined commit message
+/git-commit-push-pr --issue 42                       # draft PR, renames branch to feat/42-*, closes #42 on merge
+/git-commit-push-pr --ready --issue 42               # ready PR, renames branch to feat/42-*, closes #42 on merge
 ```
 
 ## GitHub CLI Reference
