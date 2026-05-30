@@ -55,6 +55,7 @@ bld/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
+.idea/
 # Uncomment if you have tasks that create the project's static files in wwwroot
 #wwwroot/
 
@@ -401,6 +402,9 @@ healthchecksdb
 # Backup folder for Package Reference Convert tool in Visual Studio 2017
 MigrationBackup/
 
+# Local AI context / work tasks (not tracked in source control)
+.context/
+
 # Ionide (cross platform F# VS Code tools) working folder
 **/.ionide/
 
@@ -427,3 +431,7 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# macOS Finder metadata
+.DS_Store
+**/.DS_Store
