@@ -1,6 +1,6 @@
 ---
 name: manage-rule-system
-description: Convention for creating, updating, or modifying rule files in .agents/rules/ and .agents/rules-scoped/. Use when adding, editing, or restructuring rule files to ensure compatibility across Claude Code, GitHub Copilot, Cursor, and OpenAI Codex.
+description: Convention for creating, updating, or modifying rule files in .agents/rules/. Use when adding, editing, or restructuring rule files to ensure compatibility across Claude Code, GitHub Copilot, Cursor, and OpenAI Codex.
 allowed-tools:
   - Read
   - Edit
@@ -10,16 +10,18 @@ allowed-tools:
 
 # Manage Rule System — Skill
 
-Triggered automatically by `.agents/hooks/manage-rule-system-context.sh` (UserPromptSubmit) when the user mentions creating, updating, modifying, adding, or editing a rule. Also triggers when an agent Reads/Edits/Writes a file under `.agents/rules/` or `.agents/rules-scoped/` via the `load-agents-context` PostToolUse hook.
+Triggered automatically by `.agents/hooks/manage-rule-system-context.sh` (UserPromptSubmit) when the user mentions creating, updating, modifying, adding, or editing a rule. Also triggers when an agent Reads/Edits/Writes a file under `.agents/rules/` via the `load-agents-context` PostToolUse hook.
 
-## Rule Directories
+## Rule Directory
 
-| Directory | Loading | Use for |
-|-----------|---------|---------|
-| `.agents/rules/` | Always loaded by Claude Code at session start | Cross-cutting rules (git, PR, AI workflow, NFR/knowledge conventions, code-review false-positive guidance) |
-| `.agents/rules-scoped/backend/` | Injected by `load-agents-context` hook only when a backend file (`*.cs`, `*.csproj`, `*.sln(x)`, or files under `src/BuilderCatalogue.*/` or `tests/BuilderCatalogue.*/`) is opened | .NET / EF Core / API+Mediator / migrations / WireMock / logging conventions |
+All rule files live under a single `.agents/rules/` tree, organized into category subfolders. Every `.md` file in the tree is auto-loaded by the AI tool at session start; applicability is scoped **per-file** via the `paths`/`globs`/`applyTo` frontmatter (there is no separate scoped/injected directory).
 
-Files outside any known scope (e.g., `.github/workflows/`, `.docs/`, `.agents/` infra) receive only the always-loaded set.
+| Location | Use for |
+|----------|---------|
+| `.agents/rules/*.instructions.md` (flat) | Cross-cutting rules that don't share a category with ≥1 other rule (AI workflow, code-review false-positive guidance, project overview) |
+| `.agents/rules/<category>/` | A category folder is created when 2+ rules share a topic. Current: `backend/` (.NET / EF Core / API+Mediator / migrations / WireMock / logging), `git/` (git policy, PR standards), `meta/` (rule-file convention, AGENTS.md quality) |
+
+To make a rule narrow to certain files, set its frontmatter scope fields (e.g. `paths: ["**/*.cs"]`); to make it always-apply, use `"**"` / `alwaysApply: true`. The folder is organizational only — it does not change loading.
 
 ## File Format
 
@@ -34,50 +36,59 @@ Every rule file MUST:
 ---
 description: 'Short description of what the rule covers'
 globs: "<glob-pattern>"
+paths:
+  - "<glob-pattern>"
+applyTo: '<glob-pattern>'
 alwaysApply: <true|false>
 ---
 ```
 
+The three scope fields mirror the same pattern(s) — one per tool. For multiple patterns, `globs`/`applyTo` take a comma-separated string while `paths` takes a YAML list.
+
 | Field | Used by | Purpose |
 |-------|---------|---------|
 | `description` | Copilot, Cursor | Displayed in UI; Cursor uses it for agent-mode rule selection |
-| `globs` | Copilot, Cursor | File pattern for auto-attach; quote the value |
+| `globs` | Cursor | File pattern for auto-attach; quote the value |
+| `paths` | Claude Code | YAML list of file patterns for path-scoped applicability. Mirror `globs`. Use `["**"]` for always-apply |
+| `applyTo` | Copilot | File pattern for `.github/instructions/**` loading. Mirror `globs`; use `'**'` for always-apply |
 | `alwaysApply` | Cursor | `true` = always loaded; `false` = only on glob match |
 
-Claude Code auto-loads every `.md` file under `.claude/rules/` (symlink → `.agents/rules/`) at session start. The `globs`/`alwaysApply` fields are informational for Claude. To make a rule load only conditionally for Claude Code, place it under `.agents/rules-scoped/<scope>/` where the `load-agents-context` hook injects it on demand.
+Claude Code auto-loads every `.md` file under `.claude/rules/` (symlink → `.agents/rules/`) at session start, recursing into category subfolders. Scoping is **per-file** via the frontmatter above — there is no separate injected directory.
 
 ### Scoping Guidelines
 
-| Rule scope | Place in | `globs` |
-|------------|----------|---------|
-| Project-wide (git, PR, workflow, NFR) | `.agents/rules/` | `"**"` |
-| Backend only | `.agents/rules-scoped/backend/` | `"**/*.cs"` |
+| Rule scope | Place in | `alwaysApply` | `globs` / `paths` / `applyTo` |
+|------------|----------|---------------|-------------------------------|
+| Project-wide (git, PR, workflow) | `.agents/rules/` (flat) or a category folder | `true` | `"**"` |
+| Backend only | `.agents/rules/backend/` | `false` | `"**/*.cs"` |
+| Domain-specific | nearest `*_AGENTS.md` instead | n/a | n/a |
+
+Create a `<category>/` subfolder when 2+ rules share a topic; otherwise keep the rule flat in `.agents/rules/`.
 
 ## Creating a New Rule
 
 ```bash
-touch .agents/rules/my-new-rule.instructions.md                  # always-loaded
-touch .agents/rules-scoped/backend/my-rule.instructions.md       # backend-only
+touch .agents/rules/my-new-rule.instructions.md            # cross-cutting (flat)
+touch .agents/rules/backend/my-rule.instructions.md        # backend category
 ```
 
 Then add frontmatter + content. After saving:
 
-- Update the **Scoped Rules Inventory** table in root `AGENTS.md` if you added a scoped rule
 - Add a one-line changelog entry inside the rule file's `## Changelog` table (this repo retains in-file changelogs; the AI loading note tells agents to skip the section at runtime)
+- If you created a new category folder, reflect it in root `AGENTS.md` (Rules section) and in `project.slnx`
 
 ## Tool Compatibility Matrix
 
-| Tool | Reads always-loaded from | Reads scoped from | Extension |
-|------|--------------------------|-------------------|-----------|
-| Claude Code | `.claude/rules/` (symlink → `.agents/rules/`) | `.agents/rules-scoped/` via `load-agents-context` hook | `.md` |
-| Copilot | `.github/instructions` (path file → `../.agents/rules`) | uses `globs` frontmatter for auto-attach | `.instructions.md` |
-| Cursor | `.cursor/rules/` (symlink → `.agents/rules/`) | `.cursor/rules-scoped/` if mirrored; otherwise `globs` frontmatter | `.instructions.md` |
+| Tool | Reads from | Scoping mechanism | Extension |
+|------|-----------|-------------------|-----------|
+| Claude Code | `.claude/rules/` (symlink → `.agents/rules/`) | `paths` frontmatter | `.md` |
+| Copilot | `.github/instructions` (path file → `../.agents/rules`) | `applyTo` frontmatter | `.instructions.md` |
+| Cursor | `.cursor/rules/` (symlink → `.agents/rules/`) | `globs` + `alwaysApply` frontmatter | `.instructions.md` |
 | Codex | `.codex/` (symlink → `.agents/`) | invokes `load-agents-context` skill explicitly | `AGENTS.md` |
 
-All tools share the same `.agents/rules*/` source files via symlinks.
+All tools share the same `.agents/rules/` source files via symlinks.
 
 ## Non-Negotiables
 
-- **Always update root `AGENTS.md` Scoped Rules Inventory table when adding/removing a scoped rule.** Otherwise the AI cannot discover the rule when reasoning out-of-scope.
-- **Never set a default scope in `load-agents-context.sh`.** Files outside any known scope must inject **zero** scoped rules — that is where the largest token savings come from.
-- **Never reference a moved rule by its old path.** After moving a rule, sweep cross-references with `rg -l <old-path>` and update every hit.
+- **Scope per-file, not per-directory.** Every rule carries `paths`/`globs`/`applyTo` frontmatter that mirrors the same pattern(s). Category subfolders are organizational only and do not affect loading.
+- **Never reference a moved rule by its old path.** After moving a rule, sweep cross-references with `rg -l <old-path>` and update every hit (including hardcoded paths in `load-agents-context.sh` and skill docs).

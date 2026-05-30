@@ -1,10 +1,18 @@
 # AGENTS.md
 
-This file provides guidance for AI coding agents working in the builder-catalogue repository.
+This file provides guidance for AI coding agents working in the Project repository.
+
+> **⚠️ TEMPLATE NOTICE — read before working.**
+> This repository is currently a **template**. `Project` is a placeholder name used throughout the `.agents` tree, root `AGENTS.md`, rule files, skill docs, and the solution/project layout (`Project.slnx`, `src/Project.*`, `tests/Project.*`).
+>
+> **As soon as the project is given a real name, you MUST:**
+> 1. Replace every occurrence of `Project` / `project` (PascalCase namespaces/paths and lowercase prose) across all `.agents` files, root `AGENTS.md`, rule files, skill docs, `Project.slnx`, and the GitHub URL/slug with the chosen name.
+> 2. Update the glossary and the Project Overview description below to describe the real project.
+> 3. **Remove this entire TEMPLATE NOTICE block** — including this instruction — once the rename is complete.
 
 ## Project Overview
 
-builder-catalogue is an AI-spec-driven, AI-agnostic development catalogue. It documents reusable patterns, blueprints, and component specifications that guide automated and AI-assisted software delivery.
+Project is an AI-spec-driven, AI-agnostic development project. It documents reusable patterns, blueprints, and component specifications that guide automated and AI-assisted software delivery. _(Placeholder description — update once the project is named; see Template Notice above.)_
 
 **Tech stack:** .NET 10 · ASP.NET Core · Clean Architecture (Domain / Application / Infrastructure / Host) · EF Core + PostgreSQL · Mediator (source-gen CQRS) · xunit.v3
 
@@ -32,77 +40,51 @@ All planned work is tracked as worktasks under `.context/work-tasks/` (gitignore
 
 | Layer | Path | Purpose |
 |---|---|---|
-| Domain | `src/BuilderCatalogue.Domain/` | Core entities, value objects — no external deps |
-| Application | `src/BuilderCatalogue.Application/` | Vertical-slice use cases via Mediator — `Features/<Name>/`, shared code in `Common/` |
-| Infrastructure | `src/BuilderCatalogue.Infrastructure/` | EF Core + PostgreSQL (`Persistence/`), HTTP clients (`Clients/`) |
-| Host | `src/BuilderCatalogue.Host/` | ASP.NET Core Web API, Serilog, Scalar OpenAPI |
-| ChatHost | `src/BuilderCatalogue.ChatHost/` | Standalone LLM microservice — owns Anthropic SDK; talks to Host via HTTP only |
+| Domain | `src/Project.Domain/` | Core entities, value objects — no external deps |
+| Application | `src/Project.Application/` | Vertical-slice use cases via Mediator — `Features/<Name>/`, shared code in `Common/` |
+| Infrastructure | `src/Project.Infrastructure/` | EF Core + PostgreSQL (`Persistence/`), HTTP clients (`Clients/`) |
+| Host | `src/Project.Host/` | ASP.NET Core Web API, Serilog, Scalar OpenAPI |
+| ChatHost | `src/Project.ChatHost/` | Standalone LLM microservice — owns Anthropic SDK; talks to Host via HTTP only |
 
-Detailed backend coding rules are maintained in `.agents/rules-scoped/backend/` and injected only when a backend file is opened (see Rules section).
+Detailed backend coding rules are maintained in `.agents/rules/backend/` and scoped per-file via frontmatter (see Rules section).
 
 ## Rules
 
-Project-wide rules live in `.agents/rules/` as `*.instructions.md` files and are auto-loaded every session by Claude Code, Cursor, Copilot, and Codex via the symlinks/path-references documented in `.agents/AI_DEVELOPMENT_AGENTS.md`. Scope-conditional rules live in `.agents/rules-scoped/<scope>/` and are injected by the `load-agents-context` PostToolUse hook only when an in-scope file is opened (`*.cs`, `*.csproj`, `*.sln(x)`, or files under `src/BuilderCatalogue.*/` and `tests/BuilderCatalogue.*/`). Out-of-scope sessions (e.g., editing `.github/workflows/`, `.docs/`, `.agents/` infra) see only the always-loaded set. See `.agents/rules/meta/rules.instructions.md` for the file convention and `.agents/skills/manage-rule-system/SKILL.md` for the directory contract.
+All rules live under `.agents/rules/` as `*.instructions.md` files and are auto-loaded every session by Claude Code, Cursor, Copilot, and Codex via the symlinks/path-references documented in `.agents/AI_DEVELOPMENT_AGENTS.md`. Applicability is scoped **per-file** via frontmatter (`paths` for Claude, `globs`+`alwaysApply` for Cursor, `applyTo` for Copilot) — e.g. backend rules carry `**/*.cs` so they attach when a C# file is opened. Rules are organized into category subfolders for navigation; the folder is organizational only and does not change loading. See `.agents/rules/meta/rules.instructions.md` for the file convention and `.agents/skills/manage-rule-system/SKILL.md` for the directory contract.
 
-### Scoped Rules Inventory
+### Rule Categories
 
-The AI does not auto-load scoped rules out-of-scope. Read on demand from this list when reasoning across scopes:
+| Category | Folder | Contents |
+|----------|--------|----------|
+| _(cross-cutting)_ | `.agents/rules/` (flat) | `ai-workflow-rules`, `code-review-standards`, `project-overview` |
+| git | `.agents/rules/git/` | `git-policy`, `pr-standards` |
+| meta | `.agents/rules/meta/` | `rules` (file convention), `knowledge-conventional-contexts-quality` (AGENTS.md quality) |
+| backend (`**/*.cs`) | `.agents/rules/backend/` | `api-mediator-validation` (Minimal API + Mediator + FluentValidation fail-fast); `architecture-slices` (clean-architecture boundaries, vertical-slice Features); `backend-logging-conventions` (Information vs Debug levels); `external-api-clients` (Refit list vs singular client split, HybridCache adapter); `migrations` (`[ExcludeFromCodeCoverage]` requirement); `wiremock-stubbing` (TestFramework.Aspire single-source stub helper) |
 
-| Scope | File | What it covers |
-|-------|------|----------------|
-| backend | `.agents/rules-scoped/backend/api-mediator-validation.instructions.md` | Minimal API + Mediator + FluentValidation fail-fast |
-| backend | `.agents/rules-scoped/backend/architecture-slices.instructions.md` | Clean-architecture boundaries; vertical-slice Features |
-| backend | `.agents/rules-scoped/backend/backend-logging-conventions.instructions.md` | Default Information vs Debug log levels |
-| backend | `.agents/rules-scoped/backend/external-api-clients.instructions.md` | Refit list vs singular client split; HybridCache adapter pattern |
-| backend | `.agents/rules-scoped/backend/migrations.instructions.md` | `[ExcludeFromCodeCoverage]` requirement on migration classes |
-| backend | `.agents/rules-scoped/backend/wiremock-stubbing.instructions.md` | TestFramework.Aspire single-source-of-truth stub helper |
-
-## Build / Lint / Test Commands
+## Build / Test Commands
 
 ```bash
-# Build
-dotnet build BuilderCatalogue.slnx
-
-# Run all tests
-dotnet test BuilderCatalogue.slnx
-
-# Run the dev Aspire AppHost from the repo root
-dotnet run --project src/BuilderCatalogue.AppHost
-
-# Run by level — target projects directly (no Trait annotations required)
-dotnet test tests/BuilderCatalogue.Domain.UnitTest
-dotnet test tests/BuilderCatalogue.Application.UnitTest
-dotnet test tests/BuilderCatalogue.Infrastructure.UnitTest
-dotnet test tests/BuilderCatalogue.Host.UnitTest
-dotnet test tests/BuilderCatalogue.Application.ComponentTest
-dotnet test tests/BuilderCatalogue.Infrastructure.ComponentTest
-dotnet test tests/BuilderCatalogue.Host.IntegrationTest
-dotnet test tests/BuilderCatalogue.ChatHost.UnitTest
-dotnet test tests/BuilderCatalogue.ChatHost.IntegrationTest
-
-# Run ChatHost standalone (separate process from the API Host)
-dotnet run --project src/BuilderCatalogue.ChatHost
+dotnet build Project.slnx                     # build
+dotnet test  Project.slnx                     # run all tests
+dotnet run --project src/Project.AppHost      # dev Aspire AppHost
+dotnet run --project src/Project.ChatHost     # ChatHost standalone (separate process from the API Host)
 ```
 
-The dev Aspire AppHost dashboard is exposed on `http://localhost:15278` by this repository's checked-in launch settings. If started from a terminal, use the printed `/login?t=...` URL for the first browser visit.
+Target a single test project directly when needed (e.g. `dotnet test tests/Project.Domain.UnitTest`); `ls tests/` lists them — no Trait annotations required. **Gotcha:** the dev Aspire dashboard runs at `http://localhost:15278`; when started from a terminal, use the printed `/login?t=...` URL on first browser visit.
 
 ## Test Framework
 
-| Concern | Tool |
-|---|---|
-| Framework | xunit.v3 |
-| Assertions | Shouldly |
-| Fake / fixture data | Bogus |
-| DB cleanup | Respawn |
-| L0 (unit) | `*.UnitTest` — no I/O, all in-process |
-| L1 (component) | `Application.ComponentTest` — in-memory EF Core; `Infrastructure.ComponentTest` — real isolated DB + Respawn |
-| L2 (integration) | `*.IntegrationTest` — full stack, real PostgreSQL |
+xunit.v3 · Shouldly · Bogus · Respawn. Three tiers (the distinction is non-obvious and drives where a test belongs):
 
-Shared L0-L2 fixtures live in `tests/BuilderCatalogue.TestFramework/`; the Aspire dependency host lives in `tests/BuilderCatalogue.TestFramework.Aspire/`. Aspire-managed test dependencies use PostgreSQL and WireMock containers.
+- **L0** `*.UnitTest` — no I/O, all in-process.
+- **L1** component — `Application.ComponentTest` uses in-memory EF Core; `Infrastructure.ComponentTest` uses a real isolated DB + Respawn.
+- **L2** `*.IntegrationTest` — full stack, real PostgreSQL.
+
+Shared fixtures live in `tests/Project.TestFramework/`; the Aspire dependency host (PostgreSQL + WireMock containers) in `tests/Project.TestFramework.Aspire/`. See `.docs/wiki/testing.md`.
 
 ## Style and Dependencies
 
-Authoritative stack and coding conventions for AI coders are in `.agents/rules/project-overview.instructions.md` and backend-specific rules under `.agents/rules-scoped/backend/` (injected on demand by `load-agents-context`).
+Authoritative stack and coding conventions for AI coders are in `.agents/rules/project-overview.instructions.md` and backend-specific rules under `.agents/rules/backend/` (scoped per-file via `**/*.cs` frontmatter).
 
 ## Architecture Decisions (NFRs)
 
@@ -110,41 +92,15 @@ Human-facing reviewer documentation lives in `.docs/wiki/`. Detailed high-level 
 
 ## CI/CD
 
-| Stage | Workflow | Trigger |
-|---|---|---|
-| PR Gate | `.github/workflows/pr-gate.yml` | `pull_request` → `main` (includes PR branch updates), `push` → `main`, `workflow_dispatch` |
-
-### PR Gate steps
-
-1. **Checkout** — `actions/checkout@v4`
-2. **Install .NET SDK** — `actions/setup-dotnet@v4` (version from `DOTNET_VERSION` env, currently `10.0.x`)
-3. **Restore** — `dotnet restore BuilderCatalogue.slnx`
-4. **Build** — `dotnet build … --no-restore --configuration Release`
-5. **Aspire test with coverage** — local action `.github/actions/aspire-test-with-coverage`
-   - Starts `tests/BuilderCatalogue.TestFramework.Aspire`, keeps its PID inside the action script, and waits for PostgreSQL (`127.0.0.1:15432`), Redis (`127.0.0.1:16379`), and WireMock (`http://127.0.0.1:19091/__admin/health`)
-   - Restores .NET tools (`dotnet tool restore`) after dependency pre-warm, matching the proven CI timing before tests start
-   - Prepares `artifacts/testresults/` and `artifacts/coverage/`
-   - Runs test projects in order: Host integration, Application/Infrastructure component, then Domain/Application/Infrastructure/Host unit tests
-   - Generates coverage reports with `dotnet tool run reportgenerator`
-   - Stops the Aspire host from the action script's teardown trap after tests and coverage generation have finished or failed
-6. **Publish coverage summary** (`if: always()`) — appends `artifacts/coverage/SummaryGithub.md` to the GitHub step summary
-7. **Upload coverage artifacts** (`if: always()`) — uploads `artifacts/coverage/` as `coverage-report`
-
-### .NET local tools
-
-`.config/dotnet-tools.json` declares the local tool manifest. Currently registered:
-
-| Tool | Version | Command |
-|---|---|---|
-| `dotnet-reportgenerator-globaltool` | `5.4.4` | `reportgenerator` |
+PR gate — `.github/workflows/pr-gate.yml` (triggers: `pull_request` → `main`, `push` → `main`, `workflow_dispatch`): restore → build (Release) → Aspire-backed test with coverage via the local action `.github/actions/aspire-test-with-coverage`, then publish + upload the coverage report. Step ordering, service ports, and timing live in those files. Local .NET CLI tools are declared in `.config/dotnet-tools.json`.
 
 ## Git Constraints
 
-This repository is hosted on **GitHub** at `https://github.com/generic-automation-and-it/builder-catalogue`.
+This repository is hosted on **GitHub** at `https://github.com/generic-automation-and-it/project`.
 
 - **CLI tool:** Use `gh` (GitHub CLI) for PR and repository operations.
 - **PR template:** `.github/pull_request_template.md`
-- **Code owners:** `.github/CODEOWNERS` — all files owned by `@generic-automation-and-it/builder-catalogue`
+- **Code owners:** `.github/CODEOWNERS` — all files owned by `@generic-automation-and-it/project`
 
 ## Glossary
 

@@ -1,5 +1,5 @@
 ---
-description: 'Builder Catalogue backend tech stack, architecture, and commands for AI coding tasks'
+description: 'Project backend tech stack, architecture, and commands for AI coding tasks'
 globs: "**"
 paths:
   - "**"
@@ -16,7 +16,7 @@ Updated: 2026-05-09
 |-----------|-----------|
 | Framework | ASP.NET Core (.NET 10) |
 | Architecture | Clean Architecture (`Domain` / `Application` / `Infrastructure` / `Host`) |
-| API style | Minimal API endpoints in `src/BuilderCatalogue.Host` |
+| API style | Minimal API endpoints in `src/Project.Host` |
 | Mediator | [`martinothamar/Mediator`](https://github.com/martinothamar/Mediator) (in-process request/response dispatch with pipeline support) |
 | Messaging durability options | Message Queue / Message Streaming can be introduced when durability, retries, or asynchronous decoupling are required |
 | Validation | FluentValidation in Mediator pipeline (fail fast) |
@@ -27,33 +27,33 @@ Updated: 2026-05-09
 ## Commands
 
 ```bash
-dotnet build BuilderCatalogue.slnx
-dotnet test BuilderCatalogue.slnx
+dotnet build Project.slnx
+dotnet test Project.slnx
 
 # Targeted test projects
-dotnet test tests/BuilderCatalogue.Domain.UnitTest
-dotnet test tests/BuilderCatalogue.Application.UnitTest
-dotnet test tests/BuilderCatalogue.Infrastructure.UnitTest
-dotnet test tests/BuilderCatalogue.Host.UnitTest
-dotnet test tests/BuilderCatalogue.Application.ComponentTest
-dotnet test tests/BuilderCatalogue.Infrastructure.ComponentTest
-dotnet test tests/BuilderCatalogue.Host.IntegrationTest
+dotnet test tests/Project.Domain.UnitTest
+dotnet test tests/Project.Application.UnitTest
+dotnet test tests/Project.Infrastructure.UnitTest
+dotnet test tests/Project.Host.UnitTest
+dotnet test tests/Project.Application.ComponentTest
+dotnet test tests/Project.Infrastructure.ComponentTest
+dotnet test tests/Project.Host.IntegrationTest
 ```
 
 ## Project Structure
 
 ```
 src/
-  BuilderCatalogue.Domain/          # Entities, value objects, invariants
-  BuilderCatalogue.Application/     # Feature slices + Mediator handlers/pipelines
-  BuilderCatalogue.Infrastructure/  # EF Core persistence + external integrations
-  BuilderCatalogue.Host/            # Minimal API composition, middleware, observability
+  Project.Domain/          # Entities, value objects, invariants
+  Project.Application/     # Feature slices + Mediator handlers/pipelines
+  Project.Infrastructure/  # EF Core persistence + external integrations
+  Project.Host/            # Minimal API composition, middleware, observability
 
 tests/
-  BuilderCatalogue.*.UnitTest/
-  BuilderCatalogue.*.ComponentTest/
-  BuilderCatalogue.*.IntegrationTest/
-  BuilderCatalogue.TestFramework/
+  Project.*.UnitTest/
+  Project.*.ComponentTest/
+  Project.*.IntegrationTest/
+  Project.TestFramework/
 ```
 
 ## AI Coder Rules (Summary)
@@ -71,6 +71,7 @@ tests/
 
 | Date | Change |
 |:-----|:-------|
+| 2026-05-30 | Genericized placeholder name `BuilderCatalogue`/`builder-catalogue` → `Project`/`project` (template state; see root AGENTS.md Template Notice) |
 | 2026-05-09 | Replaced template content with repository-specific stack, commands, structure, and AI-coder rules |
 | 2026-05-09 | Corrected Mediator description and added messaging durability prompt guidance (queue/streaming) |
 | 2026-03-07 | Reset to generic template — remove project-specific content |

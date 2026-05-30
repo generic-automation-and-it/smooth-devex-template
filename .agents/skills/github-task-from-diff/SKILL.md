@@ -33,7 +33,7 @@ python3 .agents/skills/github-task-from-diff/scripts/create_github_task_from_dif
 
 # Create task and link as sub-issue using a Feature issue URL
 python3 .agents/skills/github-task-from-diff/scripts/create_github_task_from_diff.py \
-  --feature-issue https://github.com/generic-automation-and-it/builder-catalogue/issues/42
+  --feature-issue https://github.com/generic-automation-and-it/project/issues/42
 
 # Override title and base ref
 python3 .agents/skills/github-task-from-diff/scripts/create_github_task_from_diff.py \

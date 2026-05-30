@@ -19,7 +19,7 @@ Updated: 2026-05-10
   using System.Diagnostics.CodeAnalysis;
   using Microsoft.EntityFrameworkCore.Migrations;
 
-  namespace BuilderCatalogue.Infrastructure.Persistence.Migrations;
+  namespace Project.Infrastructure.Persistence.Migrations;
 
   /// <inheritdoc />
   [ExcludeFromCodeCoverage]

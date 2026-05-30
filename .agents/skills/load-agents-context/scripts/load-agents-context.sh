@@ -122,7 +122,7 @@ REPO_ROOT=$(git -C "$FILE_DIR" rev-parse --show-toplevel 2>/dev/null || true)
 # --- Skip directories that are already auto-loaded by the AI tool ---
 is_auto_loaded_dir() {
     case "$1" in
-        */.agents/rules/*|*/.agents/rules-scoped/*|*/.ai/rules/*|*/.ai/rules-scoped/*|*/.claude/rules/*|*/.cursor/rules/*|*/.github/instructions/*) return 0 ;;
+        */.agents/rules/*|*/.ai/rules/*|*/.claude/rules/*|*/.cursor/rules/*|*/.github/instructions/*) return 0 ;;
     esac
     return 1
 }
@@ -152,28 +152,6 @@ while [ "$DEPTH" -lt 20 ]; do
     DEPTH=$((DEPTH + 1))
 done
 
-# --- Scope-conditional rule injection (.agents/rules-scoped/<scope>/) ---
-# Backend scope:  *.cs / *.csproj / *.sln / *.slnx, or src/BuilderCatalogue.*/ + tests/BuilderCatalogue.*/ trees.
-# Out-of-scope:   no scoped rules injected (e.g., .github/workflows, .docs, .agents/ infra).
-SCOPE=""
-case "$ABS_PATH" in
-    *.cs|*.csproj|*.sln|*.slnx) SCOPE="backend" ;;
-    */src/BuilderCatalogue.*/*|*/tests/BuilderCatalogue.*/*) SCOPE="backend" ;;
-esac
-
-if [ -n "$SCOPE" ] && [ -n "$REPO_ROOT" ]; then
-    SCOPED_DIR="${REPO_ROOT}/.agents/rules-scoped/${SCOPE}"
-    if [ -d "$SCOPED_DIR" ]; then
-        while IFS= read -r rule_file; do
-            [ -z "$rule_file" ] && continue
-            if ! grep -qxF "$rule_file" "$TRACKER" 2>/dev/null; then
-                TO_LOAD+=("$rule_file")
-                printf '%s\n' "$rule_file" >> "$TRACKER" || true
-            fi
-        done < <(find "$SCOPED_DIR" -maxdepth 1 -name "*.instructions.md" -type f 2>/dev/null | sort)
-    fi
-fi
-
 # --- Skill-on-path injection ---
 # When the touched file matches a known pattern, inject the related skill/rule once per session.
 inject_if_new() {
@@ -187,7 +165,7 @@ inject_if_new() {
 
 if [ -n "$REPO_ROOT" ]; then
     case "$ABS_PATH" in
-        */.agents/rules/*|*/.agents/rules-scoped/*|*/.claude/rules/*|*/.cursor/rules/*|*/.github/instructions/*)
+        */.agents/rules/*|*/.claude/rules/*|*/.cursor/rules/*|*/.github/instructions/*)
             inject_if_new "${REPO_ROOT}/.agents/skills/manage-rule-system/SKILL.md"
             ;;
     esac

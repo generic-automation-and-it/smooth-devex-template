@@ -33,10 +33,8 @@ sequenceDiagram
     Hook->>FS: Walk dir(file) → repo root, find *AGENTS.md per level
     FS-->>Hook: Candidate AGENTS.md paths (sorted, maxdepth 1 per dir)
     Hook->>Hook: Filter: skip auto-loaded dirs + session-tracker hits
-    Hook->>Hook: Detect scope from path (backend / out-of-scope)
-    Hook->>FS: If in-scope, list .agents/rules-scoped/<scope>/*.instructions.md
     Hook->>Hook: Skill-on-path: rule file ⇒ manage-rule-system; *AGENTS.md ⇒ knowledge-conventional-contexts
-    Hook->>FS: Read each new file (AGENTS.md + scoped rules + skill SKILL.md)
+    Hook->>FS: Read each new file (AGENTS.md + skill SKILL.md)
     Hook->>Ctx: Emit <context-auto-loaded> block via stdout
     Hook->>Hook: Append loaded paths to session tracker file
 ```
@@ -79,14 +77,12 @@ sequenceDiagram
 
 **Consequences:** Transferring to another repo requires copying the skill folder, copying the hook wrapper, and adding one entry to `settings.json`. Single source of truth for the implementation; agent-agnostic invocation lives in one place.
 
-### LADR-005: Scope-conditional rule injection — no default scope
-**Date:** 2026-05-14 | **Status:** Accepted
+### LADR-005: Scope-conditional rule injection — Superseded
+**Date:** 2026-05-14 | **Status:** Superseded (2026-05-30)
 
-**Context:** Always-loading every backend rule for every session means CI/docs/`.agents/` infra edits drag the full backend rule set into context unnecessarily. Bunker-procurement PR #5206 demonstrated 5,500–12,500 token savings per session by moving backend/frontend rules to `rules-scoped/` and injecting them only when an in-scope file is touched.
+**Context:** Originally the hook injected `.agents/rules-scoped/<scope>/*.instructions.md` only when an in-scope file was touched, to keep backend rules out of unrelated sessions.
 
-**Decision:** The hook detects scope from the touched file's absolute path: backend (`*.cs`, `*.csproj`, `*.sln(x)`, or files under `src/BuilderCatalogue.*/` and `tests/BuilderCatalogue.*/`). Anything else is **out-of-scope and injects zero scoped rules** — no catch-all default. Files outside any known scope (CI YAML, docs, `.agents/` infra) save the most tokens because they bypass the scoped set entirely. A Scoped Rules Inventory table in root `AGENTS.md` lists every scoped rule so the AI can Read-on-demand when reasoning out-of-scope.
-
-**Consequences:** An AI session that never touches a backend file does not see backend rules — by design. If the agent needs them for cross-cutting reasoning, it must Read them explicitly using the inventory table. Adding a new scope (e.g., `infra/` later) requires a new `case` arm in the script and a new section in the inventory. Estimated savings on this backend-only repo: ~2,500–4,000 tokens per non-backend session (smaller than bunker-procurement because there is only one scope here).
+**Superseded by:** Per-file frontmatter scoping. Rule files now live under `.agents/rules/` (with `backend/`, `git/`, `meta/` category subfolders) and carry `paths`/`globs`/`applyTo` so each AI tool filters applicability itself — Claude via `paths`, Cursor via `globs`+`alwaysApply`, Copilot via `applyTo`. The `.agents/rules-scoped/` directory and the hook's scope-injection block were removed. The hook no longer special-cases scope; it only performs the AGENTS.md ancestor walk and skill-on-path injection (LADR-006).
 
 ### LADR-006: Skill-on-path injection (rule files, AGENTS.md)
 **Date:** 2026-05-14 | **Status:** Accepted
@@ -107,8 +103,7 @@ sequenceDiagram
 6. **Session tracker**: `/tmp/.agents_ctx_${SESSION_ID}` — one absolute path per line, checked via `grep -qxF` (exact full-line match, no partial hits).
 7. **Output envelope**: All emitted content is wrapped in `<context-auto-loaded>` tags for traceability. Each file is prefixed with `## Context: <relative-path>`.
 8. **Tool agnostic**: Plain bash with `jq` as the only external dependency. Claude Code uses hook mode. Codex and Copilot use explicit skill invocation and session identifiers (`CODEX_THREAD_ID`/`CODEX_SESSION_ID`, `COPILOT_SESSION_ID`/`GITHUB_COPILOT_SESSION_ID`) for stable deduplication.
-9. **Scope-conditional rule injection**: After the AGENTS.md walk, the hook detects scope from the touched file's path. Backend (`*.cs`/`*.csproj`/`*.sln(x)` or `src/BuilderCatalogue.*/`, `tests/BuilderCatalogue.*/`) → list and inject every `*.instructions.md` under `.agents/rules-scoped/backend/`. Out-of-scope (no match) → inject **zero** scoped rules. There is intentionally no default/catch-all scope.
-10. **Skill-on-path injection**: After scope detection, touching a file under `.agents/rules*/` / `.claude/rules/` / `.cursor/rules/` / `.github/instructions/` injects `.agents/skills/manage-rule-system/SKILL.md`. Touching `AGENTS.md` / `CLAUDE.md` / `GEMINI.md` / `*_AGENTS.md` injects `.agents/rules/knowledge-conventional-contexts-quality.instructions.md`. Each is dedup-tracked per session.
+9. **Skill-on-path injection**: Touching a file under `.agents/rules/` / `.claude/rules/` / `.cursor/rules/` / `.github/instructions/` injects `.agents/skills/manage-rule-system/SKILL.md`. Touching `AGENTS.md` / `CLAUDE.md` / `GEMINI.md` / `*_AGENTS.md` injects `.agents/rules/meta/knowledge-conventional-contexts-quality.instructions.md`. Each is dedup-tracked per session. (Rule files themselves are auto-loaded by the AI tool and scoped per-file via frontmatter — the hook does not inject them.)
 
 ## Hook Registration
 
@@ -164,6 +159,7 @@ Copilot can pass a stable prompt/session identifier:
 
 | Date | Change | Ref |
 |:-----|:-------|:----|
-| 2026-05-14 | Added LADR-005 (scope-conditional rule injection, no default scope) and LADR-006 (skill-on-path injection). Hook now detects backend scope and injects `.agents/rules-scoped/backend/*` on `.cs`/`.csproj`/`.sln(x)` / `src/BuilderCatalogue.*/` / `tests/BuilderCatalogue.*/` access; injects `manage-rule-system/SKILL.md` on rule-file access; injects `knowledge-conventional-contexts-quality.instructions.md` on `*AGENTS.md` access. Inventory table added to root `AGENTS.md`. | hamburg-v3 — port of bunker-procurement #5206 + token-reduction playbook |
+| 2026-05-30 | Superseded LADR-005: removed `.agents/rules-scoped/<scope>/` scope-injection. Rules now live under `.agents/rules/` (with `backend/`/`git/`/`meta/` subfolders) and are scoped per-file via `paths`/`globs`/`applyTo` frontmatter; the hook only does the AGENTS.md walk + skill-on-path injection. Knowledge-conventional inject path moved to `.agents/rules/meta/`. | tianjin-v1 |
+| 2026-05-14 | Added LADR-005 (scope-conditional rule injection, no default scope) and LADR-006 (skill-on-path injection). Hook now detects backend scope and injects `.agents/rules-scoped/backend/*` on `.cs`/`.csproj`/`.sln(x)` / `src/Project.*/` / `tests/Project.*/` access; injects `manage-rule-system/SKILL.md` on rule-file access; injects `knowledge-conventional-contexts-quality.instructions.md` on `*AGENTS.md` access. Inventory table added to root `AGENTS.md`. | hamburg-v3 — port of bunker-procurement #5206 + token-reduction playbook |
 | 2026-05-14 | Hardening from upstream Gemini review: wrapper guards `exec` with `[ -x ]` check, matcher widened to `Read\|Edit\|Write`, `cd -P`/`pwd -P` for symlink-safe canonical paths, `\|\| true` guards on tracker append and content read. | denpasar |
 | 2026-05-14 | Ported from bunker-procurement: agent-agnostic lazy AGENTS.md context loading via PostToolUse hook; skip list extended with `.agents/rules/` for this repo's symlink layout. | denpasar |

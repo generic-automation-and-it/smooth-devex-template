@@ -18,9 +18,9 @@ Root AGENTS.md / NFR files alone are NOT sufficient. Domain-specific context is 
 
 | Working in | Apply |
 |------------|-------|
-| Backend code (.NET, C#, server-side) | `.agents/rules-scoped/backend/*` rules (auto-injected by `load-agents-context` on backend file Read/Edit) |
+| Backend code (.NET, C#, server-side) | `.agents/rules/backend/*` rules (scoped to `**/*.cs` via frontmatter; attach when a C# file is opened) |
 
-Always-on rules under `.agents/rules/` are auto-loaded every session. Scoped rules under `.agents/rules-scoped/<scope>/` are injected only when an in-scope file is opened — out-of-scope sessions (CI configs, docs, infra) see only the always-loaded set. For functional `*_AGENTS.md` context: use the `load-context` skill with `[domain]` or manually request the relevant files. The Scoped Rules Inventory table in root `AGENTS.md` lists every on-demand rule so the AI can Read it explicitly when reasoning out-of-scope.
+All rules under `.agents/rules/` are auto-loaded every session, organized into category subfolders (`backend/`, `git/`, `meta/`); applicability is scoped per-file via frontmatter (`paths`/`globs`/`applyTo`). For functional `*_AGENTS.md` context: use the `load-context` skill with `[domain]` or manually request the relevant files. The Rule Categories table in root `AGENTS.md` lists each rule and what it covers.
 
 If no context loaded: **BLOCK** → offer: Load / Search / Create / BYPASS.
 

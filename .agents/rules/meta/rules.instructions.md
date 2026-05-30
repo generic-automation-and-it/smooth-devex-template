@@ -1,24 +1,27 @@
 ---
-description: 'Convention for creating new rule files in .agents/rules/ and .agents/rules-scoped/'
-globs: ".agents/rules/**,.agents/rules-scoped/**"
+description: 'Convention for creating new rule files in .agents/rules/'
+globs: ".agents/rules/**"
 paths:
   - ".agents/rules/**"
-  - ".agents/rules-scoped/**"
-applyTo: '.agents/rules/**,.agents/rules-scoped/**'
+applyTo: '.agents/rules/**'
 alwaysApply: false
 ---
 # Rule File Convention
 
-When creating or modifying rule files in `.agents/rules/` or `.agents/rules-scoped/`, follow this convention to ensure compatibility across Claude Code, GitHub Copilot, Cursor, and OpenAI Codex.
+When creating or modifying rule files in `.agents/rules/`, follow this convention to ensure compatibility across Claude Code, GitHub Copilot, Cursor, and OpenAI Codex.
 
-## Rule Directories
+## Rule Directory
 
-| Directory | Loading | Use for |
-|-----------|---------|---------|
-| `.agents/rules/` | Always-on (auto-loaded every session) | Cross-cutting rules — git, PR, AI workflow, NFR/knowledge conventions, code-review false-positive guidance |
-| `.agents/rules-scoped/<scope>/` | Injected by `load-agents-context` PostToolUse hook only when an in-scope file is opened | Scope-specific rules (e.g., `backend/` → `*.cs`, `*.csproj`, `*.sln(x)`, `src/BuilderCatalogue.*/`, `tests/BuilderCatalogue.*/`) |
+All rule files live under a single `.agents/rules/` tree. Every `.md` file in it is auto-loaded by the AI tool at session start; **applicability is scoped per-file** via the `paths`/`globs`/`applyTo` frontmatter (there is no separate injected/scoped directory).
 
-Out-of-scope sessions (CI YAML, docs, `.agents/` infra) inject no scoped rules. See `.agents/skills/manage-rule-system/SKILL.md` for the directory contract and the Scoped Rules Inventory table in root `AGENTS.md` for the full on-demand list.
+Rules are organized into category subfolders for navigation only — folder placement does not change loading:
+
+| Location | Use for |
+|----------|---------|
+| `.agents/rules/*.instructions.md` (flat) | Cross-cutting rules with no ≥2-member category (AI workflow, code-review guidance, project overview) |
+| `.agents/rules/<category>/` | A folder created when 2+ rules share a topic — currently `backend/`, `git/`, `meta/` |
+
+See `.agents/skills/manage-rule-system/SKILL.md` for the directory contract.
 
 ## File Format
 
@@ -59,27 +62,27 @@ All three scope fields (`globs`, `paths`, `applyTo`) mirror the same pattern(s) 
 | Apply Intelligently | `false` | omit | required | Agent decides based on description |
 | Apply Manually | `false` | omit | required | Only when `@rule-name` mentioned in chat |
 
-Claude Code auto-loads all `.md` files in `.claude/rules/` (symlinked to `.agents/rules/`); the `paths` field scopes which files a rule applies to. Scope-conditional rules under `.agents/rules-scoped/` are injected by the `load-agents-context` hook in addition to honoring `paths`.
+Claude Code auto-loads all `.md` files in `.claude/rules/` (symlinked to `.agents/rules/`), recursing into category subfolders; the `paths` field scopes which files a rule applies to.
 
 ### Scoping Guidelines
 
 | Rule scope | Place in | `alwaysApply` | `globs` / `paths` / `applyTo` |
 |------------|----------|---------------|-------------------------------|
-| Project-wide (git, PR, workflow, NFR) | `.agents/rules/` | `true` | `"**"` |
-| Backend only | `.agents/rules-scoped/backend/` | `false` | `"**/*.cs"` |
+| Project-wide (git, PR, workflow) | `.agents/rules/` (flat) or a category folder | `true` | `"**"` |
+| Backend only | `.agents/rules/backend/` | `false` | `"**/*.cs"` |
 | Domain-specific | nearest `*_AGENTS.md` instead | n/a | n/a |
 
 ## Creating a New Rule
 
 ```bash
-# Always-loaded (cross-cutting)
+# Cross-cutting (flat)
 touch .agents/rules/my-new-rule.instructions.md
 
-# Backend-only (scope-conditional, injected on .cs/.csproj/src/BuilderCatalogue.*/... Read/Edit)
-touch .agents/rules-scoped/backend/my-rule.instructions.md
+# Backend category (scoped per-file via "**/*.cs" frontmatter)
+touch .agents/rules/backend/my-rule.instructions.md
 ```
 
-After adding a scoped rule, update the Scoped Rules Inventory table in root `AGENTS.md`. Then add frontmatter + content.
+Then add frontmatter + content. Create a `<category>/` subfolder only when 2+ rules share a topic.
 
 ## Tool Compatibility Matrix
 

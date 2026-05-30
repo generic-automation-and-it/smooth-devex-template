@@ -15,7 +15,7 @@ fi
 # Match common phrasings for rule-system management.
 # Positive: "create a rule for X", "update the testing rule", "edit .agents/rules/foo".
 # Negative: "review the PR", "fix the bug" — must NOT fire.
-if printf '%s' "$PROMPT" | grep -qiE '(create|update|modif|add|edit|new|restructur).{0,40}(rule|instruction)|\.agents/rules|\.ai/rules|\.claude/rules|rules-scoped'; then
+if printf '%s' "$PROMPT" | grep -qiE '(create|update|modif|add|edit|new|restructur).{0,40}(rule|instruction)|\.agents/rules|\.ai/rules|\.claude/rules'; then
     SCRIPT="$(cd -P "$(dirname "$0")" && pwd -P)/../skills/manage-rule-system/scripts/inject-context.sh"
     [ -x "$SCRIPT" ] && exec "$SCRIPT" || true
 fi
