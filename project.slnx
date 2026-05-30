@@ -94,6 +94,7 @@
   <Folder Name="/.docs/wiki/">
     <File Path=".docs/wiki/ai-tooling.md" />
     <File Path=".docs/wiki/architecture.md" />
+    <File Path=".docs/wiki/ci.md" />
     <File Path=".docs/wiki/testing.md" />
   </Folder>
   <Folder Name="/.docs/adr/" />
