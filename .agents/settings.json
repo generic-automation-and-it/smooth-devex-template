@@ -65,7 +65,9 @@
       "Bash(sqlcmd*TRUNCATE*)",
       "Bash(sqlcmd*truncate*)"
     ],
-    "ask": []
+    "ask": [
+      "Bash(gh pr close:*)"
+    ]
   },
   "hooks": {
     "PostToolUse": [
@@ -74,7 +76,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .agents/hooks/slnx-docs-sync.py"
+            "command": "python3 .agents/hooks/slnx-docs-sync.py"
           }
         ]
       },

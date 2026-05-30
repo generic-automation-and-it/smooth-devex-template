@@ -55,12 +55,9 @@
   </Folder>
   <Folder Name="/.agents/skills/git-commit-push-pr/">
     <File Path=".agents/skills/git-commit-push-pr/SKILL.md" />
-    <File Path=".agents/skills/git-commit-push-pr/scripts/check-pr.sh" />
-    <File Path=".agents/skills/git-commit-push-pr/scripts/create-pr.sh" />
     <File Path=".agents/skills/git-commit-push-pr/scripts/get-base-branch.sh" />
     <File Path=".agents/skills/git-commit-push-pr/scripts/get-pr-metadata.sh" />
     <File Path=".agents/skills/git-commit-push-pr/scripts/push.sh" />
-    <File Path=".agents/skills/git-commit-push-pr/scripts/update-pr.sh" />
   </Folder>
   <Folder Name="/.agents/skills/git-sync/">
     <File Path=".agents/skills/git-sync/SKILL.md" />

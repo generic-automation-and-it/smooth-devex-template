@@ -63,30 +63,42 @@ def main() -> None:
     if file_entry in content:
         sys.exit(0)
 
-    # Locate the target <Folder> element.
-    folder_tag = f'<Folder Name="{folder_name}">'
-    folder_idx = content.find(folder_tag)
+    # Locate the target <Folder> element. It may be a container
+    # (<Folder Name="X"> … </Folder>) or, when the folder is currently
+    # empty, a self-closing element (<Folder Name="X" />).
+    open_prefix = f'<Folder Name="{folder_name}"'
+    folder_idx = content.find(open_prefix)
     if folder_idx == -1:
         sys.exit(0)
 
-    # Find the corresponding </Folder> closing tag.
-    closing_tag = "</Folder>"
-    search_start = folder_idx + len(folder_tag)
-    closing_idx = content.find(closing_tag, search_start)
-    if closing_idx == -1:
+    tag_end = content.find(">", folder_idx)
+    if tag_end == -1:
         sys.exit(0)
 
-    # Match the indentation of the closing tag and add two extra spaces.
-    line_start = content.rfind("\n", 0, closing_idx) + 1
-    m = re.match(r"^(\s*)", content[line_start:closing_idx])
-    indent = m.group(1) if m else ""
-    entry_indent = indent + "  "
+    # Indentation of the <Folder> line; nested entries get two more spaces.
+    folder_line_start = content.rfind("\n", 0, folder_idx) + 1
+    fm = re.match(r"^(\s*)", content[folder_line_start:folder_idx])
+    folder_indent = fm.group(1) if fm else ""
+    entry_indent = folder_indent + "  "
 
-    updated = (
-        content[:closing_idx]
-        + f"{entry_indent}{file_entry}\n"
-        + content[closing_idx:]
-    )
+    if content[tag_end - 1] == "/":
+        # Self-closing: expand into a container holding the new file.
+        block = (
+            f'<Folder Name="{folder_name}">\n'
+            f"{entry_indent}{file_entry}\n"
+            f"{folder_indent}</Folder>"
+        )
+        updated = content[:folder_idx] + block + content[tag_end + 1 :]
+    else:
+        # Container: insert before the matching </Folder>.
+        closing_idx = content.find("</Folder>", tag_end)
+        if closing_idx == -1:
+            sys.exit(0)
+        updated = (
+            content[:closing_idx]
+            + f"{entry_indent}{file_entry}\n"
+            + content[closing_idx:]
+        )
     open(slnx_path, "w", encoding="utf-8").write(updated)
     print(f"slnx-docs-sync: added {rel} → {folder_name}", file=sys.stderr)
 
