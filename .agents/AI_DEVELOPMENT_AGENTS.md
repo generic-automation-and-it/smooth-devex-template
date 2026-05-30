@@ -40,15 +40,14 @@ This is a unified AI development experience folder that centralizes skills, prom
 | `.cursor` → `.agents` | Symbolic link for Cursor AI compatibility |
 | `CLAUDE.md` → `AGENTS.md` | Symbolic link alias for Claude-compatible root context discovery |
 | `GEMINI.md` → `AGENTS.md` | Symbolic link alias for Gemini-compatible root context discovery |
-| `.github/instructions` | GitHub Copilot path reference file pointing to `../.agents/rules` |
-| `.github/skills` | GitHub Copilot path reference file pointing to `../.agents/skills` |
+| `.github/instructions` → `../.agents/rules` | Symbolic link exposing rule files at `.github/instructions/**.instructions.md` for GitHub Copilot path-specific instructions |
 
 ### Tool Compatibility Matrix
 
 | Tool | Access Method | Status |
 | :---- | :---- | :---- |
 | **Claude Code** | Via `.claude` symlink | ✅ Active |
-| **GitHub Copilot** | Via `.github/instructions` and `.github/skills` path reference files | ✅ Active |
+| **GitHub Copilot** | Via `.github/instructions` symlink → `.agents/rules` (path-specific `*.instructions.md`); root `AGENTS.md` for repo-wide context | ✅ Active |
 | **Cursor AI** | Via `.cursor` symlink | ✅ Active |
 | **OpenAI Codex** | Via `.codex` symlink | ✅ Active |
 | **Gemini** | Via `GEMINI.md` symlink | ✅ Compatible |
@@ -94,7 +93,7 @@ This is a unified AI development experience folder that centralizes skills, prom
 
 ## 📊 Setup Instructions
 
-**Symlinks (`.claude`, `.codex`, `.cursor`, `CLAUDE.md`, `GEMINI.md`) are committed to git and available immediately after clone. GitHub Copilot uses committed path reference files in `.github/`, so no setup script is required for those mappings.**
+**Symlinks (`.claude`, `.codex`, `.cursor`, `CLAUDE.md`, `GEMINI.md`, and `.github/instructions → ../.agents/rules`) are committed to git and available immediately after clone. GitHub Copilot reads path-specific rules from `.github/instructions/**.instructions.md` (resolved through that symlink) and repo-wide context from root `AGENTS.md`, so no setup script is required.**
 
 ```bash
 # Verify links are present after clone
@@ -118,6 +117,7 @@ ls -la | grep -E '(\.claude|\.codex|\.cursor)'
 
 | Date | Change | Reason |
 | :---- | :---- | :---- |
+| 2026-05-30 | Restored `.github/instructions` as a symlink → `../.agents/rules`; added `applyTo` frontmatter to rule files. GitHub Copilot has no "path reference file" mechanism — only `.github/instructions/**.instructions.md` (Coding Agent + Code Review) and root `AGENTS.md` are read | Make Copilot path-specific instructions actually load |
 | 2026-05-08 | Converted `.github/instructions` and `.github/skills` from symlinks to committed path reference files; added `GEMINI.md` alias | Improve GitHub Copilot and Gemini compatibility |
 | 2026-04-03 | Added `.codex` and GitHub Copilot path mappings | Support GitHub Copilot and OpenAI Codex |
 | 2026-02-12 | Created `.agents` folder structure, migrated from `.claude` | Unified AI development experience across multiple tools |

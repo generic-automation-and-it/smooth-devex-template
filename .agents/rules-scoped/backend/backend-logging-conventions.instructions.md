@@ -1,6 +1,9 @@
 ---
 description: 'Backend logging level conventions — default to Debug, reserve Information for operation boundaries'
 globs: "**/*.cs"
+paths:
+  - "**/*.cs"
+applyTo: '**/*.cs'
 alwaysApply: false
 ---
 

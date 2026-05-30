@@ -1,6 +1,9 @@
 ---
 description: 'Pull request standards — GitHub PR workflow, Conventional Commits title format, AI Review Notes'
 globs: "**"
+paths:
+  - "**"
+applyTo: '**'
 alwaysApply: true
 ---
 # Pull Request Standards

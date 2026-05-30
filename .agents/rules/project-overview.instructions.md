@@ -1,6 +1,9 @@
 ---
 description: 'Builder Catalogue backend tech stack, architecture, and commands for AI coding tasks'
 globs: "**"
+paths:
+  - "**"
+applyTo: '**'
 alwaysApply: true
 ---
 # Project Overview

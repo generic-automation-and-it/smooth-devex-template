@@ -1,6 +1,9 @@
 ---
 description: 'Backend architecture rules: clean architecture boundaries and application feature-slice structure'
 globs: "**/*.cs"
+paths:
+  - "**/*.cs"
+applyTo: '**/*.cs'
 alwaysApply: false
 ---
 

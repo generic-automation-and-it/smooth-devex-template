@@ -1,3 +1,11 @@
+---
+description: 'Backend WireMock stubbing — single Aspire stub helper is the source of truth for user API stubs'
+globs: "tests/BuilderCatalogue.TestFramework.Aspire/**/*.cs"
+paths:
+  - "tests/BuilderCatalogue.TestFramework.Aspire/**/*.cs"
+applyTo: 'tests/BuilderCatalogue.TestFramework.Aspire/**/*.cs'
+alwaysApply: false
+---
 # Backend WireMock Stubbing Rules
 
 ## Scope

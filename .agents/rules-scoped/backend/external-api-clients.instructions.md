@@ -1,6 +1,9 @@
 ---
 description: 'Conventions for Refit-based external API clients: file locations, interface shape, caching adapter, sync (direct) registration'
 globs: "**/*.cs"
+paths:
+  - "**/*.cs"
+applyTo: '**/*.cs'
 alwaysApply: false
 ---
 

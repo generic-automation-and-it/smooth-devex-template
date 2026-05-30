@@ -1,6 +1,9 @@
 ---
 description: 'AGENTS.md quality standards, required structure, and anti-patterns'
-globs: "**"
+globs: "**/*AGENTS.md"
+paths:
+  - "**/*AGENTS.md"
+applyTo: '**/*AGENTS.md'
 alwaysApply: true
 ---
 # AGENTS.md Quality Standards

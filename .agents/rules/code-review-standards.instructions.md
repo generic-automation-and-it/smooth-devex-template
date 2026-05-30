@@ -1,6 +1,9 @@
 ---
 description: 'Code review standards and intentional design decisions — prevent false positive AI review feedback'
 globs: "**"
+paths:
+  - "**"
+applyTo: '**'
 alwaysApply: true
 ---
 # Code Review Standards & Design Decisions

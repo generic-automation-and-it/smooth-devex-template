@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "smooth-repo-index": {
-      "command": "bash",
-      "args": ["-c", "smooth-code-repo-index-mcp --root \"$(git rev-parse --git-common-dir | sed 's/\\.git$//')\""]
-    }
-  }
-}

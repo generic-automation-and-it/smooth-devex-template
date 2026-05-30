@@ -1,6 +1,9 @@
 ---
 description: 'Backend migration rules: EF Core migration authoring conventions and code-coverage exclusion requirements'
 globs: "src/BuilderCatalogue.Infrastructure/Persistence/Migrations/**/*.cs"
+paths:
+  - "src/BuilderCatalogue.Infrastructure/Persistence/Migrations/**/*.cs"
+applyTo: 'src/BuilderCatalogue.Infrastructure/Persistence/Migrations/**/*.cs'
 alwaysApply: false
 ---
 

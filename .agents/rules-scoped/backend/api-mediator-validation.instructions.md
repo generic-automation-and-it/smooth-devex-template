@@ -1,6 +1,9 @@
 ---
 description: 'Backend API rules: minimal APIs in Host, Mediator request flow, and FluentValidation fail-fast pipeline'
 globs: "**/*.cs"
+paths:
+  - "**/*.cs"
+applyTo: '**/*.cs'
 alwaysApply: false
 ---
 

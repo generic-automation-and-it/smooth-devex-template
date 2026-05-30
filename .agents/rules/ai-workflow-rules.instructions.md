@@ -1,6 +1,9 @@
 ---
 description: 'AI-assisted coding workflow phases (Odin→Bragi) — mandatory execution order for all coding tasks'
 globs: "**"
+paths:
+  - "**"
+applyTo: '**'
 alwaysApply: true
 ---
 # AI-Assisted Coding Workflow
