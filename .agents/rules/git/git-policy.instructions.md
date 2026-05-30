@@ -51,21 +51,27 @@ All work happens on a branch off `main`. Branch names **MUST** follow:
 
 ### Allowed types
 
+Branch `<type>` uses the **same vocabulary as the [Commit Message Convention](#commit-message-convention)** below, so a branch, its commits, and its PR title all share one type.
+
 | Type | When to use |
 |------|-------------|
-| `feature` | New feature or capability |
-| `bugfix` | Bug fix |
-| `hotfix` | Critical production fix |
-| `maintenance` | Dependency updates, CI/CD, infrastructure |
-| `chore` | Refactoring, cleanup, no behaviour change |
+| `feat` | New feature or capability |
+| `fix` | Bug fix |
+| `chore` | Maintenance, dependency updates, tooling |
+| `docs` | Documentation only |
+| `refactor` | Code restructuring without behaviour change |
+| `test` | Adding or updating tests |
+| `ci` | CI/CD pipeline changes |
+| `perf` | Performance improvements |
+| `build` | Build system changes |
 
 ### Examples
 
 ```
-feature/1234-add-user-export
-bugfix/2087-null-ref-on-login
-maintenance/3001-bump-gh-cli-minimum
-chore/cleanup-dead-code
+feat/1234-add-user-export
+fix/2087-null-ref-on-login
+chore/3001-bump-gh-cli-minimum
+refactor/cleanup-dead-code
 ```
 
 ## Commit Message Convention
@@ -152,3 +158,4 @@ User owns their git history. They may want to: review before committing, split i
 | Date | Change |
 |:-----|:-------|
 | 2026-05-30 | Initial version. |
+| 2026-05-30 | Align branch types with Conventional Commits (`feat`/`fix`/… not `feature`/`bugfix`/…). |

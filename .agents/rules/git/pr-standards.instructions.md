@@ -8,7 +8,7 @@ alwaysApply: true
 ---
 # Pull Request Standards
 
-**All PRs MUST follow the Conventional Commits title format.** Updated: 2026-05-06
+**All PRs MUST follow the Conventional Commits title format.** Updated: 2026-05-30
 
 ## PR Title Format
 
@@ -20,11 +20,11 @@ Examples: `feat(skills): add github-task-from-diff skill` | `fix(hooks): resolve
 
 ## Branch Naming
 
-Pattern: `<type>/<ticket-or-slug>-<description>` (lowercase, hyphens)
+Pattern: `<type>/<ticket-or-slug>-<description>` (lowercase, hyphens). Branch `<type>` uses the **same Conventional Commits vocabulary** as commit/PR-title types — see `git-policy.instructions.md`.
 
 | Valid Types | Invalid Types |
 |-------------|---------------|
-| `feature/`, `bugfix/`, `hotfix/`, `maintenance/`, `chore/` | `docs/`, `refactor/`, `test/` |
+| `feat/`, `fix/`, `chore/`, `docs/`, `refactor/`, `test/`, `ci/`, `perf/`, `build/` | `feature/`, `bugfix/`, `hotfix/`, `maintenance/` |
 
 ## PR Creation Checklist
 
@@ -65,3 +65,4 @@ Pattern: `<type>/<ticket-or-slug>-<description>` (lowercase, hyphens)
 | Date | Change |
 |:-----|:-------|
 | 2026-05-30 | Initial version. |
+| 2026-05-30 | Align branch-name types with Conventional Commits (`feat`/`fix`/… valid; `feature`/`bugfix`/… invalid). |
