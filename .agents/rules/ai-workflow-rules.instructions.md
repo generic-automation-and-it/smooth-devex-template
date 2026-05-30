@@ -133,12 +133,4 @@ Use when: 3+ files, new patterns, cross-cutting concerns, or ambiguous scope.
 
 | Date | Change |
 |:-----|:-------|
-| 2026-03-08 | Phase 8 (Bragi): added mandatory review of `.docs/adrs/` and `.docs/nfrs/` — update existing ADRs/NFRs if behavior changed, create new ADRs for new architectural decisions |
-| 2026-03-07 | Replaced project-specific frontend path (`ProsmarBunkering.Web/**`) with generic frontend/backend path description |
-| 2026-02-25 | Aligned gates with standalone template: 🛑 markers on enforcement table, Phase 8 mandatory on BOTH paths (not just full), lightweight path now includes Phase 8, added context-doc-loaded obligation rule, clarified path selection is about middle phases not Phase 8 |
-| 2026-02-23 | Merge conflict resolution: combined Output Requirements (main) with standalone template alignment (branch). Enforcement table now has both "MUST output skip reason" and Phase 1 gate consistency, Phase 7→8 forward pointer, Bragi MANDATORY |
-| 2026-02-21 | Added Output Requirements section: mandatory phase labelling, skip accountability, sequential order enforcement. Updated Enforcement table: "Skip for trivial tasks" → "Skippable — MUST output skip reason" |
-| 2026-02-21 | Aligned with standalone template: Phase 1 gate consistency (proceed if clear), path decision criteria, Phase 4 soft prerequisites, Phase 6 failure handling, Phase 7 skip-aware spec sync. Strengthened Phase 8 (Bragi) enforcement — added forward pointer from Phase 7, MANDATORY label |
-| 2026-02-18 | Aligned phases with AI_WORKTASK_PROMOTE_TEMPLATE (Phase 0-8, Norse god names), enforced context loading gate, added lightweight vs full path |
-| 2026-01-20 | 4→5 phases, context loading mandatory, Plan phase, load-context workflow, `ask_user` support |
-| 2026-01-19 | Extracted from root AGENTS.md, token optimization (327→140 lines) |
+| 2026-05-30 | Initial version. |

@@ -106,6 +106,4 @@ Caching `IApiResponse<T>` directly breaks `HybridCache` because the underlying `
 
 | Date | Change |
 |:-----|:-------|
-| 2026-05-12 | Plural/singular naming convention for list vs singular clients (`IUsersClient` vs `IUserClient`, `IColoursClient`, `ISetsClient` vs `ISetClient`). | #107 |
-| 2026-05-12 | Rewrote pattern: split list (Refit, Application, uncached, `IApiResponse<T>`) from singular (plain Application interface, cached Infra adapter, throws `UnknownResourceException` on 404). Removed Scrutor `Decorate<>` + keyed `"sync"` registrations. | #107 |
-| 2026-05-11 | Created — codified Refit interface location, IApiResponse<T> return shape, direct-adaptor marker, caching adapter throw-on-failure pattern, refitDescriptor DI registration order |
+| 2026-05-30 | Initial version. |

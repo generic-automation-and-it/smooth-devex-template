@@ -64,5 +64,4 @@ Pattern: `<type>/<ticket-or-slug>-<description>` (lowercase, hyphens)
 
 | Date | Change |
 |:-----|:-------|
-| 2026-05-06 | Updated to GitHub-native workflow — replaced ADO template reference with `gh` CLI; aligned PR title format with Conventional Commits (git-policy.instructions.md); added frontmatter |
-| 2026-02-18 | Extracted from root CLAUDE.md to `.agents/rules/`, compacted |
+| 2026-05-30 | Initial version. |

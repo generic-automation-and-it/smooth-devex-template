@@ -117,7 +117,4 @@ ls -la | grep -E '(\.claude|\.codex|\.cursor)'
 
 | Date | Change | Reason |
 | :---- | :---- | :---- |
-| 2026-05-30 | Restored `.github/instructions` as a symlink → `../.agents/rules`; added `applyTo` frontmatter to rule files. GitHub Copilot has no "path reference file" mechanism — only `.github/instructions/**.instructions.md` (Coding Agent + Code Review) and root `AGENTS.md` are read | Make Copilot path-specific instructions actually load |
-| 2026-05-08 | Converted `.github/instructions` and `.github/skills` from symlinks to committed path reference files; added `GEMINI.md` alias | Improve GitHub Copilot and Gemini compatibility |
-| 2026-04-03 | Added `.codex` and GitHub Copilot path mappings | Support GitHub Copilot and OpenAI Codex |
-| 2026-02-12 | Created `.agents` folder structure, migrated from `.claude` | Unified AI development experience across multiple tools |
+| 2026-05-30 | Initial version. | |

@@ -151,6 +151,4 @@ User owns their git history. They may want to: review before committing, split i
 
 | Date | Change |
 |:-----|:-------|
-| 2026-05-30 | Added Branching Strategy (`<type>/{issue}-short-description` + allowed types); changed PR title format to `<type>[{ticket}]: <description>`; added Format Enforcement section requiring `git*` skills to reject non-conforming commits/branches/PR titles |
-| 2026-05-06 | Added Conventional Commits convention for commit messages and PR titles (squash merge) |
-| 2026-02-18 | Extracted from root CLAUDE.md to `.agents/rules/`, compacted to decision table |
+| 2026-05-30 | Initial version. |

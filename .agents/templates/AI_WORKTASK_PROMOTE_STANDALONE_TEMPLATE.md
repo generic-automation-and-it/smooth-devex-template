@@ -576,12 +576,4 @@ Branch is ready for PR review. All work committed to [branch name].
 
 | Date | Task | Changes |
 |------|------|---------|
-| 2026-04-06 | | **Role instructions created**: `.agents/roles/` now contains specialist instructions for Phase 1 (odin-po-specialist, odin-architect-specialist, odin-qa-specialist), Phase 4-6 (backend-engineer, frontend-engineer), Phase 7 (heimdall-reviewer). Each role specifies: responsibilities, output format, escalation triggers, key principles. Orchestrator invokes these when launching sub-agents. |
-| 2026-04-06 | | **Phases 2-8 mechanics**: Phase 2 (Thoth) Architect determines tech stack (backend/frontend/infra), informs engineer selection in Phase 4-6. Phase 3 (Forseti) Architect writes spec (Opus). Phase 4 (Tyr) Architect plan → engineers in parallel if needed. Phase 5 (Frigg) Architect documents. Phase 6 (Thor) engineers parallel on shared branch. Phase 7 (Heimdall) all reviewers parallel, Orchestrator gates. Phase 8 (Bragi) Orchestrator commits all work in logical chunks, updates AGENTS.md and ADRs. |
-| 2026-04-06 | | **Multi-agent orchestration mechanics**: Phase 1 (Odin) launches 3 sub-agents in parallel with Agent tool (run_in_background=true). Sub-agents receive: role instruction + full worktask + domain context. Output: structured PO/Architect/QA sections. Orchestrator consolidates and gates. Model selection table: Opus for Architect + Orchestrator gates, Sonnet for implementation + domain specialists (cost-quality trade-off). |
-| 2026-04-06 | | Added multi-agent orchestration: Phase 1 (Odin) now launches PO + Architect + QA sub-agents in parallel; Phase 2-3 (Architect only); Phase 4 (Architect → Backend/Frontend engineers); Phase 6 (Backend/Frontend engineers in parallel); Phase 7 (all reviewers in parallel); Phase 8 (Orchestrator commits all work) |
-| 2026-03-07 | | Removed project-specific ticket references from changelog |
-| 2026-02-21 | | Strengthened phase output rules: mandatory labelling, skip accountability, sequential order enforcement |
-| 2026-02-21 | | Aligned with standalone template: path criteria, Phase 1 gate consistency, git override callout, contexts hint, phase announcements, Phase 0 references Contexts section |
-| 2026-02-12 | | Slimmed template — moved phase details to `.agents/agents/` |
-| 2026-01-30 | | Created single-agent workflow template |
+| 2026-05-30 | | Initial version. |

@@ -45,4 +45,4 @@ logger.LogError(ex, "Compare flow failed for agent {AgentId}", info.AgentId);
 
 | Date | Change |
 |:-----|:-------|
-| 2026-04-03 | Created — extracted from VemSync pipeline logging conventions |
+| 2026-05-30 | Initial version. |

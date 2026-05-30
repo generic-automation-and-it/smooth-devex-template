@@ -159,7 +159,4 @@ Copilot can pass a stable prompt/session identifier:
 
 | Date | Change | Ref |
 |:-----|:-------|:----|
-| 2026-05-30 | Superseded LADR-005: removed `.agents/rules-scoped/<scope>/` scope-injection. Rules now live under `.agents/rules/` (with `backend/`/`git/`/`meta/` subfolders) and are scoped per-file via `paths`/`globs`/`applyTo` frontmatter; the hook only does the AGENTS.md walk + skill-on-path injection. Knowledge-conventional inject path moved to `.agents/rules/meta/`. | tianjin-v1 |
-| 2026-05-14 | Added LADR-005 (scope-conditional rule injection, no default scope) and LADR-006 (skill-on-path injection). Hook now detects backend scope and injects `.agents/rules-scoped/backend/*` on `.cs`/`.csproj`/`.sln(x)` / `src/Project.*/` / `tests/Project.*/` access; injects `manage-rule-system/SKILL.md` on rule-file access; injects `knowledge-conventional-contexts-quality.instructions.md` on `*AGENTS.md` access. Inventory table added to root `AGENTS.md`. | hamburg-v3 — port of bunker-procurement #5206 + token-reduction playbook |
-| 2026-05-14 | Hardening from upstream Gemini review: wrapper guards `exec` with `[ -x ]` check, matcher widened to `Read\|Edit\|Write`, `cd -P`/`pwd -P` for symlink-safe canonical paths, `\|\| true` guards on tracker append and content read. | denpasar |
-| 2026-05-14 | Ported from bunker-procurement: agent-agnostic lazy AGENTS.md context loading via PostToolUse hook; skip list extended with `.agents/rules/` for this repo's symlink layout. | denpasar |
+| 2026-05-30 | Initial version. | |

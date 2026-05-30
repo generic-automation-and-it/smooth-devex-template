@@ -71,7 +71,4 @@ tests/
 
 | Date | Change |
 |:-----|:-------|
-| 2026-05-30 | Genericized placeholder name `BuilderCatalogue`/`builder-catalogue` → `Project`/`project` (template state; see root AGENTS.md Template Notice) |
-| 2026-05-09 | Replaced template content with repository-specific stack, commands, structure, and AI-coder rules |
-| 2026-05-09 | Corrected Mediator description and added messaging durability prompt guidance (queue/streaming) |
-| 2026-03-07 | Reset to generic template — remove project-specific content |
+| 2026-05-30 | Initial version. |

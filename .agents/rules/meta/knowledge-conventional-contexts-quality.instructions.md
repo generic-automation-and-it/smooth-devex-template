@@ -85,7 +85,4 @@ When AI agents make code changes, they MUST update the corresponding `*_AGENTS.m
 
 | Date | Change |
 |:-----|:-------|
-| 2026-02-28 | Expanded System Context (#3) to three-tier diagram policy: C4Context (services/workers), sequenceDiagram (handlers with side effects), erDiagram (DbContext/repositories). Added Drift Minimization section with update obligation, diagram accuracy, and stale documentation rules. | BNKI-001 |
-| 2026-02-28 | Broadened value test from single bug-prevention question to three-part criteria (bug prevention, decision quality, system understanding). Added Test References section (#6, backend only). Added System Context inclusion guidance (expected for services/workers). Clarified LADR triviality judgment with concrete examples. Renumbered sections 6→7→8→9. | BNKI-001 |
-| 2026-02-28 | Added Quality Constraints (#6) and Migration Plans (#7) sections, expanded System Context to include Mermaid C4Context diagram — aligned with austin-v1 |
-| 2026-02-28 | Created — extracted quality standards from `review-contextural-knowledge-agents` command, aligned with austin-v1 `KNOWLEDGE_CONVENTION_CONTEXTS.md` |
+| 2026-05-30 | Initial version. |

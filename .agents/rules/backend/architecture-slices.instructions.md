@@ -29,4 +29,4 @@ Updated: 2026-05-09
 
 | Date | Change |
 |:-----|:-------|
-| 2026-05-09 | Created — extracted backend structure rules from root `AGENTS.md` and application/host contexts |
+| 2026-05-30 | Initial version. |

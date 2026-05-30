@@ -36,5 +36,4 @@ If the parent file becomes too large, move pipeline types to a `Pipelines/` subf
 
 | Date | Change |
 |:-----|:-------|
-| 2026-05-09 | Created — codified minimal API + Mediator + FluentValidation fail-fast requirements and class-shape conventions |
-| 2026-05-09 | Added messaging durability guidance (prompt for queue/streaming when justified) |
+| 2026-05-30 | Initial version. |

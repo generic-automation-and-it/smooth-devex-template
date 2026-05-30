@@ -35,4 +35,4 @@ Updated: 2026-05-10
 
 | Date | Change |
 |:-----|:-------|
-| 2026-05-10 | Created — defines ExcludeFromCodeCoverage requirement for migration classes |
+| 2026-05-30 | Initial version. |
