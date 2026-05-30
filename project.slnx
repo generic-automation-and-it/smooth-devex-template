@@ -1,0 +1,98 @@
+<Solution>
+  <Folder Name="/.agents/">
+    <File Path=".agents/AI_DEVELOPMENT_AGENTS.md" />
+    <File Path=".agents/hooks.json" />
+    <File Path=".agents/launch.json" />
+    <File Path=".agents/settings.json" />
+  </Folder>
+  <Folder Name="/.agents/hooks/">
+    <File Path=".agents/hooks/agentmd-create-update.sh" />
+    <File Path=".agents/hooks/knowledge-rule-enforce.sh" />
+    <File Path=".agents/hooks/load-agents-context.sh" />
+    <File Path=".agents/hooks/manage-rule-system-context.sh" />
+    <File Path=".agents/hooks/slnx-docs-sync.py" />
+    <File Path=".agents/hooks/worktask-create.sh" />
+  </Folder>
+  <Folder Name="/.agents/rules/">
+    <File Path=".agents/rules/ai-workflow-rules.instructions.md" />
+    <File Path=".agents/rules/code-review-standards.instructions.md" />
+    <File Path=".agents/rules/git-policy.instructions.md" />
+    <File Path=".agents/rules/knowledge-conventional-contexts-quality.instructions.md" />
+    <File Path=".agents/rules/pr-standards.instructions.md" />
+    <File Path=".agents/rules/project-overview.instructions.md" />
+    <File Path=".agents/rules/rules.instructions.md" />
+  </Folder>
+  <Folder Name="/.agents/rules-scoped/backend/">
+    <File Path=".agents/rules-scoped/backend/api-mediator-validation.instructions.md" />
+    <File Path=".agents/rules-scoped/backend/architecture-slices.instructions.md" />
+    <File Path=".agents/rules-scoped/backend/backend-logging-conventions.instructions.md" />
+    <File Path=".agents/rules-scoped/backend/external-api-clients.instructions.md" />
+    <File Path=".agents/rules-scoped/backend/migrations.instructions.md" />
+    <File Path=".agents/rules-scoped/backend/wiremock-stubbing.instructions.md" />
+  </Folder>
+  <Folder Name="/.agents/setup/scripts/">
+    <File Path=".agents/setup/scripts/agents-setup.ps1" />
+    <File Path=".agents/setup/scripts/agents-setup.sh" />
+    <File Path=".agents/setup/scripts/agents-terminals.ps1" />
+    <File Path=".agents/setup/scripts/agents-terminals.sh" />
+  </Folder>
+  <Folder Name="/.agents/skills/">
+    <File Path=".agents/skills/README.md" />
+  </Folder>
+  <Folder Name="/.agents/skills/ai-review/">
+    <File Path=".agents/skills/ai-review/SKILL.md" />
+    <File Path=".agents/skills/ai-review/agents/openai.yaml" />
+  </Folder>
+  <Folder Name="/.agents/skills/git-commit/">
+    <File Path=".agents/skills/git-commit/SKILL.md" />
+  </Folder>
+  <Folder Name="/.agents/skills/git-commit-push/">
+    <File Path=".agents/skills/git-commit-push/SKILL.md" />
+  </Folder>
+  <Folder Name="/.agents/skills/git-commit-push-pr/">
+    <File Path=".agents/skills/git-commit-push-pr/SKILL.md" />
+    <File Path=".agents/skills/git-commit-push-pr/scripts/check-pr.sh" />
+    <File Path=".agents/skills/git-commit-push-pr/scripts/create-pr.sh" />
+    <File Path=".agents/skills/git-commit-push-pr/scripts/get-base-branch.sh" />
+    <File Path=".agents/skills/git-commit-push-pr/scripts/get-pr-metadata.sh" />
+    <File Path=".agents/skills/git-commit-push-pr/scripts/push.sh" />
+    <File Path=".agents/skills/git-commit-push-pr/scripts/update-pr.sh" />
+  </Folder>
+  <Folder Name="/.agents/skills/git-sync/">
+    <File Path=".agents/skills/git-sync/SKILL.md" />
+  </Folder>
+  <Folder Name="/.agents/skills/github-task-from-diff/">
+    <File Path=".agents/skills/github-task-from-diff/SKILL.md" />
+    <File Path=".agents/skills/github-task-from-diff/agents/openai.yaml" />
+    <File Path=".agents/skills/github-task-from-diff/scripts/create_github_task_from_diff.py" />
+  </Folder>
+  <Folder Name="/.agents/skills/load-agents-context/">
+    <File Path=".agents/skills/load-agents-context/SKILL.md" />
+    <File Path=".agents/skills/load-agents-context/agents/openai.yaml" />
+    <File Path=".agents/skills/load-agents-context/scripts/load-agents-context.sh" />
+  </Folder>
+  <Folder Name="/.agents/skills/load-context/">
+    <File Path=".agents/skills/load-context/SKILL.md" />
+    <File Path=".agents/skills/load-context/agents/openai.yaml" />
+  </Folder>
+  <Folder Name="/.agents/skills/manage-rule-system/">
+    <File Path=".agents/skills/manage-rule-system/SKILL.md" />
+    <File Path=".agents/skills/manage-rule-system/scripts/inject-context.sh" />
+  </Folder>
+  <Folder Name="/.agents/templates/">
+    <File Path=".agents/templates/AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md" />
+    <File Path=".agents/templates/TEMPLATE_AGENTS.md" />
+    <File Path=".agents/templates/TEMPLATE_README.md" />
+  </Folder>
+  <Folder Name="/.docs/">
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/.docs/wiki/">
+    <File Path=".docs/wiki/ai-tooling.md" />
+    <File Path=".docs/wiki/architecture.md" />
+    <File Path=".docs/wiki/testing.md" />
+  </Folder>
+  <Folder Name="/.docs/adr/" />
+  <Folder Name="/.docs/nfr/" />
+  <File Path="AGENTS.md" />
+</Solution>
