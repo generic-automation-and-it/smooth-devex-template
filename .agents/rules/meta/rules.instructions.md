@@ -14,6 +14,15 @@ When creating or modifying rule files in `.agents/rules/`, follow this conventio
 
 All rule files live under a single `.agents/rules/` tree. Every `.md` file in it is auto-loaded by the AI tool at session start; **applicability is scoped per-file** via the `paths`/`globs`/`applyTo` frontmatter (there is no separate injected/scoped directory).
 
+### Hook-deferred rules (Claude-only token saving)
+
+A rule that is only relevant to a specific prompt (e.g. code reviews) can be **deferred for Claude** so it does not consume context on every session, then re-injected on demand by a `UserPromptSubmit` hook. To do this:
+
+1. Set the Claude `paths` field to a **non-matching sentinel** (e.g. `[".review-only--injected-via-hook"]`) so Claude's path-scoper skips it at session start. Leave `globs`/`alwaysApply`/`applyTo` at their normal scope — **Cursor and Copilot do not run Claude Code hooks, so they keep loading the rule** and must not lose coverage.
+2. Add a hook script under `.agents/hooks/` that matches the relevant prompt and `cat`s the rule file inside a `<context-auto-loaded>` block, then wire it into `settings.json` → `hooks.UserPromptSubmit`.
+
+Current example: `code-review-standards.instructions.md` → `.agents/hooks/code-review-standards-context.sh` (fires on `/review`, `/code-review`, `/ai-review`, "pr review", etc.). Use this pattern sparingly — only for genuinely prompt-scoped rules, never for always-relevant ones (workflow) or safety rules (git policy).
+
 Rules are organized into category subfolders for navigation only — folder placement does not change loading:
 
 | Location | Use for |

@@ -1,8 +1,12 @@
 ---
 description: 'Code review standards and intentional design decisions — prevent false positive AI review feedback'
 globs: "**"
+# Claude Code only: deferred (NOT auto-loaded every session). Injected on review prompts by
+# .agents/hooks/code-review-standards-context.sh — saves ~900 tokens on non-review sessions.
+# The sentinel below never matches a real file, so Claude's path-scoper skips it at session start.
+# Cursor/Copilot still load it always via globs / alwaysApply / applyTo below (they don't run Claude hooks).
 paths:
-  - "**"
+  - ".review-only--injected-via-hook"
 applyTo: '**'
 alwaysApply: true
 ---
@@ -80,6 +84,4 @@ Modern .NET SDK auto-enables the latest C# version. `<LangVersion>` in csproj is
 
 | Date | Change |
 |:-----|:-------|
-| 2026-03-07 | Removed project-specific DRs (SQL Server enforcement, Wijmo migration, ZN-Library design system). Renumbered generically. |
-| 2026-02-18 | Added Code Comments Policy (merged from root CLAUDE.md) |
-| 2026-02-12 | Moved to `.agents/rules/` |
+| 2026-05-30 | Initial version. |

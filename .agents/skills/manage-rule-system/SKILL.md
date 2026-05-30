@@ -23,6 +23,8 @@ All rule files live under a single `.agents/rules/` tree, organized into categor
 
 To make a rule narrow to certain files, set its frontmatter scope fields (e.g. `paths: ["**/*.cs"]`); to make it always-apply, use `"**"` / `alwaysApply: true`. The folder is organizational only — it does not change loading.
 
+To defer a prompt-scoped rule for Claude only (saving session tokens) and re-inject it on demand via a `UserPromptSubmit` hook, see "Hook-deferred rules" in `.agents/rules/meta/rules.instructions.md` — e.g. `code-review-standards`.
+
 ## File Format
 
 Every rule file MUST:

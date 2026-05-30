@@ -96,6 +96,14 @@
             "command": ".agents/hooks/manage-rule-system-context.sh"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".agents/hooks/code-review-standards-context.sh"
+          }
+        ]
       }
     ]
   }
