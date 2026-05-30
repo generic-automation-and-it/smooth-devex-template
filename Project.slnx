@@ -1,4 +1,27 @@
 <Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Project.Domain/Project.Domain.csproj" />
+    <Project Path="src/Project.Application/Project.Application.csproj" />
+    <Project Path="src/Project.Infrastructure/Project.Infrastructure.csproj" />
+    <Project Path="src/Project.Host/Project.Host.csproj" />
+  </Folder>
+  <Folder Name="/tests/TestFramework/">
+    <Project Path="tests/Project.TestFramework/Project.TestFramework.csproj" />
+  </Folder>
+  <Folder Name="/tests/" />
+  <Folder Name="/tests/L0/">
+    <Project Path="tests/Project.Domain.UnitTest/Project.Domain.UnitTest.csproj" />
+    <Project Path="tests/Project.Application.UnitTest/Project.Application.UnitTest.csproj" />
+    <Project Path="tests/Project.Infrastructure.UnitTest/Project.Infrastructure.UnitTest.csproj" />
+    <Project Path="tests/Project.Host.UnitTest/Project.Host.UnitTest.csproj" />
+  </Folder>
+  <Folder Name="/tests/L1/">
+    <Project Path="tests/Project.Application.ComponentTest/Project.Application.ComponentTest.csproj" />
+    <Project Path="tests/Project.Infrastructure.ComponentTest/Project.Infrastructure.ComponentTest.csproj" />
+  </Folder>
+  <Folder Name="/tests/L2/">
+    <Project Path="tests/Project.Host.IntegrationTest/Project.Host.IntegrationTest.csproj" />
+  </Folder>
   <Folder Name="/.agents/">
     <File Path=".agents/AI_DEVELOPMENT_AGENTS.md" />
     <File Path=".agents/hooks.json" />
