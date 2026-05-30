@@ -42,7 +42,7 @@ Detailed backend coding rules are maintained in `.agents/rules-scoped/backend/` 
 
 ## Rules
 
-Project-wide rules live in `.agents/rules/` as `*.instructions.md` files and are auto-loaded every session by Claude Code, Cursor, Copilot, and Codex via the symlinks/path-references documented in `.agents/AI_DEVELOPMENT_AGENTS.md`. Scope-conditional rules live in `.agents/rules-scoped/<scope>/` and are injected by the `load-agents-context` PostToolUse hook only when an in-scope file is opened (`*.cs`, `*.csproj`, `*.sln(x)`, or files under `src/BuilderCatalogue.*/` and `tests/BuilderCatalogue.*/`). Out-of-scope sessions (e.g., editing `.github/workflows/`, `.docs/`, `.agents/` infra) see only the always-loaded set. See `.agents/rules/rules.instructions.md` for the file convention and `.agents/skills/manage-rule-system/SKILL.md` for the directory contract.
+Project-wide rules live in `.agents/rules/` as `*.instructions.md` files and are auto-loaded every session by Claude Code, Cursor, Copilot, and Codex via the symlinks/path-references documented in `.agents/AI_DEVELOPMENT_AGENTS.md`. Scope-conditional rules live in `.agents/rules-scoped/<scope>/` and are injected by the `load-agents-context` PostToolUse hook only when an in-scope file is opened (`*.cs`, `*.csproj`, `*.sln(x)`, or files under `src/BuilderCatalogue.*/` and `tests/BuilderCatalogue.*/`). Out-of-scope sessions (e.g., editing `.github/workflows/`, `.docs/`, `.agents/` infra) see only the always-loaded set. See `.agents/rules/meta/rules.instructions.md` for the file convention and `.agents/skills/manage-rule-system/SKILL.md` for the directory contract.
 
 ### Scoped Rules Inventory
 

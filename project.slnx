@@ -15,18 +15,24 @@
   </Folder>
   <Folder Name="/.agents/rules/">
     <File Path=".agents/rules/ai-workflow-rules.instructions.md" />
-    <File Path=".agents/rules/api-mediator-validation.instructions.md" />
-    <File Path=".agents/rules/architecture-slices.instructions.md" />
-    <File Path=".agents/rules/backend-logging-conventions.instructions.md" />
     <File Path=".agents/rules/code-review-standards.instructions.md" />
-    <File Path=".agents/rules/external-api-clients.instructions.md" />
-    <File Path=".agents/rules/git-policy.instructions.md" />
-    <File Path=".agents/rules/knowledge-conventional-contexts-quality.instructions.md" />
-    <File Path=".agents/rules/migrations.instructions.md" />
-    <File Path=".agents/rules/pr-standards.instructions.md" />
     <File Path=".agents/rules/project-overview.instructions.md" />
-    <File Path=".agents/rules/rules.instructions.md" />
-    <File Path=".agents/rules/wiremock-stubbing.instructions.md" />
+  </Folder>
+  <Folder Name="/.agents/rules/backend/">
+    <File Path=".agents/rules/backend/api-mediator-validation.instructions.md" />
+    <File Path=".agents/rules/backend/architecture-slices.instructions.md" />
+    <File Path=".agents/rules/backend/backend-logging-conventions.instructions.md" />
+    <File Path=".agents/rules/backend/external-api-clients.instructions.md" />
+    <File Path=".agents/rules/backend/migrations.instructions.md" />
+    <File Path=".agents/rules/backend/wiremock-stubbing.instructions.md" />
+  </Folder>
+  <Folder Name="/.agents/rules/git/">
+    <File Path=".agents/rules/git/git-policy.instructions.md" />
+    <File Path=".agents/rules/git/pr-standards.instructions.md" />
+  </Folder>
+  <Folder Name="/.agents/rules/meta/">
+    <File Path=".agents/rules/meta/knowledge-conventional-contexts-quality.instructions.md" />
+    <File Path=".agents/rules/meta/rules.instructions.md" />
   </Folder>
   <Folder Name="/.agents/setup/scripts/">
     <File Path=".agents/setup/scripts/agents-setup.ps1" />

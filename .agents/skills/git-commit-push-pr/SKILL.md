@@ -43,7 +43,7 @@ Run `gh pr list --head $(git rev-parse --abbrev-ref HEAD) --json number,title`
 
 ### Step 3: Build PR Title (Ticketed Conventional Format)
 
-**MANDATORY FORMAT** (per `.agents/rules/git-policy.instructions.md` — the source of truth):
+**MANDATORY FORMAT** (per `.agents/rules/git/git-policy.instructions.md` — the source of truth):
 
 `<type>[{ticket}]: <description>`
 
