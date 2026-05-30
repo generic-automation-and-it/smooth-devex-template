@@ -1,0 +1,1 @@
+# smoot-agent-template
