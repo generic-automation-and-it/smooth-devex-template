@@ -1,3 +1,4 @@
+using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 
 namespace Project.TestFramework.Aspire;
@@ -14,6 +15,7 @@ internal static class DistributedApplicationBuilderExtensions
             secret: true);
 
         builder.AddPostgresDependency(postgresPassword);
+        builder.AddRedisDependency();
         builder.AddWireMockDependency();
     }
 
@@ -33,6 +35,16 @@ internal static class DistributedApplicationBuilderExtensions
         postgres.AddDatabase("infra-component");
         postgres.AddDatabase("infra-integration");
         postgres.AddDatabase("host-integration");
+    }
+
+    private static void AddRedisDependency(this IDistributedApplicationBuilder builder)
+    {
+        builder.AddRedis("redis", port: 16379)
+            .WithContainerName("project-test-redis")
+            .WithContainerRuntimeArgs(
+                "--label", $"com.docker.compose.project={DockerDesktopGroupName}",
+                "--label", "com.docker.compose.service=project-test-redis")
+            .WithLifetime(ContainerLifetime.Persistent);
     }
 
     private static void AddWireMockDependency(this IDistributedApplicationBuilder builder)
