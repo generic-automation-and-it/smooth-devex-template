@@ -29,18 +29,21 @@ Run `gh pr list --head $(git rev-parse --abbrev-ref HEAD) --json number,title`
 - If the result contains a PR (non-empty output): go to **Update Existing PR** section below and STOP
 - If no PR exists (empty output): **MUST CONTINUE** with Step 3
 
-### Step 3: Build PR Title (Conventional Commits Format)
+### Step 3: Build PR Title (Ticketed Conventional Format)
 
-**MANDATORY FORMAT**: Follow [Conventional Commits](https://www.conventionalcommits.org)
+**MANDATORY FORMAT** (per `.agents/rules/git-policy.instructions.md` — the source of truth):
 
-`<type>[optional scope]: <description>`
+`<type>[{ticket}]: <description>`
+
+- `<type>` — Conventional Commits type (`feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `ci`, `perf`, `build`)
+- `[{ticket}]` — tracking ticket/issue number in square brackets; use `[NO-TICKET]` only if none exists
 
 Examples:
-- `feat(auth): add user authentication`
-- `fix(api): resolve null reference in agent sync`
-- `chore(deps): update dependencies`
+- `feat[1234]: add user authentication`
+- `fix[2087]: resolve null reference in agent sync`
+- `chore[NO-TICKET]: update dependencies`
 
-This title becomes the squash commit message on `main`, so it must be descriptive and follow the format precisely.
+This title becomes the squash commit message on `main`, so it must be descriptive and follow the format precisely. **If a conforming ticket/title cannot be determined, STOP and ask the user — do not guess or proceed with a non-conforming title.**
 
 ### Step 4: Read PR Template
 
@@ -59,7 +62,7 @@ This title becomes the squash commit message on `main`, so it must be descriptiv
 Run `gh pr create --title "<title>" --body "<filled template content>" --base main`
 
 - **Base branch defaults to `main`**
-- **ABSOLUTE REQUIREMENT**: Use Conventional Commits format for title, STRICT template for body
+- **ABSOLUTE REQUIREMENT**: Use the `<type>[{ticket}]: <description>` title format (Step 3), STRICT template for body
 
 ### Step 7: Verify (MANDATORY)
 

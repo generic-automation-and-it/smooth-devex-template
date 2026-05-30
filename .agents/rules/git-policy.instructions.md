@@ -1,11 +1,14 @@
 ---
-description: 'Git operations policy — never commit/push without explicit user request; Conventional Commits for messages and PR titles'
+description: 'Git operations policy — never commit/push without explicit user request; branching strategy, Conventional Commits for messages, ticketed PR titles'
 globs: "**"
+paths:
+  - "**"
+applyTo: '**'
 alwaysApply: true
 ---
 # Git Operations Policy
 
-**NEVER commit or push unless the user EXPLICITLY asks.** Updated: 2026-02-18
+**NEVER commit or push unless the user EXPLICITLY asks.** Updated: 2026-05-30
 
 ## Absolute Rule
 
@@ -33,6 +36,37 @@ alwaysApply: true
 - Wait for explicit request ("push this", "please push", or explicit git workflow request)
 - Never auto-push after committing
 - Never assume push is implied when user asks to commit
+
+## Branching Strategy
+
+All work happens on a branch off `main`. Branch names **MUST** follow:
+
+```
+<type>/{issue}-short-description
+```
+
+- **`<type>`** — one of the allowed branch types below
+- **`{issue}`** — the tracking issue/ticket number (omit this segment only when no ticket exists)
+- **`short-description`** — lowercase, hyphen-separated, no spaces
+
+### Allowed types
+
+| Type | When to use |
+|------|-------------|
+| `feature` | New feature or capability |
+| `bugfix` | Bug fix |
+| `hotfix` | Critical production fix |
+| `maintenance` | Dependency updates, CI/CD, infrastructure |
+| `chore` | Refactoring, cleanup, no behaviour change |
+
+### Examples
+
+```
+feature/1234-add-user-export
+bugfix/2087-null-ref-on-login
+maintenance/3001-bump-gh-cli-minimum
+chore/cleanup-dead-code
+```
 
 ## Commit Message Convention
 
@@ -78,23 +112,34 @@ refactor(rules): rename ALL_CAPS rule files to kebab-case
 
 ## PR Title Convention
 
-This repository uses **squash merges**. The squash commit message is taken from the PR title, so PR titles must also follow Conventional Commits format:
+This repository uses **squash merges**. The squash commit message is taken from the PR title, so PR titles **MUST** follow:
 
 ```
-<type>[optional scope]: <description>
+<type>[{ticket}]: <description>
 ```
 
-- Same type list and rules as commit messages above
-- The PR title becomes the single squash commit on `main`, so it must be descriptive enough to stand alone in the git log
-- **Do NOT** use generic titles like "Update files" or "Fix issue" — include the type and a meaningful description
+- **`<type>`** — same Conventional Commits type list and rules as commit messages above
+- **`[{ticket}]`** — the tracking ticket/issue number in square brackets (e.g. `[1234]`). If there is genuinely no ticket, use `[NO-TICKET]`
+- **`<description>`** — lowercase, imperative, no trailing period; descriptive enough to stand alone in the `main` git log
+- **Do NOT** use generic titles like "Update files" or "Fix issue" — include the type, ticket, and a meaningful description
 
 ### Examples
 
 ```
-feat(skills): add github-task-from-diff skill with horizontal diff slicing
-fix(hooks): make slnx-docs-sync.py detect solution file dynamically
-chore(agents): rename rule files to kebab-case .instructions.md convention
+feat[1234]: add github-task-from-diff skill with horizontal diff slicing
+fix[2087]: make slnx-docs-sync.py detect solution file dynamically
+chore[NO-TICKET]: rename rule files to kebab-case .instructions.md convention
 ```
+
+## Format Enforcement
+
+These formats are **mandatory, not advisory**:
+
+- **No commit** may be created unless its message matches the [Commit Message Convention](#commit-message-convention).
+- **No branch** may be created unless its name matches the [Branching Strategy](#branching-strategy).
+- **No PR** may be opened unless its title matches the [PR Title Convention](#pr-title-convention).
+
+Any skill matching `git*` (e.g. `git-commit`, `git-commit-push`, `git-commit-push-pr`, `git-sync`) **MUST** validate the relevant format before performing the operation. If the input does not conform, the skill must **stop and ask the user to supply a conforming value** — it must not guess, silently rewrite, or proceed with a non-conforming commit, branch, or PR title.
 
 ## Rationale
 
@@ -106,5 +151,6 @@ User owns their git history. They may want to: review before committing, split i
 
 | Date | Change |
 |:-----|:-------|
+| 2026-05-30 | Added Branching Strategy (`<type>/{issue}-short-description` + allowed types); changed PR title format to `<type>[{ticket}]: <description>`; added Format Enforcement section requiring `git*` skills to reject non-conforming commits/branches/PR titles |
 | 2026-05-06 | Added Conventional Commits convention for commit messages and PR titles (squash merge) |
 | 2026-02-18 | Extracted from root CLAUDE.md to `.agents/rules/`, compacted to decision table |

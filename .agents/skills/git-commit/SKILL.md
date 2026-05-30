@@ -44,7 +44,7 @@ Commit current changes using conventional commits format.
 4. **Ask user if grouping is unclear** — When uncertain about logical boundaries, confirm with user
 5. For each logical unit:
    a. Stage all relevant changes using git add
-   b. Create a conventional commit message following the format: `<type>[optional scope]: <description>`
+   b. Create a conventional commit message following the format: `<type>[optional scope]: <description>` (per `.agents/rules/git-policy.instructions.md`). **No commit may be created unless its message conforms — if a conforming message cannot be determined, STOP and ask the user; never commit with a non-conforming message.**
    c. Use appropriate types:
       - `feat` (new feature)
       - `fix` (bug fix)
