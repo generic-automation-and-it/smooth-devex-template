@@ -27,12 +27,13 @@ This is a unified AI development experience folder that centralizes skills, prom
 | `.agents/rules/` | Enforced AI development rules (workflow rules, coding standards) |
 | `.agents/settings.json` | Tool permissions, compile/test commands |
 | `.agents/skills/` | Executable skills (multi-file workflows) |
-| `.agents/skills/load-context/` | Load or create functional `*_AGENTS.md` context files |
+| `.agents/skills/context/load-context/` | Load or create functional `*_AGENTS.md` context files |
+| `.agents/skills/context/load-agents-context/` | Load ancestor AGENTS.md context for a target file |
 | `.agents/skills/ai-review/` | Analyze and execute AI PR review decisions |
-| `.agents/skills/git-commit/` | Commit with conventional format |
-| `.agents/skills/git-commit-push/` | Commit and push to remote |
-| `.agents/skills/git-commit-push-pr/` | Commit, push, and create/update PRs |
-| `.agents/skills/git-sync/` | Sync with main (stop on conflicts) |
+| `.agents/skills/git/git-commit/` | Commit with conventional format |
+| `.agents/skills/git/git-commit-push/` | Commit and push to remote |
+| `.agents/skills/git/git-commit-push-pr/` | Commit, push, and create/update PRs |
+| `.agents/skills/git/git-sync/` | Sync with main (stop on conflicts) |
 | `.agents/skills/github-task-from-diff/` | Create a GitHub Task (sub-issue) from the current git diff vs main |
 | `.agents/templates/` | Document templates (AGENTS.md, README.md, work task promote templates) |
 | `.claude` → `.agents` | Symbolic link for Claude Code compatibility |
