@@ -42,7 +42,7 @@ Skills are classified by complexity tier. Each SKILL.md carries a `models` front
 |-----------|-------------|----------------|--------------|
 | **low** | `haiku` | `gpt-5.4-mini` | `gpt-5.4-mini` |
 | **medium** | `sonnet` | `auto` | `gpt-5.4` |
-| **high** | `opus` | `auto` | `gpt-5.4` |
+| **high** | `opus` | `auto` | `gpt-5.5` |
 
 ### Skill complexity classification
 

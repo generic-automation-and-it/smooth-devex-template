@@ -4,7 +4,7 @@ description: Start and run a listen-first braindump session for tickets, issues,
 models:
   claude: opus      # high-complexity; multi-turn synthesis and deep requirement reasoning
   copilot: auto
-  codex: gpt-5.4
+  codex: gpt-5.5
 ---
 
 # Brain Dump
