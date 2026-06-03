@@ -2,7 +2,7 @@
 name: load-agents-context
 description: Load ancestor AGENTS.md context for a target file. Use when Codex, Claude, Copilot, or another agent needs local domain context before reading or editing source files.
 allowed-tools:
-  - Bash(.agents/skills/load-agents-context/scripts/load-agents-context.sh:*)
+  - Bash(.agents/skills/context/load-agents-context/scripts/load-agents-context.sh:*)
 ---
 
 # Load AGENTS Context — Skill
@@ -73,7 +73,7 @@ sequenceDiagram
 
 **Context:** Scripts could live entirely in `.agents/hooks/` or inside the skill folder. Either is workable.
 
-**Decision:** Authoritative script lives at `.agents/skills/load-agents-context/scripts/load-agents-context.sh`. A one-line `exec` wrapper at `.agents/hooks/load-agents-context.sh` lets `settings.json` reference the conventional `.agents/hooks/` path.
+**Decision:** Authoritative script lives at `.agents/skills/context/load-agents-context/scripts/load-agents-context.sh`. A one-line `exec` wrapper at `.agents/hooks/load-agents-context.sh` lets `settings.json` reference the conventional `.agents/hooks/` path.
 
 **Consequences:** Transferring to another repo requires copying the skill folder, copying the hook wrapper, and adding one entry to `settings.json`. Single source of truth for the implementation; agent-agnostic invocation lives in one place.
 
@@ -128,20 +128,20 @@ Add to `.agents/settings.json` (equivalently `.claude/settings.json` via symlink
 Use the skill as `/load-agents-context <path>` or run the script directly:
 
 ```bash
-.agents/skills/load-agents-context/scripts/load-agents-context.sh --file path/to/source-file
+.agents/skills/context/load-agents-context/scripts/load-agents-context.sh --file path/to/source-file
 ```
 
 Codex can pass its thread identifier for stable deduplication:
 
 ```bash
 CODEX_SESSION_ID="${CODEX_SESSION_ID:-${CODEX_THREAD_ID:-codex-manual}}" \
-  .agents/skills/load-agents-context/scripts/load-agents-context.sh --tool Codex --file path/to/source-file
+  .agents/skills/context/load-agents-context/scripts/load-agents-context.sh --tool Codex --file path/to/source-file
 ```
 
 Copilot can pass a stable prompt/session identifier:
 
 ```bash
-.agents/skills/load-agents-context/scripts/load-agents-context.sh \
+.agents/skills/context/load-agents-context/scripts/load-agents-context.sh \
   --tool Copilot \
   --session-id copilot-vscode-session \
   --file path/to/source-file
@@ -149,7 +149,7 @@ Copilot can pass a stable prompt/session identifier:
 
 ## Transferring to Another Repo
 
-1. Copy `.agents/skills/load-agents-context/` to the target repo's skills folder (adjust path prefix if the repo uses `.ai/` instead of `.agents/`)
+1. Copy `.agents/skills/context/load-agents-context/` to the target repo's skills folder (adjust path prefix if the repo uses `.ai/` instead of `.agents/`)
 2. Copy `.agents/hooks/load-agents-context.sh` wrapper (adjust the path it `exec`s if needed)
 3. Add the hook registration above to the target repo's `settings.json`
 4. Ensure `jq` and `git` are available in the environment
