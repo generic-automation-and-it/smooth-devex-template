@@ -6,6 +6,10 @@ allowed-tools:
   - Edit
   - Write
   - Bash(.agents/skills/manage-rule-system/scripts/inject-context.sh:*)
+models:
+  claude: sonnet      # medium-complexity; cross-tool frontmatter authoring requires structured reasoning
+  copilot: auto
+  codex: gpt-4.1
 ---
 
 # Manage Rule System — Skill

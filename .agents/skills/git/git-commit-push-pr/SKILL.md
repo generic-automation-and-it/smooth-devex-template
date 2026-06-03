@@ -7,6 +7,10 @@ allowed-tools:
   - Bash(git push:*)
   - Bash(gh pr create:*)
   - Bash(gh pr ready:*)
+models:
+  claude: sonnet      # medium-complexity; PR creation with template filling needs broader reasoning
+  copilot: auto
+  codex: gpt-4.1
 ---
 
 # Git Commit, Push, and Create/Update Pull Request (GitHub)
@@ -28,7 +32,10 @@ PRs are created as **draft by default**. The state is controlled by two switches
 
 ### Step 1: Commit and Push (MANDATORY)
 
-Invoke the **git-commit-push** skill:
+Invoke the **git-commit-push** skill as a sub-agent (medium-complexity task):
+- Claude Code: `Task(subagent_type: "general-purpose", model: "sonnet", prompt: "invoke git-commit-push skill" + args)`
+- Copilot: invoke `git-commit-push` skill with model `auto`
+- Codex: invoke git-commit-push agent (model: `gpt-4.1`)
 - If commit message provided, pass it to git-commit-push
 - If `--issue <number>` was passed, forward it to git-commit-push so the branch is renamed before the push
 - This handles staging, committing with conventional format, branch renaming (when `--issue` is passed), and pushing to remote

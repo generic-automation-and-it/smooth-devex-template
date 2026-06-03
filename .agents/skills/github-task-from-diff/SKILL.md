@@ -1,6 +1,10 @@
 ---
 name: github-task-from-diff
 description: Create a GitHub Task (sub-issue) from the current git diff vs main and link it as a sub-issue of a parent Feature in the local GitHub Project. Use when Codex needs to summarize branch changes into a horizontally sliced task with acceptance criteria and create it via `gh`.
+models:
+  claude: sonnet      # medium-complexity; diff analysis + issue authoring across layers
+  copilot: auto
+  codex: gpt-4.1
 ---
 
 # Task From Diff
