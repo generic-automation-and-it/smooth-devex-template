@@ -4,7 +4,7 @@ description: Create a GitHub Task (sub-issue) from the current git diff vs main 
 models:
   claude: sonnet      # medium-complexity; diff analysis + issue authoring across layers
   copilot: auto
-  codex: gpt-4.1
+  codex: gpt-5.4
 ---
 
 # Task From Diff

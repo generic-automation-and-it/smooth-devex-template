@@ -6,8 +6,8 @@ allowed-tools:
   - Bash(git commit:*)
 models:
   claude: haiku      # low-complexity; fast git operations need minimal reasoning
-  copilot: gpt-4.1-mini  # gpt-latest equivalent for low-complexity Copilot tasks
-  codex: gpt-4.1-mini
+  copilot: gpt-5.4-mini  # mini equivalent for low-complexity Copilot tasks
+  codex: gpt-5.4-mini
 ---
 
 # Git Commit with Conventional Format

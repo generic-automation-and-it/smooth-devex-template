@@ -5,8 +5,8 @@ allowed-tools:
   - Bash(.agents/skills/context/load-agents-context/scripts/load-agents-context.sh:*)
 models:
   claude: haiku      # low-complexity; script-driven file traversal with no deep reasoning required
-  copilot: gpt-4.1-mini  # gpt-latest equivalent for low-complexity Copilot tasks
-  codex: gpt-4.1-mini
+  copilot: gpt-5.4-mini  # mini equivalent for low-complexity Copilot tasks
+  codex: gpt-5.4-mini
 ---
 
 # Load AGENTS Context — Skill

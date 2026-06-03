@@ -9,7 +9,7 @@ allowed-tools:
 models:
   claude: sonnet      # medium-complexity; cross-tool frontmatter authoring requires structured reasoning
   copilot: auto
-  codex: gpt-4.1
+  codex: gpt-5.4
 ---
 
 # Manage Rule System — Skill

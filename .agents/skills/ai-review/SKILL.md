@@ -4,7 +4,7 @@ description: Analyze and execute AI PR review feedback with fix/skip decisions. 
 models:
   claude: sonnet      # medium-complexity; review analysis + code fixes across multiple files
   copilot: auto
-  codex: gpt-4.1
+  codex: gpt-5.4
 ---
 
 # AI PR Review Analyzer & Executor

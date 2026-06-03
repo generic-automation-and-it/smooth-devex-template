@@ -40,9 +40,9 @@ Skills are classified by complexity tier. Each SKILL.md carries a `models` front
 
 | Complexity | Claude Code | GitHub Copilot | OpenAI Codex |
 |-----------|-------------|----------------|--------------|
-| **low** | `haiku` | `gpt-4.1-mini` | `gpt-4.1-mini` |
-| **medium** | `sonnet` | `auto` | `gpt-4.1` |
-| **high** | `opus` | `auto` | `o1` |
+| **low** | `haiku` | `gpt-5.4-mini` | `gpt-5.4-mini` |
+| **medium** | `sonnet` | `auto` | `gpt-5.4` |
+| **high** | `opus` | `auto` | `gpt-5.4` |
 
 ### Skill complexity classification
 
@@ -63,8 +63,8 @@ Skills are classified by complexity tier. Each SKILL.md carries a `models` front
 
 When a skill invokes another skill as a sub-agent, use the sub-skill's model tier:
 
-- **git-commit-push** → invokes **git-commit** (low): use `haiku` / `gpt-4.1-mini` / `gpt-4.1-mini`
-- **git-commit-push-pr** → invokes **git-commit-push** (medium): use `sonnet` / `auto` / `gpt-4.1`
+- **git-commit-push** → invokes **git-commit** (low): use `haiku` / `gpt-5.4-mini` / `gpt-5.4-mini`
+- **git-commit-push-pr** → invokes **git-commit-push** (medium): use `sonnet` / `auto` / `gpt-5.4`
 
 ## Folder Structure
 
