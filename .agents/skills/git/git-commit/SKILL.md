@@ -4,6 +4,10 @@ description: Commit current changes with conventional commits format, respecting
 allowed-tools:
   - Bash(git add:*)
   - Bash(git commit:*)
+models:
+  claude: haiku      # low-complexity; fast git operations need minimal reasoning
+  copilot: gpt-5.4-mini  # mini equivalent for low-complexity Copilot tasks
+  codex: gpt-5.4-mini
 ---
 
 # Git Commit with Conventional Format

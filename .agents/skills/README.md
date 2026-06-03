@@ -1,6 +1,6 @@
 # AI Skills
 
-Self-contained skills for Claude Code providing specialized workflows and tools.
+Self-contained skills for Claude Code, GitHub Copilot, and OpenAI Codex providing specialized workflows and tools.
 
 ## Quick Reference
 
@@ -34,6 +34,38 @@ Opt-in switches relax that, at different token costs (see `brain-dump/README.md`
 The tool switches (`--oktoreaddocs`, `--oktowebsearch`) re-enable the file/web payload bloat the
 listen-first default avoids — use deliberately.
 
+## Model Selection
+
+Skills are classified by complexity tier. Each SKILL.md carries a `models` frontmatter block with the recommended model per tool. When a skill is invoked as a sub-agent, use the model from its `models` block.
+
+| Complexity | Claude Code | GitHub Copilot | OpenAI Codex |
+|-----------|-------------|----------------|--------------|
+| **low** | `haiku` | `gpt-5.4-mini` | `gpt-5.4-mini` |
+| **medium** | `sonnet` | `auto` | `gpt-5.4` |
+| **high** | `opus` | `auto` | `gpt-5.5` |
+
+### Skill complexity classification
+
+| Skill | Complexity | Rationale |
+|-------|-----------|-----------|
+| **load-context** | low | File discovery and loading; no deep reasoning |
+| **load-agents-context** | low | Script-driven file traversal; no deep reasoning |
+| **git-commit** | low | Diff review + conventional commit; straightforward |
+| **git-sync** | low | Fetch + merge; straightforward git operations |
+| **git-commit-push** | medium | Branch rename logic + upstream tracking |
+| **git-commit-push-pr** | medium | PR template authoring + state management |
+| **ai-review** | medium | Review analysis + multi-file code fixes |
+| **github-task-from-diff** | medium | Diff classification + issue authoring |
+| **manage-rule-system** | medium | Cross-tool frontmatter authoring |
+| **brain-dump** | high | Multi-turn synthesis + deep requirement reasoning |
+
+### Sub-skill invocation model guidance
+
+When a skill invokes another skill as a sub-agent, use the sub-skill's model tier:
+
+- **git-commit-push** → invokes **git-commit** (low): use `haiku` / `gpt-5.4-mini` / `gpt-5.4-mini`
+- **git-commit-push-pr** → invokes **git-commit-push** (medium): use `sonnet` / `auto` / `gpt-5.4`
+
 ## Folder Structure
 
 Skills are organized into category subfolders:
@@ -47,8 +79,9 @@ Skills are organized into category subfolders:
 ## About Skills
 
 Each skill is a directory containing:
-- **SKILL.md** — The skill definition with workflow steps
+- **SKILL.md** — The skill definition with workflow steps and `models` frontmatter
+- **agents/openai.yaml** — OpenAI Codex agent registration with model specification
 - **scripts/** — Helper scripts (if applicable)
 - **references/** — Reference documentation (if applicable)
 
-Skills follow the Codex skill format and work across Claude Code and future AI tools.
+Skills are tool-agnostic and work across Claude Code, GitHub Copilot, and OpenAI Codex.
