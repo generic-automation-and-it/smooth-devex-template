@@ -14,6 +14,7 @@ Self-contained skills for Claude Code providing specialized workflows and tools.
 | **git-sync-fix** | Sync with main (auto-resolve conflicts) | `/git-sync-fix` |
 | **github-task-from-diff** | Create a GitHub Task (sub-issue) from the current git diff vs main | `/github-task-from-diff` |
 | **ai-review** | Analyze/execute AI review feedback | `/ai-review analyse 123` |
+| **brain-dump** | Listen-first capture session; synthesize on request | `/brain-dump` |
 
 ## About Skills
 
