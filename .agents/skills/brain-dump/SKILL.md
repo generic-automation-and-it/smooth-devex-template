@@ -5,6 +5,27 @@ description: Start and run a listen-first braindump session for tickets, issues,
 
 # Brain Dump
 
+## Modes & Switches
+
+All switches are **OFF by default**. With no switches the skill behaves exactly as a silent listen-first
+capture: no questions, no tools, no synthesis until asked.
+
+| Switch | Effect |
+|--------|--------|
+| _(none)_ | Pure listen-first. Capture silently; never ask, never browse. |
+| `--oktoask` | Permit clarifying questions during Listen. Cadence is **sparse** — only genuine blockers or contradictions that would corrupt capture; 1–2 questions; **non-blocking** ("keep dumping, answer when you can"). Stays **tool-free**. |
+| `--thinking` | Make questioning **liberal** during Listen — ask whenever something is unclear, including detail gaps. Implies `--oktoask`. |
+| `--oktoreaddocs` | Permit reading local code/docs to ground a question (promotes the Phase 3 "Compare" tools into the Listen phase on demand). Implies `--oktoask`. |
+| `--oktowebsearch` | Permit web search to ground a question or fill a gap. Implies `--oktoask`. |
+
+**Implication rule:** `--thinking`, `--oktoreaddocs`, and `--oktowebsearch` each imply `--oktoask`. If any
+of them is passed without `--oktoask`, treat `--oktoask` as on.
+
+**Cost note:** `--oktoask` and `--thinking` are cheap — they add conversational turns, not tool-result
+bloat. `--oktoreaddocs` and `--oktowebsearch` are expensive — they re-enable the file/web payloads that
+get injected into context and re-billed every turn, which is the very cost the listen-first default avoids.
+Use the tool switches deliberately.
+
 ## Core Posture
 
 Run a low-friction capture session. The user is thinking out loud; do not prematurely organize, debate, or act.
@@ -39,8 +60,23 @@ For each braindump message:
 - Confirm capture in one or two sentences.
 - Summarize only the newly added information or the evolving theme.
 - Do not produce a full requirements spec unless asked.
-- Do not ask clarifying questions by default.
-- Do not browse, inspect code, or use external tools unless the user asks you to compare against current reality, validate feasibility, or prepare for synthesis.
+
+Questioning during Listen depends on the active switches (see Modes & Switches):
+
+- **Default (no switch):** Do not ask clarifying questions. Capture silently.
+- **`--oktoask` (sparse):** Ask only when an item is a genuine blocker or internally contradictory in a way
+  that would corrupt capture. Keep to 1–2 questions, non-blocking — invite the user to keep dumping and
+  answer when convenient. Stay tool-free.
+- **`--thinking` (liberal):** Ask whenever something is unclear, including detail and wording gaps. Still
+  non-blocking; still batch related questions rather than dripping one per item.
+
+Browsing/tools during Listen:
+
+- **Default / `--oktoask` / `--thinking`:** tool-free — do not browse, inspect code, or use external tools.
+- **`--oktoreaddocs`:** you may read local code/docs to ground a question or confirm a reference.
+- **`--oktowebsearch`:** you may run a web search to ground a question or fill a gap.
+- Even with tool switches on, grounding is the only thing widened — do not synthesize or modify anything
+  during Listen.
 
 Good listening response:
 
@@ -71,6 +107,11 @@ Yes, a few clarifying questions before we finalize the dump:
 
 Only when the user asks to update/create/synthesize an artifact:
 
+- **Conclusion Q&A (when any questioning switch is on):** Before producing the artifact, run ONE liberal
+  numbered clarification round covering everything still unresolved. Separate true blockers from
+  nice-to-haves. This is a single bounded pass, not an open-ended loop — proceed to synthesis once
+  answered (or once the user says to proceed regardless). In the default no-switch mode, skip this and
+  surface open questions inside the artifact instead.
 - Confirm the target if multiple were mentioned.
 - Use the accumulated context and any final decisions.
 - Produce the requested artifact directly: issue description, ADR, worktask, PR body, implementation checklist, acceptance criteria, etc.
@@ -102,8 +143,14 @@ Do not expose the whole capture every turn. Surface it when the user asks to fin
 - Do not clean up the user's rough wording during the listening phase except in tiny confirmations.
 - Do not over-question early; braindumps often become clear after several messages.
 - Do not lose changed targets. If the user later names a different issue or file, use the latest explicit target and mention the switch.
-- If the user asks you to "just listen," obey that even when you notice likely issues.
+- If the user asks you to "just listen," obey that even when you notice likely issues — this overrides any
+  questioning switch for as long as it stands.
 - If the user asks you to compare against code, tools are allowed, but final output should still be questions or observations unless they ask for edits.
+- In `--oktoask` (sparse) mode, do not nitpick wording or ask about details that later messages will
+  likely clarify — sparse means blockers only. (`--thinking` relaxes this to allow detail/wording gaps.)
+- Batch related questions into one message; do not drip a question after every dumped item.
+- A questioning switch is not permission to act. `--oktoreaddocs` / `--oktowebsearch` widen *grounding*
+  only; the no-implement, no-modify rule still holds until the user explicitly asks to synthesize or update.
 
 ## Finalization Output
 
