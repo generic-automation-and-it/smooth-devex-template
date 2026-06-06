@@ -1,5 +1,5 @@
 ---
-name: load-agents-context
+name: context-load-agents-context
 description: Load ancestor AGENTS.md context for a target file. Use when Codex, Claude, Copilot, or another agent needs local domain context before reading or editing source files.
 allowed-tools:
   - Bash(.agents/skills/context/load-agents-context/scripts/load-agents-context.sh:*)

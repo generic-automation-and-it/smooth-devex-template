@@ -1,6 +1,6 @@
 ---
-name: mansplain
-description: Reformat one reply into terse, high-density output: answer first, bullets/tables, no preamble or niceties, end with a TL;DR. Trigger on "/mansplain", "give it to me straight", "no fluff", "bullet it", "tl;dr this", or any signal the user wants signal over rapport. Skip when they want exploration, emotional support, or teaching.
+name: ai-mansplain
+description: 'Reformat one reply into terse, high-density output: answer first, bullets/tables, no preamble or niceties, end with a TL;DR. Trigger on "/ai-mansplain", "give it to me straight", "no fluff", "bullet it", "tl;dr this", or any signal the user wants signal over rapport. Skip when they want exploration, emotional support, or teaching.'
 models:
   claude: haiku       # low-complexity; single-turn reformatting, no tools or deep reasoning
   copilot: gpt-5.4-mini

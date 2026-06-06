@@ -90,7 +90,7 @@ Then add frontmatter + content. After saving:
 | Claude Code | `.claude/rules/` (symlink → `.agents/rules/`) | `paths` frontmatter | `.md` |
 | Copilot | `.github/instructions` (path file → `../.agents/rules`) | `applyTo` frontmatter | `.instructions.md` |
 | Cursor | `.cursor/rules/` (symlink → `.agents/rules/`) | `globs` + `alwaysApply` frontmatter | `.instructions.md` |
-| Codex | `.codex/` (symlink → `.agents/`) | invokes `load-agents-context` skill explicitly | `AGENTS.md` |
+| Codex | `.codex/` (symlink → `.agents/`) | invokes `context-load-agents-context` skill explicitly | `AGENTS.md` |
 
 All tools share the same `.agents/rules/` source files via symlinks.
 

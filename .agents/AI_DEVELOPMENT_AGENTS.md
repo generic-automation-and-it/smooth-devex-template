@@ -26,15 +26,18 @@ This is a unified AI development experience folder that centralizes skills, prom
 | `.agents/roles/` | Multi-agent role instructions (PO, Architect, QA, Backend/Frontend Engineer, Heimdall Reviewer) |
 | `.agents/rules/` | Enforced AI development rules (workflow rules, coding standards) |
 | `.agents/settings.json` | Tool permissions, compile/test commands |
-| `.agents/skills/` | Executable skills (multi-file workflows) |
-| `.agents/skills/context/load-context/` | Load or create functional `*_AGENTS.md` context files |
-| `.agents/skills/context/load-agents-context/` | Load ancestor AGENTS.md context for a target file |
+| `.agents/skills/` | Executable skills (multi-file workflows) — flat dirs, category-prefixed folder names |
+| `.agents/skills/agile-github-task-from-diff/` | Create a GitHub Task (sub-issue) from the current git diff vs main |
+| `.agents/skills/ai-brain-dump/` | Listen-first capture session; synthesize on request |
+| `.agents/skills/ai-mansplain/` | Reformat this turn's reply into terse, high-density output with a TL;DR |
 | `.agents/skills/ai-review/` | Analyze and execute AI PR review decisions |
-| `.agents/skills/git/git-commit/` | Commit with conventional format |
-| `.agents/skills/git/git-commit-push/` | Commit and push to remote |
-| `.agents/skills/git/git-commit-push-pr/` | Commit, push, and create/update PRs |
-| `.agents/skills/git/git-sync/` | Sync with main (stop on conflicts) |
-| `.agents/skills/agile/github-task-from-diff/` | Create a GitHub Task (sub-issue) from the current git diff vs main |
+| `.agents/skills/context-load-context/` | Load or create functional `*_AGENTS.md` context files |
+| `.agents/skills/context-load-agents-context/` | Load ancestor AGENTS.md context for a target file |
+| `.agents/skills/git-commit/` | Commit with conventional format |
+| `.agents/skills/git-commit-push/` | Commit and push to remote |
+| `.agents/skills/git-commit-push-pr/` | Commit, push, and create/update PRs |
+| `.agents/skills/git-sync/` | Sync with main (optionally auto-resolve conflicts) |
+| `.agents/skills/manage-rule-system/` | Create/update rule files in `.agents/rules/` |
 | `.agents/templates/` | Document templates (AGENTS.md, README.md, work task promote templates) |
 | `.claude` → `.agents` | Symbolic link for Claude Code compatibility |
 | `.codex` → `.agents` | Symbolic link for OpenAI Codex compatibility |

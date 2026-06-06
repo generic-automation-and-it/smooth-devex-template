@@ -1,5 +1,5 @@
 ---
-name: github-task-from-diff
+name: agile-github-task-from-diff
 description: Create a GitHub Task (sub-issue) from the current git diff vs main and link it as a sub-issue of a parent Feature in the local GitHub Project. Use when Codex needs to summarize branch changes into a horizontally sliced task with acceptance criteria and create it via `gh`.
 models:
   claude: sonnet      # medium-complexity; diff analysis + issue authoring across layers
@@ -25,28 +25,28 @@ Use `scripts/create_github_task_from_diff.py`.
 
 ```bash
 # Preview (dry run)
-python3 .agents/skills/github-task-from-diff/scripts/create_github_task_from_diff.py \
+python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py \
   --dry-run
 
 # Create task and add to project #1 (no Feature link)
-python3 .agents/skills/github-task-from-diff/scripts/create_github_task_from_diff.py
+python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py
 
 # Create task and link as sub-issue of Feature #42 (by number)
-python3 .agents/skills/github-task-from-diff/scripts/create_github_task_from_diff.py \
+python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py \
   --feature-issue 42
 
 # Create task and link as sub-issue using a Feature issue URL
-python3 .agents/skills/github-task-from-diff/scripts/create_github_task_from_diff.py \
+python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py \
   --feature-issue https://github.com/generic-automation-and-it/project/issues/42
 
 # Override title and base ref
-python3 .agents/skills/github-task-from-diff/scripts/create_github_task_from_diff.py \
+python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py \
   --feature-issue 42 \
   --base-ref main \
   --title "Add persistence layer tests"
 
 # Create and open in browser
-python3 .agents/skills/github-task-from-diff/scripts/create_github_task_from_diff.py \
+python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py \
   --feature-issue 42 \
   --open
 ```
