@@ -1,6 +1,12 @@
 ---
 name: ai-template-sync
 description: UPSERT the smooth-devex-template agentic scaffold into an existing repo. Asks which tools (Claude Code, Codex, Copilot) to configure, whether to copy .NET solutioning, and whether to overwrite existing agentic files.
+allowed-tools:
+  - Bash(.agents/skills/ai-template-sync/scripts/sync.sh:*)
+  - Bash(git clone:*)
+  - Bash(mktemp:*)
+  - Bash(bash:*)
+  - Bash(rm:*)
 models:
   claude: opus      # high-complexity; interactive multi-turn Q&A + conditional file sync across tools
   copilot: auto
@@ -13,10 +19,47 @@ Sync the **smooth-devex-template** agentic scaffold into a landing repo (UPSERT 
 
 ## TL;DR
 
+0. If the template isn't checked out locally (running as a skill via web / hosted agent), clone it to a temp dir first.
 1. Ask which AI tools to configure.
 2. Optionally copy .NET solutioning.
-3. Detect conflicts; ask for overwrite scope.
-4. Copy files per tool selection.
+3. Pre-flight: if `.agents/rules` isn't a symlink to `.github/instructions`, ask whether to move the rules.
+4. Detect conflicts; ask for overwrite scope.
+5. Copy files per tool selection.
+
+---
+
+## Phase 0 — Acquire Template (remote / web runs)
+
+**Run this ONLY when the template repo is not already checked out at the current location** —
+i.e. the skill is invoked as a *landing-repo* skill (web / hosted agent / a repo that doesn't
+contain the template). If you are already inside a checkout of the template repo, skip Phase 0
+and let `--template` default to the current git toplevel.
+
+The sync scripts copy **from** the template tree (`.agents/`, `.github/instructions/`,
+`copilot-instructions.md`, optional `src/`/`tests/`). None of that lives under the skill folder,
+so pulling just the skill is **not** enough — clone the whole template repo:
+
+```bash
+T=$(mktemp -d)
+git clone --depth 1 https://github.com/generic-automation-and-it/smooth-devex-template "$T"
+# the cloned tree contains BOTH the payload and the scripts; run the cloned script directly:
+bash "$T/.agents/skills/ai-template-sync/scripts/sync.sh" \
+  --template "$T" \
+  --landing "$PWD" \
+  --tools <claude,codex,copilot> \
+  --overwrite <global|none> \
+  [--dotnet]
+rm -rf "$T"
+```
+
+Equivalently, the script can self-acquire — pass `--template-url <git-url>` (or `-TemplateUrl`
+on Windows) instead of `--template`, and it clones to a temp dir and cleans up on exit.
+
+Caveats (one line): the runner needs **Bash + git + network**; a **private** template needs
+`gh`-auth or a token embedded in the clone URL. Pin to a tag/SHA if reproducibility matters.
+
+> The interactive phases below (1–3) still apply — gather intent and run the pre-flight before
+> invoking the cloned script. Phase 0 only solves *getting the files*, not the decisions.
 
 ---
 
@@ -43,7 +86,40 @@ Wait for user answers before proceeding.
 
 ---
 
-## Phase 2 — Conflict Detection (Selective mode only)
+## Phase 2 — Rules-Layout Pre-flight (ALWAYS run, even in Global mode)
+
+The template's contract is: **`.github/instructions/` is the real directory** that holds the rule files, and **`.agents/rules` is a symlink pointing to it**. A landing repo may not follow this — it may keep `.agents/rules` as a real directory of its own rules, or symlinked somewhere else.
+
+This matters because Section D of the sync (`scripts/sync.sh`) **unconditionally** runs `rm -rf .agents/rules` and re-points the symlink — in *both* overwrite modes. If `.agents/rules` is a real directory, that step **destroys the repo's own rules**. So this check runs regardless of the Phase 1 overwrite choice, and only when `copilot` is among the selected tools (Section D runs only then).
+
+Inspect the landing repo:
+
+```bash
+readlink "<LANDING_REPO>/.agents/rules"   # prints ../.github/instructions in a conforming repo; empty/non-zero exit if it's a real dir
+```
+
+If `.agents/rules` exists but is **not** a symlink resolving to `.github/instructions` (i.e. it is a real directory, or a symlink pointing elsewhere), **stop and ask** before running the sync:
+
+```
+Your repo's `.agents/rules` is NOT a symlink to `.github/instructions`
+(it is <a real directory | a symlink to X>).
+
+The template keeps rule files in `.github/instructions/`, with `.agents/rules`
+symlinked to it. The sync would otherwise delete `.agents/rules` and re-point it,
+losing your existing rules.
+
+Move your existing rules into `.github/instructions/` and re-point
+`.agents/rules` at it as part of this update? [y/n]
+```
+
+- **y** → before invoking the script, move the existing rule files into `.github/instructions/` (merge, don't clobber the template rules), then let Section D re-point the `.agents/rules` symlink. The repo's own rules are preserved.
+- **n** → do **not** run with `copilot` in `--tools` (Section D would still `rm -rf .agents/rules`). Either drop `copilot` from the tools list, or sync the other tools first and handle Copilot's rules dir manually. Leave the existing layout untouched.
+
+If `.agents/rules` already symlinks to `.github/instructions`, or neither path exists, take no action and proceed.
+
+---
+
+## Phase 3 — Conflict Detection (Selective mode only)
 
 Skip if user chose **Global overwrite**.
 
@@ -70,130 +146,56 @@ Print the table, then ask:
 Enter IDs to overwrite (e.g. "1 3 5"), "all", or "none":
 ```
 
-Collect the response before moving to Phase 3.
+Collect the response before moving to Phase 4.
 
 ---
 
-## Phase 3 — Execute Sync
+## Phase 4 — Execute Sync
 
-Apply overwrite decisions from Phase 1–2, then execute each section that applies.
+The mechanical copy/symlink work (Sections A–E) is performed by **`scripts/sync.sh`**
+(`scripts/sync.ps1` on Windows). You decide the flags from the Phase 1–3 answers; the script
+executes them. It is idempotent and supports two overwrite modes — `global` (clobber) and
+`none` (additive, never clobber).
 
-> **Never touch dotnet files** (`.slnx`, `.sln`, `Directory.*.props`, `NuGet.Config`, `src/`, `tests/`) during agentic sync, even if the user requests it here.
-
-### Section A — .agents Base Folder
-
-Copy the entire `.agents/` tree to the landing repo root.
-- Skip individual files the user chose NOT to overwrite (Selective mode).
-- Overwrite files the user approved or when Global mode is active.
-- Preserve existing landing-repo-only files (i.e., do not delete files absent from the template).
+> **Never touch dotnet files** (`.slnx`, `.sln`, `Directory.*.props`, `NuGet.Config`, `src/`, `tests/`) during agentic sync, even if the user requests it here. The script's `--dotnet` path only ever *adds* them when no solution exists, and never overwrites.
 
 ```bash
-# From the TEMPLATE repo root
-rsync -av --no-delete \
-  --exclude='*.py' \        # skip repo-specific hooks unless user confirmed
-  .agents/ <LANDING_REPO>/.agents/
+.agents/skills/ai-template-sync/scripts/sync.sh \
+  --landing <LANDING_REPO> \
+  --tools claude,codex,copilot \
+  [--dotnet] \
+  --overwrite global|none
 ```
-
-> Adjust excludes based on user answers. Run without `--dry-run` only after confirmation.
-
-### Section B — Claude Code (if selected)
-
-Create symlinks in the landing repo:
-
-```bash
-cd <LANDING_REPO>
-
-# Directory symlinks
-ln -sf .agents .claude
-ln -sf .agents .cursor          # optional; add if Cursor is used
-
-# File symlinks
-ln -sf AGENTS.md CLAUDE.md
-ln -sf AGENTS.md GEMINI.md
-
-# Enable git symlink support
-git config core.symlinks true
-```
-
-Windows (PowerShell, requires Developer Mode or admin):
 
 ```powershell
-cd <LANDING_REPO>
-New-Item -ItemType SymbolicLink -Name .claude   -Target .agents -Force
-New-Item -ItemType SymbolicLink -Name CLAUDE.md -Target AGENTS.md -Force
-New-Item -ItemType SymbolicLink -Name GEMINI.md -Target AGENTS.md -Force
-git config core.symlinks true
+.agents/skills/ai-template-sync/scripts/sync.ps1 `
+  -Landing <LANDING_REPO> `
+  -Tools claude,codex,copilot `
+  [-Dotnet] `
+  -Overwrite global|none
 ```
 
-### Section C — OpenAI Codex (if selected)
+| Flag | Maps to | Notes |
+|------|---------|-------|
+| `--tools` / `-Tools` | Phase 1 Q1 | Comma-separated subset of `claude,codex,copilot`. Drives Sections B/C/D. |
+| `--dotnet` / `-Dotnet` | Phase 1 Q2 | Section E. Skipped automatically if a `.slnx`/`.sln` already exists. |
+| `--overwrite global` | Phase 1 Q3 = A | Clobber every agentic file. |
+| `--overwrite none` | Phase 1 Q3 = B (after selection) | Additive only — never clobber existing files. |
+| `--template` / `-Template` | _(auto)_ | Template repo root; defaults to the current git toplevel. |
+| `--template-url` / `-TemplateUrl` | Phase 0 | Git URL of the template; the script shallow-clones it to a temp dir and cleans up on exit. Mutually exclusive with `--template`. Use for remote / web runs. |
 
-```bash
-cd <LANDING_REPO>
-ln -sf .agents .codex
-git config core.symlinks true
-```
+What each section does (now inside the script):
+- **A — `.agents/` base tree**: `rsync` (global = overwrite, none = `--ignore-existing`); never deletes landing-only files.
+- **B — Claude Code**: `.claude`→`.agents`, `CLAUDE.md`/`GEMINI.md`→`AGENTS.md` symlinks + `git config core.symlinks true`.
+- **C — Codex**: `.codex`→`.agents` symlink.
+- **D — Copilot**: copies the real `.github/instructions/` dir, re-points `.agents/rules` symlink at it, copies `copilot-instructions.md`.
+- **E — .NET**: copies `Directory.*.props`, `NuGet.Config`, `*.slnx`, `src/`, `tests/` only when absent. **Rename `Project.*` → `<ActualProjectName>` afterwards** (the script prints this reminder; the rename itself is the agent's job).
 
-Windows:
-
-```powershell
-cd <LANDING_REPO>
-New-Item -ItemType SymbolicLink -Name .codex -Target .agents -Force
-git config core.symlinks true
-```
-
-Codex discovers skills, rules, and hooks through `.codex/` → `.agents/`. No additional files needed beyond the base scaffold (Section A).
-
-### Section D — GitHub Copilot (if selected)
-
-The rule files physically live in `.github/instructions/` (a **real directory** that Copilot's github.com-hosted agent reads natively — no server-side symlink resolution). `.agents/rules` is a symlink back to it, so local agents (Claude Code, Codex, Cursor) resolve the same files.
-
-```bash
-cd <LANDING_REPO>
-
-# Real rules directory for Copilot; .agents/rules symlinks back to it
-mkdir -p .github
-cp -R <TEMPLATE>/.github/instructions .github/instructions
-rm -rf .agents/rules
-ln -sf ../.github/instructions .agents/rules
-```
-
-Copy `copilot-instructions.md` (overwrite only if approved or Global mode):
-
-```bash
-cp <TEMPLATE>/.github/copilot-instructions.md <LANDING_REPO>/.github/copilot-instructions.md
-```
-
-Windows:
-
-```powershell
-cd <LANDING_REPO>
-New-Item -ItemType Directory -Path .github -Force
-Copy-Item <TEMPLATE>\.github\instructions .github\instructions -Recurse -Force
-Remove-Item .agents\rules -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType SymbolicLink -Name .agents\rules -Target ..\.github\instructions -Force
-Copy-Item <TEMPLATE>\.github\copilot-instructions.md .github\copilot-instructions.md -Force
-```
-
-### Section E — .NET Solutioning (if opted in)
-
-Only execute if the user answered **y** to question 2 AND no `.slnx`/`.sln` was detected.
-
-Copy these files/folders from the template root to the landing repo root:
-
-| Item | Notes |
-|------|-------|
-| `Project.slnx` | Rename to match landing project name |
-| `Directory.Build.props` | MSBuild shared props |
-| `Directory.Packages.props` | Central package management |
-| `NuGet.Config` | Feed config |
-| `src/` | All source projects — rename `Project.*` namespaces |
-| `tests/` | All test projects — rename `Project.*` namespaces |
-
-> After copying, rename every occurrence of `Project` → `<ActualProjectName>` in file names, folder names, and file contents.
+> **Selective overwrite (Phase 1 Q3 = B):** the script handles `global` and `none` only. For true per-file selection, copy the user-approved files manually first, then run the script with `--overwrite none` so it adds the remainder without clobbering anything.
 
 ---
 
-## Phase 4 — Post-Sync Checklist
+## Phase 5 — Post-Sync Checklist
 
 After all copies/symlinks are done, report:
 
