@@ -1,6 +1,8 @@
 ---
 name: git-sync
 description: Sync the current working branch with origin/main and optionally resolve merge conflicts. Use when synchronizing local branch with the latest changes from main, with automatic or manual conflict resolution.
+allowed-tools:
+  - Bash(.agents/skills/git-sync/scripts/safe-sync.sh:*)
 models:
   claude: haiku      # low-complexity; fetch + merge is straightforward; conflict resolution may briefly require sonnet
   copilot: gpt-5.4-mini  # mini equivalent for low-complexity Copilot tasks
@@ -11,6 +13,11 @@ models:
 
 Sync the current working branch with the latest changes from origin/main.
 
+The deterministic fetch+merge plumbing lives in `scripts/safe-sync.sh` (used by both modes):
+it fetches `origin/main`, merges into the current branch, and prints either `MERGE_OK` + the
+last 5 commits (exit 0) or `MERGE_CONFLICTS` + the conflicted file list, **leaving conflicts in
+the working tree** (exit 1). The merge *decision/resolution* stays with the agent.
+
 ## Two Modes
 
 ### Mode 1: Safe Sync (stop on conflicts)
@@ -18,12 +25,13 @@ Sync the current working branch with the latest changes from origin/main.
 **Use when**: You want to sync but prefer to handle conflicts yourself
 
 **Workflow:**
-1. Run `git fetch origin main` to pull the latest from remote
-2. Run `git merge origin/main` into the current branch
-3. If the merge has conflicts:
-   - List the conflicting files and **STOP**
-   - Do NOT auto-resolve — user handles manually
-4. If the merge succeeds, run `git log --oneline -5` to show the result
+1. Run the sync script:
+   ```bash
+   .agents/skills/git-sync/scripts/safe-sync.sh
+   ```
+2. If it prints `MERGE_OK` — report the commit list; done.
+3. If it prints `MERGE_CONFLICTS` — list the conflicting files and **STOP**. Do NOT auto-resolve;
+   the user handles them manually (conflicts are left staged in the working tree).
 
 **Usage:**
 ```
@@ -49,16 +57,18 @@ Please resolve conflicts and commit the merge.
 **Argument:** `--fix` or `--auto-resolve`
 
 **Workflow:**
-1. Run `git fetch origin main` to pull the latest from remote
-2. Run `git merge origin/main` into the current branch
-3. If the merge has conflicts:
-   - Read each conflicting file and understand both sides
+1. Run the same sync script (it leaves any conflicts in the working tree):
+   ```bash
+   .agents/skills/git-sync/scripts/safe-sync.sh
+   ```
+2. If it prints `MERGE_OK` — skip resolution; report the commit list; done.
+3. If it prints `MERGE_CONFLICTS` — for each conflicting file:
+   - Read it and understand both sides
    - Resolve by keeping the intent of both branches
    - Prefer our branch's structure/style while incorporating new content from main
    - Stage the resolved files
    - Commit the merge resolution with message: `Merge main into <current-branch>`
-4. If merge succeeds immediately, skip conflict resolution
-5. Run `git log --oneline -5` to show the result
+   - Run `git log --oneline -5` to show the result
 
 **Usage:**
 ```
