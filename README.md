@@ -2,13 +2,26 @@
 
 > One-line description of what the service does and who it is for. _(Placeholder — update once the project is named.)_
 
-`Project` is an AI-spec-driven, AI-agnostic .NET service built on **.NET 10 / ASP.NET Core** using **Clean Architecture**. It ships with a documented AI-agent toolchain (Claude Code, Cursor, GitHub Copilot, OpenAI Codex), a layered test strategy, and Aspire-orchestrated local infrastructure.
+`Project` is a **combined AI DevEx template** — a starting point for teams that want structured, tool-agnostic AI-assisted development from day one. It ships a ready-to-use AI agent toolchain (Claude Code, Cursor, GitHub Copilot, OpenAI Codex) wired up via a single `.agents/` directory, alongside a **.NET 10 / ASP.NET Core** reference implementation built with **Clean Architecture**.
 
 > **⚠️ Template repository.** `Project` is a placeholder name used throughout the solution (`Project.slnx`, `src/Project.*`, `tests/Project.*`), the `.agents` tree, and this README. When the project is given a real name, rename every `Project`/`project` occurrence and update the descriptions below. See the Template Notice in [`AGENTS.md`](AGENTS.md) for the full checklist.
 
 ---
 
 ## Tech Stack
+
+### AI Toolchain
+
+| Component | Technology |
+|---|---|
+| Agent scaffold | `.agents/` — single source of truth for all AI tools |
+| Coding agents | Claude Code · GitHub Copilot · Cursor · OpenAI Codex |
+| Skills | Executable multi-file workflows in `.agents/skills/` |
+| Rules | Per-file coding standards in `.agents/rules/` |
+| Prompts & roles | Reusable prompt templates and multi-agent role instructions |
+| Hooks | `PostToolUse` / `UserPromptSubmit` automation via `.agents/hooks/` |
+
+### .NET Reference Implementation
 
 | Component | Technology |
 |---|---|
@@ -18,7 +31,6 @@
 | Mediator | [`martinothamar/Mediator`](https://github.com/martinothamar/Mediator) — source-gen CQRS dispatch |
 | Validation | FluentValidation in a fail-fast Mediator pipeline |
 | Persistence | EF Core + PostgreSQL (`Npgsql.EntityFrameworkCore.PostgreSQL`) |
-| Local orchestration | .NET Aspire (`src/Project.AppHost`) |
 | Observability | Serilog + OpenTelemetry, Scalar OpenAPI UI |
 | Testing | xunit.v3 · Shouldly · Bogus · Respawn |
 
@@ -29,7 +41,7 @@
 ### Prerequisites
 
 - **.NET 10 SDK**
-- A container runtime — Docker Desktop, Rancher Desktop, Colima, or Podman (for PostgreSQL + WireMock via Aspire)
+- A container runtime — Docker Desktop, Rancher Desktop, Colima, or Podman (for PostgreSQL via Aspire)
 
 ### One-time AI-agent setup
 
@@ -57,35 +69,38 @@ dotnet test    Project.slnx
 
 Target a single test project directly when iterating, e.g. `dotnet test tests/Project.Domain.UnitTest`.
 
-### Run locally (Aspire)
+### Run locally
 
 ```bash
-dotnet run --project src/Project.AppHost      # full dev stack (API + PostgreSQL + WireMock)
-dotnet run --project src/Project.ChatHost     # standalone LLM microservice (separate process)
+dotnet run --project src/Project.Host      # start the API
 ```
 
-Once the stack is up and migrations have applied (visible in the Aspire dashboard):
+Once the stack is up:
 
 | Interface | URL |
 |---|---|
-| Aspire Dashboard | http://localhost:15278 |
 | Scalar API Docs | `/scalar/v1` on the Host |
 | OpenAPI schema | `/openapi/v1.json` on the Host |
-
-> When the dashboard is launched from a terminal, use the printed `/login?t=...` URL on the first browser visit.
 
 ---
 
 ## Project Structure
 
 ```
+.agents/                         # All AI tooling — single source of truth
+  hooks/                         # PostToolUse / UserPromptSubmit automation
+  prompts/                       # Reusable prompt templates
+  roles/                         # Multi-agent role instructions (PO, Architect, QA, …)
+  rules/                         # Per-file coding standards (auto-loaded by agents)
+  skills/                        # Executable multi-file workflows
+  setup/                         # One-time symlink / config setup scripts
+  settings.json                  # Tool permissions, compile/test commands
+
 src/
   Project.Domain/          # Entities, value objects, invariants — no external deps
   Project.Application/     # Vertical-slice use cases (Features/<Name>/) + Mediator handlers
   Project.Infrastructure/  # EF Core + PostgreSQL persistence, HTTP clients
   Project.Host/            # Minimal API composition, middleware, observability
-  Project.ChatHost/        # Standalone LLM microservice (talks to Host over HTTP)
-  Project.AppHost/         # Aspire orchestrator for local dev
 
 tests/
   Project.*.UnitTest/          # L0 — no I/O, in-process
