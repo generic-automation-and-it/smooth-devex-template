@@ -14,9 +14,11 @@ models:
 Sync the current working branch with the latest changes from origin/main.
 
 The deterministic fetch+merge plumbing lives in `scripts/safe-sync.sh` (used by both modes):
-it fetches `origin/main`, merges into the current branch, and prints either `MERGE_OK` + the
-last 5 commits (exit 0) or `MERGE_CONFLICTS` + the conflicted file list, **leaving conflicts in
-the working tree** (exit 1). The merge *decision/resolution* stays with the agent.
+it fetches `origin/main`, merges into the current branch (non-interactively, `--no-edit`), and
+prints one of: `MERGE_OK` + the last 5 commits (exit 0); `MERGE_CONFLICTS` + the unmerged file
+list, **leaving the conflicts in the working tree** (exit 1); or `MERGE_ERROR` for a non-conflict
+failure such as a dirty tree, missing ref, or failing hook (exit 2). The merge
+*decision/resolution* stays with the agent.
 
 ## Two Modes
 
@@ -31,7 +33,10 @@ the working tree** (exit 1). The merge *decision/resolution* stays with the agen
    ```
 2. If it prints `MERGE_OK` — report the commit list; done.
 3. If it prints `MERGE_CONFLICTS` — list the conflicting files and **STOP**. Do NOT auto-resolve;
-   the user handles them manually (conflicts are left staged in the working tree).
+   the user handles them manually (the files are left *unmerged* in the working tree, with conflict
+   markers — they must be resolved and staged before the merge can be committed).
+4. If it prints `MERGE_ERROR` — the merge failed for a non-conflict reason (dirty tree, missing ref,
+   failing hook). Report the script output and **STOP**; do not treat it as a conflict.
 
 **Usage:**
 ```
@@ -69,6 +74,8 @@ Please resolve conflicts and commit the merge.
    - Stage the resolved files
    - Commit the merge resolution with message: `Merge main into <current-branch>`
    - Run `git log --oneline -5` to show the result
+4. If it prints `MERGE_ERROR` — a non-conflict failure (dirty tree, missing ref, failing hook).
+   Do NOT attempt resolution; report the script output and **STOP**.
 
 **Usage:**
 ```
