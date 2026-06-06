@@ -245,8 +245,12 @@ def main():
         help="GitHub project number under the org (default: 1).",
     )
     parser.add_argument(
-        "--org", default="generic-automation-and-it",
-        help="GitHub org that owns the project (default: generic-automation-and-it).",
+        "--no-project", action="store_true",
+        help="Create the issue only; do not add it to any GitHub Project.",
+    )
+    parser.add_argument(
+        "--org",
+        help="GitHub org that owns the project. Defaults to the repo owner detected from the git remote.",
     )
     parser.add_argument(
         "--label", default="task",
@@ -278,6 +282,9 @@ def main():
     else:
         owner, repo = get_repo_info()
 
+    # Default the project org to the repo owner when not explicitly provided.
+    org = args.org or owner
+
     name_status = git(["diff", "--name-status", f"{base_sha}..HEAD"])
     paths, status_counts = parse_name_status(name_status)
 
@@ -297,7 +304,10 @@ def main():
     if args.dry_run:
         print(f"Title:\n{title}\n")
         print(f"Body:\n{body}\n")
-        print(f"Would create issue in {owner}/{repo} and add to project {args.org}/projects/{args.project}.")
+        if args.no_project:
+            print(f"Would create issue in {owner}/{repo} (no project).")
+        else:
+            print(f"Would create issue in {owner}/{repo} and add to project {org}/projects/{args.project}.")
         if feature_issue:
             print(f"Would link as sub-issue of Feature #{feature_issue}.")
         return 0
@@ -316,16 +326,19 @@ def main():
     issue_number = int(issue_url.rstrip("/").split("/")[-1])
     print(f"Created task issue #{issue_number}: {issue_url}")
 
-    # Add to GitHub Project
-    try:
-        run([
-            "gh", "project", "item-add", str(args.project),
-            "--owner", args.org,
-            "--url", issue_url,
-        ])
-        print(f"Added to project {args.org}/projects/{args.project}.")
-    except Exception as exc:
-        print(f"Warning: could not add to project: {exc}", file=sys.stderr)
+    # Add to GitHub Project (unless suppressed)
+    if args.no_project:
+        print("Skipped project add (--no-project).")
+    else:
+        try:
+            run([
+                "gh", "project", "item-add", str(args.project),
+                "--owner", org,
+                "--url", issue_url,
+            ])
+            print(f"Added to project {org}/projects/{args.project}.")
+        except Exception as exc:
+            print(f"Warning: could not add to project: {exc}", file=sys.stderr)
 
     # Link as sub-issue of the Feature
     if feature_issue:

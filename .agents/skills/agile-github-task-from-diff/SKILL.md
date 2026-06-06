@@ -31,13 +31,17 @@ python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_fr
 # Create task and add to project #1 (no Feature link)
 python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py
 
+# Create task as a plain GitHub issue, not added to any project
+python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py \
+  --no-project
+
 # Create task and link as sub-issue of Feature #42 (by number)
 python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py \
   --feature-issue 42
 
 # Create task and link as sub-issue using a Feature issue URL
 python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py \
-  --feature-issue https://github.com/generic-automation-and-it/project/issues/42
+  --feature-issue https://github.com/owner/repo/issues/42
 
 # Override title and base ref
 python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py \
@@ -59,7 +63,8 @@ python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_fr
 | `--title` | _(generated)_ | Override the auto-generated task title. |
 | `--repo` | _(from remote)_ | GitHub repo as `owner/repo`. Auto-detected when omitted. |
 | `--project` | `1` | GitHub project number under the org. |
-| `--org` | `generic-automation-and-it` | GitHub org that owns the project. |
+| `--no-project` | — | Create the issue only; skip adding it to any GitHub Project. |
+| `--org` | _(repo owner)_ | GitHub org that owns the project. Defaults to the repo owner detected from the git remote. |
 | `--label` | `task` | Label applied to the created issue. |
 | `--base-ref` | `origin/main` → `main` | Override base ref for the diff. |
 | `--dry-run` | — | Print output without creating anything. |
