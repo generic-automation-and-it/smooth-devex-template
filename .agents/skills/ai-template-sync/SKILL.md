@@ -54,7 +54,7 @@ Skip if user chose **Global overwrite**.
 | Base scaffold | `.agents/**` (all files recursively) · `AGENTS.md` |
 | Claude Code | `.claude` (symlink) · `CLAUDE.md` (symlink) · `GEMINI.md` (symlink) |
 | Codex | `.codex` (symlink) |
-| Copilot | `.github/copilot-instructions.md` · `.github/instructions` (symlink) |
+| Copilot | `.github/copilot-instructions.md` · `.github/instructions` (**real directory** — holds the rule files; `.agents/rules` symlinks to it) |
 | Setup scripts | `.agents/setup/scripts/agents-setup.sh` · `.agents/setup/scripts/agents-setup.ps1` · `.agents/setup/scripts/agents-terminals.sh` · `.agents/setup/scripts/agents-terminals.ps1` |
 
 Check each file/path against the landing repo. Build a conflict table for every item that **already exists**:
@@ -145,12 +145,16 @@ Codex discovers skills, rules, and hooks through `.codex/` → `.agents/`. No ad
 
 ### Section D — GitHub Copilot (if selected)
 
+The rule files physically live in `.github/instructions/` (a **real directory** that Copilot's github.com-hosted agent reads natively — no server-side symlink resolution). `.agents/rules` is a symlink back to it, so local agents (Claude Code, Codex, Cursor) resolve the same files.
+
 ```bash
 cd <LANDING_REPO>
 
-# Symlink rules folder for Copilot instructions
+# Real rules directory for Copilot; .agents/rules symlinks back to it
 mkdir -p .github
-ln -sf ../.agents/rules .github/instructions
+cp -R <TEMPLATE>/.github/instructions .github/instructions
+rm -rf .agents/rules
+ln -sf ../.github/instructions .agents/rules
 ```
 
 Copy `copilot-instructions.md` (overwrite only if approved or Global mode):
@@ -164,7 +168,9 @@ Windows:
 ```powershell
 cd <LANDING_REPO>
 New-Item -ItemType Directory -Path .github -Force
-New-Item -ItemType SymbolicLink -Name .github\instructions -Target ..\agents\rules -Force
+Copy-Item <TEMPLATE>\.github\instructions .github\instructions -Recurse -Force
+Remove-Item .agents\rules -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType SymbolicLink -Name .agents\rules -Target ..\.github\instructions -Force
 Copy-Item <TEMPLATE>\.github\copilot-instructions.md .github\copilot-instructions.md -Force
 ```
 
@@ -204,7 +210,7 @@ After all copies/symlinks are done, report:
 
 □ [Codex] Verify `.codex/` symlink resolves:  ls -la .codex
 
-□ [Copilot] Verify `.github/instructions/` symlink resolves:  ls -la .github/instructions
+□ [Copilot] Verify `.github/instructions/` is a real dir and `.agents/rules` symlinks to it:  ls -la .github/instructions .agents/rules
 
 □ [.NET] Rename Project.* → <ActualProjectName> everywhere (if .NET was copied).
 

@@ -97,9 +97,9 @@ Then add frontmatter + content. Create a `<category>/` subfolder only when 2+ ru
 
 | Tool | Reads from | Extension | Frontmatter |
 |------|-----------|-----------|-------------|
-| Claude Code | `.claude/rules/` (→ `.agents/rules/`) | `.md` | `paths` (YAML list) |
-| Copilot | `.github/instructions/` (symlink → `../.agents/rules`) | `.instructions.md` | `applyTo`, `description` |
-| Cursor | `.cursor/rules/` (→ `.agents/rules/`) | `.instructions.md` | `globs`, `description`, `alwaysApply` |
+| Claude Code | `.claude/rules/` (→ `.agents/rules/` → `.github/instructions/`) | `.md` | `paths` (YAML list) |
+| Copilot | `.github/instructions/` (**real directory** — no symlink) | `.instructions.md` | `applyTo`, `description` |
+| Cursor | `.cursor/rules/` (→ `.agents/rules/` → `.github/instructions/`) | `.instructions.md` | `globs`, `description`, `alwaysApply` |
 | Codex | any directory | `AGENTS.md` | none |
 
-All four tools read from the same `.agents/rules/` source files via symlinks. Copilot's path-specific instructions are surfaced at `.github/instructions/**.instructions.md` (read by Copilot Coding Agent and Code Review on github.com — not Copilot Chat) via the `.github/instructions → ../.agents/rules` symlink.
+The rule files physically live in `.github/instructions/`, a **real directory** read natively by Copilot Coding Agent and Code Review on github.com (not Copilot Chat) — no symlink resolution required server-side. The local-agent paths `.agents/rules`, `.claude/rules`, and `.cursor/rules` are symlinks resolving back to `.github/instructions/`, so all four tools share one source of truth.
