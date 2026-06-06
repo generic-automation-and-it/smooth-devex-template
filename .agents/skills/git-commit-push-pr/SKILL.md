@@ -28,6 +28,24 @@ PRs are created as **draft by default**. The state is controlled by two switches
 
 `--draft` and `--ready` are mutually exclusive; if both are passed, **STOP and ask the user**. Resolve the requested state once at the start and apply it consistently in Step 6 (new PR) and the Update Existing PR section.
 
+## Issue Auto-Close (default: ON)
+
+By default, the PR description gets a `Closes #<issue>` line so GitHub **auto-closes the linked issue when the PR merges**. The behaviour is controlled by one switch and the issue-number resolution below:
+
+| Switch | Effect |
+|--------|--------|
+| _(none)_ | Append `Closes #<issue>` to the Description section (default) |
+| `--noclose` | Do **not** append any `Closes #` link |
+
+**Issue-number resolution (when `--noclose` is NOT passed), in order:**
+
+1. Explicit `--issue <number>` argument.
+2. Otherwise, parse it from the branch name, which follows `<type>/<issue>-short-description` (e.g. `feat/133-add-export` → `133`).
+
+If neither yields a number (e.g. a ticketless branch like `refactor/cleanup-dead-code`), **skip the close link gracefully** and tell the user no issue could be determined — do not block, and do not guess a number.
+
+Resolve the close behaviour and issue number once at the start, then apply it in Step 5 (new PR) and the Update Existing PR section.
+
 ## Workflow Steps
 
 ### Step 1: Commit and Push (MANDATORY)
@@ -71,7 +89,7 @@ This title becomes the squash commit message on `main`, so it must be descriptiv
 
 ### Step 5: Fill Template Sections
 
-- **Description**: Replace placeholder with bullet points of actual changes made. If `--issue <number>` was passed, append `Closes #<number>` as the last bullet point in the Description section.
+- **Description**: Replace placeholder with bullet points of actual changes made. **Unless `--noclose` was passed**, append `Closes #<issue>` as the last bullet point in the Description section, where `<issue>` is resolved per the **Issue Auto-Close** section above (explicit `--issue <number>`, else parsed from the branch name). If no issue number can be determined, omit the close link and note this to the user.
 - **Type of Change**: Check the appropriate checkbox(es)
 - **Testing**: Check applicable test levels and describe test details
 - **Checklist**: Complete all items appropriately
@@ -110,7 +128,7 @@ If a PR already exists for the current branch (detected in Step 2):
 3. **Read PR template**: Load `.github/pull_request_template.md`
 4. **Analyze COMPLETE changeset** (`git diff main...HEAD`) — not just latest commit
 5. **Preserve PR title**: Keep existing title unchanged unless scope fundamentally changed
-6. **FULL UPDATE (not incremental)**: Completely replace the PR description based on the template
+6. **FULL UPDATE (not incremental)**: Completely replace the PR description based on the template. **Unless `--noclose` was passed**, ensure the Description section ends with `Closes #<issue>` (issue number resolved per the **Issue Auto-Close** section). If the existing description already has a correct `Closes #` line, preserve it; if `--noclose` was passed, remove any existing `Closes #` line
 7. **Execute update**: Run `gh pr edit <pr-number> --body "<updated template content>"`
 8. **Apply draft/ready switch**: If `--ready` was passed and the PR is currently a draft, run `gh pr ready <pr-number>` to mark it ready. If neither switch (or `--draft`) was passed, leave the existing draft/ready state unchanged
 9. **Verify** (mandatory): `gh pr view <pr-number> --json body` and confirm all template sections are present
@@ -125,17 +143,19 @@ If a PR already exists for the current branch (detected in Step 2):
 - Optional: pre-defined commit message (if not provided, will analyze changes and generate appropriate conventional commit message)
 - `--draft` — create the PR as a draft (this is the **default** behavior)
 - `--ready` — create the PR ready for review (or mark an existing draft PR ready). Mutually exclusive with `--draft`
+- `--noclose` — do **not** append a `Closes #<issue>` link to the PR description. By default (without this switch) the link is added so GitHub auto-closes the linked issue on merge
 - `--issue <number>` — two effects:
   1. Renames the local branch to `<type>/<number>-short-description` before pushing (delegated to **git-commit-push**)
-  2. Appends `Closes #<number>` as the last bullet in the PR description's Description section so GitHub auto-closes the issue on merge
+  2. Sets the issue number used for the `Closes #<number>` link explicitly. **Note:** the close link is added **by default** even without `--issue` — when `--issue` is omitted the number is parsed from the branch name. Use `--issue` only to override that, or `--noclose` to suppress the link entirely
 
 ## Usage Examples
 
 ```
-/git-commit-push-pr                                  # commit, push, open a DRAFT PR (default)
-/git-commit-push-pr --ready                          # commit, push, open a READY PR
+/git-commit-push-pr                                  # commit, push, open a DRAFT PR (default); closes the branch's issue on merge
+/git-commit-push-pr --ready                          # commit, push, open a READY PR; closes the branch's issue on merge
 /git-commit-push-pr feat: add user authentication    # draft PR with a pre-defined commit message
 /git-commit-push-pr --ready feat: add auth system    # ready PR with a pre-defined commit message
+/git-commit-push-pr --noclose                        # draft PR WITHOUT a Closes #<issue> link
 /git-commit-push-pr --issue 42                       # draft PR, renames branch to feat/42-*, closes #42 on merge
 /git-commit-push-pr --ready --issue 42               # ready PR, renames branch to feat/42-*, closes #42 on merge
 ```
