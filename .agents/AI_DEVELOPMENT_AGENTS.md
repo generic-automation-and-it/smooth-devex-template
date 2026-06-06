@@ -34,7 +34,7 @@ This is a unified AI development experience folder that centralizes skills, prom
 | `.agents/skills/git/git-commit-push/` | Commit and push to remote |
 | `.agents/skills/git/git-commit-push-pr/` | Commit, push, and create/update PRs |
 | `.agents/skills/git/git-sync/` | Sync with main (stop on conflicts) |
-| `.agents/skills/github-task-from-diff/` | Create a GitHub Task (sub-issue) from the current git diff vs main |
+| `.agents/skills/agile/github-task-from-diff/` | Create a GitHub Task (sub-issue) from the current git diff vs main |
 | `.agents/templates/` | Document templates (AGENTS.md, README.md, work task promote templates) |
 | `.claude` → `.agents` | Symbolic link for Claude Code compatibility |
 | `.codex` → `.agents` | Symbolic link for OpenAI Codex compatibility |

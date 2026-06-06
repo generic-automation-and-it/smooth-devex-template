@@ -13,16 +13,16 @@ Self-contained skills for Claude Code, GitHub Copilot, and OpenAI Codex providin
 | **git-commit-push-pr** | `git/` | Commit, push, and create/update PR | `/git-commit-push-pr` |
 | **git-sync** | `git/` | Sync with main (stop on conflicts) | `/git-sync` |
 | **git-sync-fix** | `git/` | Sync with main (auto-resolve conflicts) | `/git-sync-fix` |
-| **github-task-from-diff** | _(root)_ | Create a GitHub Task (sub-issue) from the current git diff vs main | `/github-task-from-diff` |
+| **github-task-from-diff** | `agile/` | Create a GitHub Task (sub-issue) from the current git diff vs main | `/github-task-from-diff` |
 | **ai-review** | _(root)_ | Analyze/execute AI review feedback | `/ai-review analyse 123` |
-| **brain-dump** | _(root)_ | Listen-first capture session; synthesize on request | `/brain-dump [--oktoask] [--thinking] [--oktoreaddocs] [--oktowebsearch]` |
+| **brain-dump** | `communication/` | Listen-first capture session; synthesize on request | `/brain-dump [--oktoask] [--thinking] [--oktoreaddocs] [--oktowebsearch]` |
 | **manage-rule-system** | _(root)_ | Create/update rule files in `.agents/rules/` | `/manage-rule-system` |
-| **mansplain** | _(root)_ | Reformat this turn's reply into terse, high-density output with a TL;DR | `/mansplain` |
+| **mansplain** | `communication/` | Reformat this turn's reply into terse, high-density output with a TL;DR | `/mansplain` |
 
 ### brain-dump switches
 
 Default (no switch) is pure silent listen-first — no questions, no tools — until you ask it to synthesize.
-Opt-in switches relax that, at different token costs (see `brain-dump/README.md` for the full breakdown):
+Opt-in switches relax that, at different token costs (see `communication/brain-dump/README.md` for the full breakdown):
 
 | Switch | Effect | Cost |
 |--------|--------|------|
@@ -74,9 +74,11 @@ Skills are organized into category subfolders:
 
 | Folder | Skills |
 |--------|--------|
+| `agile/` | `github-task-from-diff` |
+| `communication/` | `brain-dump`, `mansplain` |
 | `context/` | `load-context`, `load-agents-context` |
 | `git/` | `git-commit`, `git-commit-push`, `git-commit-push-pr`, `git-sync` |
-| _(root)_ | `ai-review`, `brain-dump`, `github-task-from-diff`, `manage-rule-system`, `mansplain` |
+| _(root)_ | `ai-review`, `manage-rule-system` |
 
 ## About Skills
 

@@ -53,10 +53,10 @@
       "WebFetch(domain:www.conventionalcommits.org)"
     ],
     "deny": [
-      "Bash(gh pr merge:*--delete-branch*)",
-      "Bash(gh pr merge:*-d*)",
-      "Bash(gh api:*DELETE*refs/heads*)",
-      "Bash(gh api:*DELETE*git/refs*)",
+      "Bash(gh pr merge*--delete-branch*)",
+      "Bash(gh pr merge*-d*)",
+      "Bash(gh api*DELETE*refs/heads*)",
+      "Bash(gh api*DELETE*git/refs*)",
       "Bash(dotnet ef database update:*)",
       "Bash(sqlcmd*INSERT*)",
       "Bash(sqlcmd*insert*)",
