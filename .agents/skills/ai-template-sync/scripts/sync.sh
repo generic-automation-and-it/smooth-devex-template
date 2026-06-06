@@ -96,8 +96,13 @@ if has_tool copilot; then
     rm -rf .github/instructions
     cp -R "$TEMPLATE/.github/instructions" .github/instructions
   fi
-  # .agents/rules always points back at the real instructions dir
-  rm -rf .agents/rules
+  # .agents/rules must be a symlink back to the real instructions dir. Refuse to
+  # clobber a real directory (a landing repo's own rule set) — only replace a symlink.
+  if [ -e .agents/rules ] && [ ! -L .agents/rules ]; then
+    echo "    refusing: .agents/rules is a real directory, not a symlink — leaving it untouched" >&2
+    exit 65
+  fi
+  rm -f .agents/rules
   ln -sf ../.github/instructions .agents/rules
   if [ "$OVERWRITE" = "global" ] || [ ! -f .github/copilot-instructions.md ]; then
     cp "$TEMPLATE/.github/copilot-instructions.md" .github/copilot-instructions.md
@@ -111,10 +116,21 @@ if [ "$DOTNET" -eq 1 ]; then
     echo "    skipped: landing repo already has a solution file"
   else
     for item in Directory.Build.props Directory.Packages.props NuGet.Config src tests; do
-      [ -e "$TEMPLATE/$item" ] && cp -R "$TEMPLATE/$item" "$LANDING/$item"
+      [ -e "$TEMPLATE/$item" ] || continue
+      if [ -e "$LANDING/$item" ]; then
+        echo "    skipped (exists): $item"
+        continue
+      fi
+      cp -R "$TEMPLATE/$item" "$LANDING/$item"
     done
     for slnx in "$TEMPLATE"/*.slnx; do
-      [ -e "$slnx" ] && cp "$slnx" "$LANDING/"
+      [ -e "$slnx" ] || continue
+      dest="$LANDING/$(basename "$slnx")"
+      if [ -e "$dest" ]; then
+        echo "    skipped (exists): $(basename "$slnx")"
+        continue
+      fi
+      cp "$slnx" "$dest"
     done
     echo "    NOTE: rename Project.* -> <ActualProjectName> in names/namespaces afterwards"
   fi
