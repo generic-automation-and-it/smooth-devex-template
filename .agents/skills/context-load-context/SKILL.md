@@ -1,5 +1,5 @@
 ---
-name: load-context
+name: context-load-context
 description: Load or create functional AGENTS.md context files before implementation work. Use when starting frontend/backend/devops code changes, when a task references a domain or feature, or when required context is missing and must be discovered or created.
 models:
   claude: haiku      # low-complexity; file discovery and loading requires minimal reasoning
@@ -88,9 +88,9 @@ Respond with A, B, C, D, or type file paths directly
 ## Usage Examples
 
 ```
-/load-context auth
-/load-context orders
-/load-context
+/context-load-context auth
+/context-load-context orders
+/context-load-context
 ```
 
 ## Context Loading Rules

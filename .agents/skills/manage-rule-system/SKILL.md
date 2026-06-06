@@ -59,7 +59,7 @@ The three scope fields mirror the same pattern(s) — one per tool. For multiple
 | `applyTo` | Copilot | File pattern for `.github/instructions/**` loading. Mirror `globs`; use `'**'` for always-apply |
 | `alwaysApply` | Cursor | `true` = always loaded; `false` = only on glob match |
 
-Claude Code auto-loads every `.md` file under `.claude/rules/` (symlink → `.agents/rules/`) at session start, recursing into category subfolders. Scoping is **per-file** via the frontmatter above — there is no separate injected directory.
+Claude Code auto-loads every `.md` file under `.claude/rules/` (symlink → `.agents/rules/` → `.github/instructions/`) at session start, recursing into category subfolders. Scoping is **per-file** via the frontmatter above — there is no separate injected directory.
 
 ### Scoping Guidelines
 
@@ -87,12 +87,12 @@ Then add frontmatter + content. After saving:
 
 | Tool | Reads from | Scoping mechanism | Extension |
 |------|-----------|-------------------|-----------|
-| Claude Code | `.claude/rules/` (symlink → `.agents/rules/`) | `paths` frontmatter | `.md` |
-| Copilot | `.github/instructions` (path file → `../.agents/rules`) | `applyTo` frontmatter | `.instructions.md` |
-| Cursor | `.cursor/rules/` (symlink → `.agents/rules/`) | `globs` + `alwaysApply` frontmatter | `.instructions.md` |
-| Codex | `.codex/` (symlink → `.agents/`) | invokes `load-agents-context` skill explicitly | `AGENTS.md` |
+| Claude Code | `.claude/rules/` (symlink → `.agents/rules/` → `.github/instructions/`) | `paths` frontmatter | `.md` |
+| Copilot | `.github/instructions/` (**real directory** — no symlink) | `applyTo` frontmatter | `.instructions.md` |
+| Cursor | `.cursor/rules/` (symlink → `.agents/rules/` → `.github/instructions/`) | `globs` + `alwaysApply` frontmatter | `.instructions.md` |
+| Codex | `.codex/` (symlink → `.agents/`) | invokes `context-load-agents-context` skill explicitly | `AGENTS.md` |
 
-All tools share the same `.agents/rules/` source files via symlinks.
+The rule files physically live in `.github/instructions/` (a **real directory**, so Copilot's github.com-hosted agent reads them without resolving a symlink). `.agents/rules`, `.claude/rules`, and `.cursor/rules` are symlinks resolving back to it — all tools share one source of truth.
 
 ## Non-Negotiables
 

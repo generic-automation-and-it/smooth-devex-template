@@ -1,4 +1,4 @@
-# brain-dump — Intent & Token-Usage Review
+# ai-brain-dump — Intent & Token-Usage Review
 
 > Companion notes to [`SKILL.md`](./SKILL.md). Explains what this skill is for and why
 > "listen-first" actually saves tokens — including where it doesn't.

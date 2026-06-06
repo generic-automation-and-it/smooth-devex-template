@@ -26,15 +26,19 @@ This is a unified AI development experience folder that centralizes skills, prom
 | `.agents/roles/` | Multi-agent role instructions (PO, Architect, QA, Backend/Frontend Engineer, Heimdall Reviewer) |
 | `.agents/rules/` | Enforced AI development rules (workflow rules, coding standards) |
 | `.agents/settings.json` | Tool permissions, compile/test commands |
-| `.agents/skills/` | Executable skills (multi-file workflows) |
-| `.agents/skills/context/load-context/` | Load or create functional `*_AGENTS.md` context files |
-| `.agents/skills/context/load-agents-context/` | Load ancestor AGENTS.md context for a target file |
+| `.agents/skills/` | Executable skills (multi-file workflows) — flat dirs, category-prefixed folder names |
+| `.agents/skills/agile-github-task-from-diff/` | Create a GitHub Task (sub-issue) from the current git diff vs main |
+| `.agents/skills/ai-brain-dump/` | Listen-first capture session; synthesize on request |
+| `.agents/skills/ai-mansplain/` | Reformat this turn's reply into terse, high-density output with a TL;DR |
 | `.agents/skills/ai-review/` | Analyze and execute AI PR review decisions |
-| `.agents/skills/git/git-commit/` | Commit with conventional format |
-| `.agents/skills/git/git-commit-push/` | Commit and push to remote |
-| `.agents/skills/git/git-commit-push-pr/` | Commit, push, and create/update PRs |
-| `.agents/skills/git/git-sync/` | Sync with main (stop on conflicts) |
-| `.agents/skills/github-task-from-diff/` | Create a GitHub Task (sub-issue) from the current git diff vs main |
+| `.agents/skills/ai-template-sync/` | UPSERT the smooth-devex-template agentic scaffold into an existing repo |
+| `.agents/skills/context-load-context/` | Load or create functional `*_AGENTS.md` context files |
+| `.agents/skills/context-load-agents-context/` | Load ancestor AGENTS.md context for a target file |
+| `.agents/skills/git-commit/` | Commit with conventional format |
+| `.agents/skills/git-commit-push/` | Commit and push to remote |
+| `.agents/skills/git-commit-push-pr/` | Commit, push, and create/update PRs |
+| `.agents/skills/git-sync/` | Sync with main (optionally auto-resolve conflicts) |
+| `.agents/skills/manage-rule-system/` | Create/update rule files in `.agents/rules/` |
 | `.agents/templates/` | Document templates (AGENTS.md, README.md, work task promote templates) |
 | `.claude` → `.agents` | Symbolic link for Claude Code compatibility |
 | `.codex` → `.agents` | Symbolic link for OpenAI Codex compatibility |
@@ -48,7 +52,7 @@ This is a unified AI development experience folder that centralizes skills, prom
 | Tool | Access Method | Status |
 | :---- | :---- | :---- |
 | **Claude Code** | Via `.claude` symlink | ✅ Active |
-| **GitHub Copilot** | Via `.github/instructions` symlink → `.agents/rules` (path-specific `*.instructions.md`); root `AGENTS.md` for repo-wide context | ✅ Active |
+| **GitHub Copilot** | Reads `.github/instructions/` directly — a **real directory** (path-specific `*.instructions.md`); root `AGENTS.md` for repo-wide context | ✅ Active |
 | **Cursor AI** | Via `.cursor` symlink | ✅ Active |
 | **OpenAI Codex** | Via `.codex` symlink | ✅ Active |
 | **Gemini** | Via `GEMINI.md` symlink | ✅ Compatible |
@@ -92,9 +96,22 @@ This is a unified AI development experience folder that centralizes skills, prom
   - Clean git history without local state pollution
   - Symlinks available immediately after clone
 
+### LADR-004: Rule Files Physically Located in `.github/instructions` (Symlink Inversion)
+
+- **Date**: 2026-06-06
+- **Status**: Accepted
+- **Context**: GitHub Copilot's Coding Agent / Code Review runs on github.com against a server-side checkout. With the rule files living in `.agents/rules` and `.github/instructions` as a symlink → `../.agents/rules`, Copilot did not load the path-scoped instructions — its instruction loader does not reliably traverse a symlinked directory server-side. Claude Code, Codex, and Cursor run locally where symlink resolution is never a problem.
+- **Decision**: Invert the symlink. The rule files now physically live in `.github/instructions/` (a real, committed directory Copilot reads natively). `.agents/rules`, `.claude/rules`, and `.cursor/rules` are symlinks resolving back to it (`.agents/rules → ../.github/instructions`; the others reach it via `.claude`/`.cursor` → `.agents`).
+- **Consequences**:
+  - Copilot reads rules with no server-side symlink resolution required.
+  - Local agents resolve the same files through a two-hop symlink (`.claude/rules → .agents/rules → .github/instructions`) — fine on local filesystems.
+  - `.agents/` remains the conceptual hub for skills/hooks/AGENTS.md, but the rule *content* now lives under `.github/`; every path reference to `.agents/rules/...` still resolves via the symlink, so hooks and skill docs did not need path edits.
+  - `ai-template-sync` provisions new repos with the inverted topology (real `.github/instructions` + `.agents/rules` symlink).
+  - **Open item**: this fixes *delivery* (Copilot can now see the rules), not *enforcement* (Copilot still treats them as soft guidance with no phase-gate hooks) and assumes Copilot does not recurse symlinked dirs — verify Copilot now honours subfolder rules (`backend/`, `git/`, `meta/`) on a live run.
+
 ## 📊 Setup Instructions
 
-**Symlinks (`.claude`, `.codex`, `.cursor`, `CLAUDE.md`, `GEMINI.md`, and `.github/instructions → ../.agents/rules`) are committed to git and available immediately after clone. GitHub Copilot reads path-specific rules from `.github/instructions/**.instructions.md` (resolved through that symlink) and repo-wide context from root `AGENTS.md`, so no setup script is required.**
+**The rule files physically live in `.github/instructions/` (a real, committed directory). Symlinks (`.claude`, `.codex`, `.cursor`, `CLAUDE.md`, `GEMINI.md`, and `.agents/rules → ../.github/instructions`) are committed to git and available immediately after clone. GitHub Copilot reads path-specific rules natively from `.github/instructions/**.instructions.md` (no symlink resolution required) and repo-wide context from root `AGENTS.md`, so no setup script is required.**
 
 ```bash
 # Verify links are present after clone
