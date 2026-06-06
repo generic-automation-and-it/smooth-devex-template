@@ -17,6 +17,7 @@ Self-contained skills for Claude Code, GitHub Copilot, and OpenAI Codex providin
 | **ai-review** | _(root)_ | Analyze/execute AI review feedback | `/ai-review analyse 123` |
 | **brain-dump** | _(root)_ | Listen-first capture session; synthesize on request | `/brain-dump [--oktoask] [--thinking] [--oktoreaddocs] [--oktowebsearch]` |
 | **manage-rule-system** | _(root)_ | Create/update rule files in `.agents/rules/` | `/manage-rule-system` |
+| **mansplain** | _(root)_ | Reformat this turn's reply into terse, high-density output with a TL;DR | `/mansplain` |
 
 ### brain-dump switches
 
@@ -57,6 +58,7 @@ Skills are classified by complexity tier. Each SKILL.md carries a `models` front
 | **ai-review** | medium | Review analysis + multi-file code fixes |
 | **github-task-from-diff** | medium | Diff classification + issue authoring |
 | **manage-rule-system** | medium | Cross-tool frontmatter authoring |
+| **mansplain** | low | Single-turn reply reformatting; no tools or deep reasoning |
 | **brain-dump** | high | Multi-turn synthesis + deep requirement reasoning |
 
 ### Sub-skill invocation model guidance
@@ -74,7 +76,7 @@ Skills are organized into category subfolders:
 |--------|--------|
 | `context/` | `load-context`, `load-agents-context` |
 | `git/` | `git-commit`, `git-commit-push`, `git-commit-push-pr`, `git-sync` |
-| _(root)_ | `ai-review`, `brain-dump`, `github-task-from-diff`, `manage-rule-system` |
+| _(root)_ | `ai-review`, `brain-dump`, `github-task-from-diff`, `manage-rule-system`, `mansplain` |
 
 ## About Skills
 
