@@ -85,6 +85,10 @@
     <File Path=".agents/skills/ai-review/SKILL.md" />
     <File Path=".agents/skills/ai-review/agents/openai.yaml" />
   </Folder>
+  <Folder Name="/.agents/skills/ai-template-sync/">
+    <File Path=".agents/skills/ai-template-sync/SKILL.md" />
+    <File Path=".agents/skills/ai-template-sync/agents/openai.yaml" />
+  </Folder>
   <Folder Name="/.agents/skills/context-load-agents-context/">
     <File Path=".agents/skills/context-load-agents-context/SKILL.md" />
     <File Path=".agents/skills/context-load-agents-context/agents/openai.yaml" />

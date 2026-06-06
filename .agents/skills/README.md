@@ -12,6 +12,7 @@ Skills live **flat**, one directory per skill directly under `.agents/skills/`. 
 | **ai-brain-dump** | Listen-first capture session; synthesize on request | `/ai-brain-dump [--oktoask] [--thinking] [--oktoreaddocs] [--oktowebsearch]` |
 | **ai-mansplain** | Reformat this turn's reply into terse, high-density output with a TL;DR | `/ai-mansplain` |
 | **ai-review** | Analyze/execute AI review feedback | `/ai-review analyse 123` |
+| **ai-template-sync** | UPSERT smooth-devex-template scaffold into an existing repo | `/ai-template-sync` |
 | **context-load-agents-context** | Load ancestor AGENTS.md context for a file | `/context-load-agents-context` |
 | **context-load-context** | Load domain context before implementation | `/context-load-context auth` |
 | **git-commit** | Commit with conventional format | `/git-commit` |
@@ -61,6 +62,7 @@ Skills are classified by complexity tier. Each SKILL.md carries a `models` front
 | **manage-rule-system** | medium | Cross-tool frontmatter authoring |
 | **ai-mansplain** | low | Single-turn reply reformatting; no tools or deep reasoning |
 | **ai-brain-dump** | high | Multi-turn synthesis + deep requirement reasoning |
+| **ai-template-sync** | high | Interactive multi-turn Q&A + conditional file sync across tools |
 
 ### Sub-skill invocation model guidance
 
@@ -76,7 +78,7 @@ Skills are flat under `.agents/skills/`; the category lives in the folder-name p
 | Prefix | Skills |
 |--------|--------|
 | `agile-` | `agile-github-task-from-diff` |
-| `ai-` | `ai-brain-dump`, `ai-mansplain`, `ai-review` |
+| `ai-` | `ai-brain-dump`, `ai-mansplain`, `ai-review`, `ai-template-sync` |
 | `context-` | `context-load-agents-context`, `context-load-context` |
 | `git-` | `git-commit`, `git-commit-push`, `git-commit-push-pr`, `git-sync` |
 | _(none)_ | `manage-rule-system` |
