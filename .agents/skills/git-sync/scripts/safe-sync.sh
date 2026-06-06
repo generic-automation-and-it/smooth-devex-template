@@ -21,7 +21,12 @@ BASE_REF="${1:-origin/main}"
 REMOTE="${BASE_REF%%/*}"
 BRANCH="${BASE_REF#*/}"
 
-git fetch "$REMOTE" "$BRANCH"
+# Fetch failures (missing remote/ref, network) are non-merge errors — keep the
+# MERGE_OK/MERGE_CONFLICTS/MERGE_ERROR contract intact rather than dying via set -e.
+if ! git fetch "$REMOTE" "$BRANCH"; then
+  echo "MERGE_ERROR"
+  exit 2
+fi
 
 if git merge --no-edit "$BASE_REF"; then
   echo "MERGE_OK"
