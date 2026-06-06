@@ -18,6 +18,7 @@ Generate a GitHub **Task** issue from the current branch diff versus main. The t
 1. Ensure the repo has an up-to-date `origin/main` (or override the base ref).
 2. Run a dry run to review the generated title, body, and acceptance criteria.
 3. Create the task issue, add it to the project, and optionally link it as a sub-issue of the Feature.
+4. Rename the current branch to match the `<type>/<issue>-short-description` naming standard using the newly created issue number — see [Rename Branch After Creation](#rename-branch-after-creation).
 
 ## Script
 
@@ -79,6 +80,34 @@ python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_fr
 - Creates the issue via `gh issue create`.
 - Adds the issue to the GitHub Project via `gh project item-add`.
 - Links the issue as a sub-issue of the parent Feature via the GitHub REST API (`gh api POST /repos/.../sub_issues`).
+
+## Rename Branch After Creation
+
+After the task issue is created, rename the **current local branch** so it conforms to the
+`<type>/<issue>-short-description` standard enforced by the
+[`git-commit-push-pr`](../git-commit-push-pr/SKILL.md) skill and `.agents/rules/git/git-policy.instructions.md`
+(the source of truth). This guarantees the downstream PR title and `Closes #<issue>` link can be derived
+from the branch name.
+
+Derive each segment from the freshly created issue:
+
+| Segment | Source |
+|---------|--------|
+| `<type>` | Conventional Commits type (`feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `ci`, `perf`, `build`) that best matches the diff. Map from the dominant horizontal layer when unsure: `documentation` → `docs`, `tests` → `test`, `config`/`ai-tooling` → `chore`, `backend` → `feat` (or `fix`/`refactor` if behaviour-preserving), `general` → `chore`. |
+| `<issue>` | The number of the issue just created by this skill. |
+| `short-description` | Lowercase, hyphen-separated slug derived from the task title (drop the `[layer]` prefix, no spaces, no trailing punctuation). |
+
+Rename the local branch (no commit/push is performed by this skill):
+
+```bash
+git branch -m feat/24-update-agents-skill-docs
+```
+
+Notes:
+
+- **Skipped on `--dry-run`** — nothing is created, so there is no issue number to rename against.
+- If a conforming `<type>` or slug cannot be determined, **stop and ask the user** — do not guess, matching the format-enforcement rule in `git-policy.instructions.md`.
+- If the branch was already pushed, the rename stays local; the subsequent `git-commit-push-pr` run pushes the renamed branch (its `--issue` handling parses the same number back out of the branch name).
 
 ## Vertical vs Horizontal Slicing
 
