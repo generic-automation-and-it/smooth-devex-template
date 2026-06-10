@@ -15,9 +15,9 @@ Skills live **flat**, one directory per skill directly under `.agents/skills/`. 
 | **ai-template-sync** | UPSERT smooth-devex-template scaffold into an existing repo | `/ai-template-sync` |
 | **context-load-agents-context** | Load ancestor AGENTS.md context for a file | `/context-load-agents-context` |
 | **context-load-context** | Load domain context before implementation | `/context-load-context auth` |
-| **git-commit** | Commit with conventional format | `/git-commit` |
-| **git-commit-push** | Commit and push to remote | `/git-commit-push` |
-| **git-commit-push-pr** | Commit, push, and create/update PR | `/git-commit-push-pr` |
+| **git-commit** | Commit with conventional format | `/git-commit [--mansplain]` |
+| **git-commit-push** | Commit and push to remote | `/git-commit-push [--mansplain]` |
+| **git-commit-push-pr** | Commit, push, and create/update PR | `/git-commit-push-pr [--mansplain]` |
 | **git-sync** | Sync with main (optionally auto-resolve conflicts) | `/git-sync` |
 | **manage-rule-system** | Create/update rule files in `.agents/rules/` | `/manage-rule-system` |
 
@@ -36,6 +36,17 @@ Opt-in switches relax that, at different token costs (see `ai-brain-dump/README.
 
 The tool switches (`--oktoreaddocs`, `--oktowebsearch`) re-enable the file/web payload bloat the
 listen-first default avoids — use deliberately.
+
+### git-commit / git-commit-push / git-commit-push-pr switches
+
+The `--mansplain` switch suppresses all interactive questions across the entire commit chain. When passed, the agent uses its best judgment on commit grouping, message selection, and PR title — it never stops to ask.
+
+| Switch | Effect |
+|--------|--------|
+| _(none)_ | Default — ask for clarification when grouping is unclear or a conforming message cannot be determined |
+| `--mansplain` | **No questions asked.** Agent decides everything autonomously and proceeds without confirmation |
+
+`--mansplain` is forwarded automatically through the skill chain: `git-commit-push-pr` → `git-commit-push` → `git-commit`.
 
 ## Model Selection
 

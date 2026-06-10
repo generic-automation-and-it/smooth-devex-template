@@ -23,6 +23,7 @@ Commit current changes using conventional commits format and push to remote repo
    - Copilot: invoke `git-commit` skill with model `gpt-5.4-mini`
    - Codex: invoke git-commit agent (model: `gpt-5.4-mini`)
    - If commit message provided, pass it to git-commit
+   - If `--mansplain` was passed, forward it to git-commit
    - This handles change analysis, staging, and committing with conventional format
    - Respects logical units of work
 3. If there are no changes to commit, skip to step 4
@@ -64,6 +65,7 @@ git push --set-upstream origin <new-branch-name>
 
 - Optional: pre-defined commit message (if not provided, will analyze changes and generate appropriate conventional commit message)
 - `--issue <number>` — renames the local branch to `<type>/<number>-short-description` before pushing, ensuring branch naming consistency
+- `--mansplain` — suppress all interactive questions; passed through to the **git-commit** sub-agent so it uses its best judgment without asking
 
 ## Usage Examples
 
@@ -72,4 +74,6 @@ git push --set-upstream origin <new-branch-name>
 /git-commit-push feat: add user authentication system
 /git-commit-push --issue 42
 /git-commit-push --issue 42 feat: add user authentication system
+/git-commit-push --mansplain
+/git-commit-push --mansplain --issue 42
 ```
