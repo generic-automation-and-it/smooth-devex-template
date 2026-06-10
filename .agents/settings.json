@@ -114,6 +114,30 @@
             "command": ".agents/hooks/code-review-standards-context.sh"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".agents/hooks/worktask-create.sh"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".agents/hooks/agentmd-create-update.sh"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".agents/hooks/knowledge-rule-enforce.sh"
+          }
+        ]
       }
     ]
   }
