@@ -20,7 +20,7 @@ PAYLOAD=$(cat 2>/dev/null || true)
 PROMPT=$(printf '%s' "$PAYLOAD" | jq -r '.prompt // empty' 2>/dev/null || true)
 [ -z "$PROMPT" ] && exit 0
 
-if ! printf '%s' "$PROMPT" | grep -qiE '/(security-)?review($|[^a-z])|/code-review|gemini review|pr review|code review|review (the |this )?pr'; then
+if ! printf '%s' "$PROMPT" | grep -qiE '/(security-)?review($|[^a-z])|/code-review($|[^a-z])|gemini review|pr review|code review|review (the |this )?pr'; then
     exit 0
 fi
 
