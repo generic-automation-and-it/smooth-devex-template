@@ -25,7 +25,7 @@ This is a unified AI development experience folder that centralizes skills, prom
 | `.agents/prompts/` | Reusable prompt templates (code review, architecture analysis) |
 | `.agents/roles/` | Multi-agent role instructions (PO, Architect, QA, Backend/Frontend Engineer, Heimdall Reviewer) |
 | `.agents/rules/` | Enforced AI development rules (workflow rules, coding standards) |
-| `.agents/settings.json` | Tool permissions, compile/test commands |
+| `.agents/settings.json` | Tool permissions, compile/test commands, hook registrations — every script in `.agents/hooks/` MUST be registered here or it silently never fires (#32) |
 | `.agents/skills/` | Executable skills (multi-file workflows) — flat dirs, category-prefixed folder names |
 | `.agents/skills/agile-github-task-from-diff/` | Create a GitHub Task (sub-issue) from the current git diff vs main |
 | `.agents/skills/ai-brain-dump/` | Listen-first capture session; synthesize on request |
@@ -136,3 +136,4 @@ ls -la | grep -E '(\.claude|\.codex|\.cursor)'
 | Date | Change | Reason |
 | :---- | :---- | :---- |
 | 2026-05-30 | Initial version. | |
+| 2026-06-10 | Registered orphaned `UserPromptSubmit` hooks (`worktask-create.sh`, `agentmd-create-update.sh`, `knowledge-rule-enforce.sh`) in `settings.json` — they existed on disk but never fired. | #32 |
