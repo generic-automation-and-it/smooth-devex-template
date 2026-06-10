@@ -11,7 +11,7 @@
 # (`globs`/`alwaysApply`/`applyTo`), since they do not run Claude Code hooks.
 #
 # Triggers on:
-#   - /review, /security-review, /code-review, /ai-review slash commands
+#   - /review, /security-review, /code-review slash commands
 #   - "review the PR", "PR review", "gemini review", "code review"
 
 set -euo pipefail
@@ -20,7 +20,7 @@ PAYLOAD=$(cat 2>/dev/null || true)
 PROMPT=$(printf '%s' "$PAYLOAD" | jq -r '.prompt // empty' 2>/dev/null || true)
 [ -z "$PROMPT" ] && exit 0
 
-if ! printf '%s' "$PROMPT" | grep -qiE '/(security-)?review($|[^a-z])|/(ai|code)-review|gemini review|pr review|code review|review (the |this )?pr'; then
+if ! printf '%s' "$PROMPT" | grep -qiE '/(security-)?review($|[^a-z])|/code-review|gemini review|pr review|code review|review (the |this )?pr'; then
     exit 0
 fi
 
