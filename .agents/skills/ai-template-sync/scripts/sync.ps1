@@ -73,7 +73,9 @@ if ($RulesOnly) {
     if (-not ($rulesItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
       throw "refusing: .agents\rules is a real directory, not a symlink — move its files into .github/instructions/ first"
     }
-    Remove-Item .agents\rules -Recurse -Force
+    # Delete the link itself, never recurse — -Recurse on a junction/symlink can
+    # delete the TARGET's contents (here: .github\instructions) on some PS versions.
+    $rulesItem.Delete()
   }
   if (Test-Path .agents) {
     New-Item -ItemType SymbolicLink -Name .agents\rules -Target ..\.github\instructions -Force | Out-Null
@@ -137,7 +139,9 @@ if (Test-Tool "copilot") {
     if (-not ($rulesItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
       throw "refusing: .agents\rules is a real directory, not a symlink — leaving it untouched"
     }
-    Remove-Item .agents\rules -Recurse -Force
+    # Delete the link itself, never recurse — -Recurse on a junction/symlink can
+    # delete the TARGET's contents (here: .github\instructions) on some PS versions.
+    $rulesItem.Delete()
   }
   New-Item -ItemType SymbolicLink -Name .agents\rules -Target ..\.github\instructions -Force | Out-Null
   if ($Overwrite -eq "global" -or -not (Test-Path .github\copilot-instructions.md)) {

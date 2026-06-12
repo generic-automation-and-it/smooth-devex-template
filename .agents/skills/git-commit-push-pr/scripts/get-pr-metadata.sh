@@ -15,7 +15,7 @@ TYPE=""
 ISSUE=""
 SLUG=""
 
-if [[ "$BRANCH" =~ ^(feat|fix|chore|docs|refactor|test|ci|perf|build)/(([0-9]+)-)?(.+)$ ]]; then
+if [[ "$BRANCH" =~ ^(feat|fix|chore|docs|refactor|test|ci|perf|build)/(([0-9]+)-)?([^/]+)$ ]]; then
     TYPE="${BASH_REMATCH[1]}"
     ISSUE="${BASH_REMATCH[3]}"
     SLUG="${BASH_REMATCH[4]}"
