@@ -26,34 +26,14 @@ Use `scripts/create_github_task_from_diff.py`.
 
 ```bash
 # Preview (dry run)
-python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py \
-  --dry-run
+python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py --dry-run
 
-# Create task and add to project #1 (no Feature link)
-python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py
+# Create task, add to project #1, link as sub-issue of Feature #42 (number or issue URL)
+python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py --feature-issue 42
 
-# Create task as a plain GitHub issue, not added to any project
+# Combine flags from the Inputs table as needed, e.g.:
 python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py \
-  --no-project
-
-# Create task and link as sub-issue of Feature #42 (by number)
-python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py \
-  --feature-issue 42
-
-# Create task and link as sub-issue using a Feature issue URL
-python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py \
-  --feature-issue https://github.com/owner/repo/issues/42
-
-# Override title and base ref
-python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py \
-  --feature-issue 42 \
-  --base-ref main \
-  --title "Add persistence layer tests"
-
-# Create and open in browser
-python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py \
-  --feature-issue 42 \
-  --open
+  --feature-issue 42 --base-ref main --title "Add persistence layer tests" --open
 ```
 
 ## Inputs
@@ -89,19 +69,7 @@ After the task issue is created, rename the **current local branch** so it confo
 (the source of truth). This guarantees the downstream PR title and `Closes #<issue>` link can be derived
 from the branch name.
 
-Derive each segment from the freshly created issue:
-
-| Segment | Source |
-|---------|--------|
-| `<type>` | Conventional Commits type (`feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `ci`, `perf`, `build`) that best matches the diff. Map from the dominant horizontal layer when unsure: `documentation` → `docs`, `tests` → `test`, `config`/`ai-tooling` → `chore`, `backend` → `feat` (or `fix`/`refactor` if behaviour-preserving), `general` → `chore`. |
-| `<issue>` | The number of the issue just created by this skill. |
-| `short-description` | Lowercase, hyphen-separated slug derived from the task title (drop the `[layer]` prefix, no spaces, no trailing punctuation). |
-
-Rename the local branch (no commit/push is performed by this skill):
-
-```bash
-git branch -m feat/24-update-agents-skill-docs
-```
+The script prints a ready-made suggestion after creating the issue (`Suggested branch rename: git branch -m <type>/<issue>-<slug>`) — it derives `<type>` from the dominant horizontal layer, `<issue>` from the new issue number, and the slug from the task title. Run that command (no commit/push is performed by this skill). Override the `<type>` if the diff is better described by `fix`/`refactor` than the layer mapping suggests.
 
 Notes:
 

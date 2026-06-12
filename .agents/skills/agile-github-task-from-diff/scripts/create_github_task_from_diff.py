@@ -88,7 +88,7 @@ def parse_name_status(name_status):
 def classify_horizontal_slice(paths):
     """Return the horizontal technical layers touched by the diff."""
     layers = []
-    if any(p.startswith(("src/", "Project", "ProsmarBunkering")) for p in paths):
+    if any(p.startswith(("src/", "Project")) for p in paths):
         layers.append("backend")
     if any("test" in p.lower() or "spec" in p.lower() for p in paths):
         layers.append("tests")
@@ -186,6 +186,26 @@ def build_task_body(branch_name, base_ref, base_sha, paths, status_counts, diff_
 {chr(10).join(checklist)}
 """
     return body.strip()
+
+
+LAYER_TO_TYPE = {
+    "documentation": "docs",
+    "tests": "test",
+    "config": "chore",
+    "ai-tooling": "chore",
+    "backend": "feat",
+    "general": "chore",
+}
+
+
+def suggest_branch_name(layers, title, issue_number):
+    """Derive a <type>/<issue>-short-description branch name (git-policy convention)."""
+    branch_type = LAYER_TO_TYPE.get(layers[0], "chore")
+    # Slug from the title: drop the "[layer]" prefix, keep alphanumerics, hyphenate
+    slug_source = title.split("]", 1)[-1] if title.startswith("[") else title
+    words = "".join(c if c.isalnum() else " " for c in slug_source.lower()).split()
+    slug = "-".join(words[:6]) or "update"
+    return f"{branch_type}/{issue_number}-{slug}"
 
 
 def link_sub_issue(owner, repo, parent_issue_number, child_issue_number):
@@ -325,6 +345,10 @@ def main():
     issue_url = run(create_cmd)
     issue_number = int(issue_url.rstrip("/").split("/")[-1])
     print(f"Created task issue #{issue_number}: {issue_url}")
+    print(
+        f"Suggested branch rename (git-policy convention): "
+        f"git branch -m {suggest_branch_name(layers, title, issue_number)}"
+    )
 
     # Add to GitHub Project (unless suppressed)
     if args.no_project:

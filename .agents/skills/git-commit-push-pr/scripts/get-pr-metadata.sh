@@ -1,41 +1,35 @@
 #!/bin/bash
 set -e
 
-# Get PR metadata from current branch
-# Extracts: PR type, ticket number
-# Output: JSON object with type, ticket, and branch fields
+# Get PR metadata from the current branch name, which follows the
+# git-policy convention: <type>/<issue>-short-description (issue segment optional).
+# Output: JSON {type, issue, slug, branch, pr_title_prefix}
+#   type            conventional commit type from the branch prefix ("" if non-conforming)
+#   issue           numeric issue from the branch name ("" if none)
+#   slug            the short-description segment
+#   pr_title_prefix ready-made "<type>[<issue>]" / "<type>[NO-TICKET]" PR-title prefix ("" if type unknown)
 
 BRANCH=$(git branch --show-current)
 
-# Extract branch prefix and determine PR type
-PREFIX=$(echo "$BRANCH" | cut -d'/' -f1)
-case "$PREFIX" in
-    bugfix|fix)
-        TYPE="Bugfix"
-        ;;
-    feature|feat)
-        TYPE="Feature"
-        ;;
-    chore|maintenance)
-        TYPE="Maintenance"
-        ;;
-    hotfix)
-        TYPE="Hotfix"
-        ;;
-    doc|docs)
-        TYPE="Documentation"
-        ;;
-    *)
-        TYPE="Feature"
-        ;;
-esac
+TYPE=""
+ISSUE=""
+SLUG=""
 
-# Extract ticket number (e.g. VEM-1234, PROJ-567 — any uppercase prefix followed by digits)
-TICKET=$(echo "$BRANCH" | grep -oE '[A-Z]+-[0-9]+' | head -1 || echo "")
+if [[ "$BRANCH" =~ ^(feat|fix|chore|docs|refactor|test|ci|perf|build)/(([0-9]+)-)?(.+)$ ]]; then
+    TYPE="${BASH_REMATCH[1]}"
+    ISSUE="${BASH_REMATCH[3]}"
+    SLUG="${BASH_REMATCH[4]}"
+fi
 
-# Output JSON
+PREFIX=""
+if [ -n "$TYPE" ]; then
+    PREFIX="${TYPE}[${ISSUE:-NO-TICKET}]"
+fi
+
 jq -n \
     --arg type "$TYPE" \
-    --arg ticket "$TICKET" \
+    --arg issue "$ISSUE" \
+    --arg slug "$SLUG" \
     --arg branch "$BRANCH" \
-    '{type: $type, ticket: $ticket, branch: $branch}'
+    --arg prefix "$PREFIX" \
+    '{type: $type, issue: $issue, slug: $slug, branch: $branch, pr_title_prefix: $prefix}'

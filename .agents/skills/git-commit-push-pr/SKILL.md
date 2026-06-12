@@ -7,6 +7,8 @@ allowed-tools:
   - Bash(git push:*)
   - Bash(gh pr create:*)
   - Bash(gh pr ready:*)
+  - Bash(.agents/skills/git-commit-push-pr/scripts/get-pr-metadata.sh:*)
+  - Bash(.agents/skills/git-commit-push-pr/scripts/get-base-branch.sh:*)
 models:
   claude: sonnet      # medium-complexity; PR creation with template filling needs broader reasoning
   copilot: auto
@@ -40,7 +42,7 @@ By default, the PR description gets a `Closes #<issue>` line so GitHub **auto-cl
 **Issue-number resolution (when `--noclose` is NOT passed), in order:**
 
 1. Explicit `--issue <number>` argument.
-2. Otherwise, parse it from the branch name, which follows `<type>/<issue>-short-description` (e.g. `feat/133-add-export` → `133`).
+2. Otherwise, run `scripts/get-pr-metadata.sh` — it parses the branch name (`<type>/<issue>-short-description`) and returns JSON with `type`, `issue`, `slug`, and a ready-made `pr_title_prefix`.
 
 If neither yields a number (e.g. a ticketless branch like `refactor/cleanup-dead-code`), **skip the close link gracefully** and tell the user no issue could be determined — do not block, and do not guess a number.
 
@@ -72,15 +74,9 @@ Run `gh pr list --head $(git rev-parse --abbrev-ref HEAD) --json number,title`
 
 **MANDATORY FORMAT** (per `.agents/rules/git/git-policy.instructions.md` — the source of truth):
 
-`<type>[{ticket}]: <description>`
+`<type>[{ticket}]: <description>` — e.g. `feat[1234]: add user authentication`, `chore[NO-TICKET]: update dependencies`
 
-- `<type>` — Conventional Commits type (`feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `ci`, `perf`, `build`)
-- `[{ticket}]` — tracking ticket/issue number in square brackets; use `[NO-TICKET]` only if none exists
-
-Examples:
-- `feat[1234]: add user authentication`
-- `fix[2087]: resolve null reference in agent sync`
-- `chore[NO-TICKET]: update dependencies`
+Run `scripts/get-pr-metadata.sh` to derive the prefix deterministically: its `pr_title_prefix` field is `<type>[<issue>]` (or `<type>[NO-TICKET]` for a ticketless conforming branch); append `: <description>` yourself. If the field is empty, the branch name is non-conforming — derive the type from the commits instead.
 
 This title becomes the squash commit message on `main`, so it must be descriptive and follow the format precisely. **If a conforming ticket/title cannot be determined, STOP and ask the user — do not guess or proceed with a non-conforming title.** _(When `--mansplain` is passed: make your best determination and proceed without asking.)_
 
@@ -106,7 +102,7 @@ This title becomes the squash commit message on `main`, so it must be descriptiv
 
 `gh pr create --title "<title>" --body "<filled template content>" --base main`
 
-- **Base branch defaults to `main`**
+- **Base branch**: use `scripts/get-base-branch.sh` if unsure (returns `main`/`master`/remote default)
 - **Draft is the default** — only create a non-draft (ready) PR when `--ready` is explicitly passed
 - **ABSOLUTE REQUIREMENT**: Use the `<type>[{ticket}]: <description>` title format (Step 3), STRICT template for body
 
@@ -165,14 +161,4 @@ If a PR already exists for the current branch (detected in Step 2):
 /git-commit-push-pr --mansplain --ready              # ready PR; no questions asked
 ```
 
-## GitHub CLI Reference
-
-- `gh pr list --head <branch>` — Check if a PR exists for the current branch
-- `gh pr create --draft --title "<title>" --body "<body>" --base main` — Create a new draft PR (default)
-- `gh pr create --title "<title>" --body "<body>" --base main` — Create a new ready PR (`--ready`)
-- `gh pr ready <pr-number>` — Mark an existing draft PR as ready for review
-- `gh pr view <pr-number>` — Fetch PR details and description
-- `gh pr edit <pr-number> --body "<body>"` — Update existing PR description
-- `gh pr view <pr-number> --json body,number,title` — Verify PR contents
-
-All commands require GitHub CLI (`gh`) to be installed and authenticated with `gh auth login`.
+All `gh` commands (shown inline in the steps above) require GitHub CLI authenticated via `gh auth login`.

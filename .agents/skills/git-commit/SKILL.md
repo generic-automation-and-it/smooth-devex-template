@@ -48,18 +48,17 @@ Commit current changes using conventional commits format.
 4. **Ask user if grouping is unclear** — When uncertain about logical boundaries, confirm with user. **Skip this step when `--mansplain` is passed** — use best judgment and proceed without asking.
 5. For each logical unit:
    a. Stage all relevant changes using git add
-   b. Create a conventional commit message following the format: `<type>[optional scope]: <description>` (per `.agents/rules/git/git-policy.instructions.md`). **No commit may be created unless its message conforms — if a conforming message cannot be determined, STOP and ask the user; never commit with a non-conforming message.** _(When `--mansplain` is passed: make your best determination and proceed without asking.)_
-   c. Use appropriate types:
+   b. Create a conventional commit message following the format: `<type>[optional scope]: <description>` (per `.agents/rules/git/git-policy.instructions.md` — the source of truth for allowed types and subject rules). **No commit may be created unless its message conforms — if a conforming message cannot be determined, STOP and ask the user; never commit with a non-conforming message.** _(When `--mansplain` is passed: make your best determination and proceed without asking.)_
+   c. Fallback types — use ONLY when the git-policy rule is not loaded in context (e.g. a runner that doesn't auto-load `.agents/rules/`). These mirror the rule and must never override it; if the rule is present, it wins. Keep this list in sync with `git-policy.instructions.md`:
       - `feat` (new feature)
       - `fix` (bug fix)
+      - `chore` (maintenance, dependency updates, tooling)
       - `docs` (documentation)
-      - `style` (formatting)
-      - `refactor` (code restructuring)
+      - `refactor` (code restructuring without behaviour change)
       - `test` (tests)
-      - `chore` (maintenance)
-      - `build` (build system)
-      - `ci` (CI)
+      - `ci` (CI/CD)
       - `perf` (performance)
+      - `build` (build system)
    d. Add `BREAKING CHANGE:` footer or `!` after type/scope for breaking changes
    e. Execute git commit with the conventional commit message
 6. Repeat for each logical unit until all changes are committed

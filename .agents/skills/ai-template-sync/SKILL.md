@@ -37,26 +37,17 @@ and let `--template` default to the current git toplevel.
 
 The sync scripts copy **from** the template tree (`.agents/`, `.github/instructions/`,
 `copilot-instructions.md`, optional `src/`/`tests/`). None of that lives under the skill folder,
-so pulling just the skill is **not** enough — clone the whole template repo:
+so pulling just the skill is **not** enough. The script self-acquires the whole template: pass
+`--template-url <git-url>` (`-TemplateUrl` on Windows) instead of `--template` and it shallow-clones
+to a temp dir and cleans up on exit. Add `--template-ref <tag|sha>` to pin for reproducibility.
 
 ```bash
-T=$(mktemp -d)
-git clone --depth 1 https://github.com/generic-automation-and-it/smooth-devex-template "$T"
-# the cloned tree contains BOTH the payload and the scripts; run the cloned script directly:
-bash "$T/.agents/skills/ai-template-sync/scripts/sync.sh" \
-  --template "$T" \
-  --landing "$PWD" \
-  --tools <claude,codex,copilot> \
-  --overwrite <global|none> \
-  [--dotnet]
-rm -rf "$T"
+bash sync.sh --template-url https://github.com/generic-automation-and-it/smooth-devex-template \
+  --landing "$PWD" --tools <claude,codex,copilot> --overwrite <global|none> [--dotnet]
 ```
 
-Equivalently, the script can self-acquire — pass `--template-url <git-url>` (or `-TemplateUrl`
-on Windows) instead of `--template`, and it clones to a temp dir and cleans up on exit.
-
 Caveats (one line): the runner needs **Bash + git + network**; a **private** template needs
-`gh`-auth or a token embedded in the clone URL. Pin to a tag/SHA if reproducibility matters.
+`gh`-auth or a token embedded in the clone URL.
 
 > The interactive phases below (1–3) still apply — gather intent and run the pre-flight before
 > invoking the cloned script. Phase 0 only solves *getting the files*, not the decisions.
@@ -183,6 +174,8 @@ executes them. It is idempotent and supports two overwrite modes — `global` (c
 | `--overwrite none` | Phase 1 Q3 = B (after selection) | Additive only — never clobber existing files. |
 | `--template` / `-Template` | _(auto)_ | Template repo root; defaults to the current git toplevel. |
 | `--template-url` / `-TemplateUrl` | Phase 0 | Git URL of the template; the script shallow-clones it to a temp dir and cleans up on exit. Mutually exclusive with `--template`. Use for remote / web runs. |
+| `--template-ref` / `-TemplateRef` | _(optional)_ | Tag/branch/SHA to pin the `--template-url` clone to. Use for reproducible rule installs. |
+| `--rules-only` / `-RulesOnly` | _(optional)_ | Sync ONLY the rule system — see Rules-Only Distribution below. |
 
 What each section does (now inside the script):
 - **A — `.agents/` base tree**: `rsync` (global = overwrite, none = `--ignore-existing`); never deletes landing-only files.
@@ -192,6 +185,27 @@ What each section does (now inside the script):
 - **E — .NET**: copies `Directory.*.props`, `NuGet.Config`, `*.slnx`, `src/`, `tests/` only when absent. **Rename `Project.*` → `<ActualProjectName>` afterwards** (the script prints this reminder; the rename itself is the agent's job).
 
 > **Selective overwrite (Phase 1 Q3 = B):** the script handles `global` and `none` only. For true per-file selection, copy the user-approved files manually first, then run the script with `--overwrite none` so it adds the remainder without clobbering anything.
+
+---
+
+## Rules-Only Distribution (`--rules-only`)
+
+Distribute or update the **rule system as a package** — `.github/instructions/` (the real rules dir, shared by Claude/Cursor/Copilot via symlinks) plus the `.agents/rules` symlink — without touching skills, hooks, setup scripts, or dotnet files:
+
+```bash
+.agents/skills/ai-template-sync/scripts/sync.sh \
+  --template-url https://github.com/generic-automation-and-it/smooth-devex-template \
+  --template-ref v1.2.0 \
+  --landing "$PWD" \
+  --rules-only \
+  --overwrite global|none
+```
+
+Semantics:
+
+- `--overwrite global` updates same-named rule files to the pinned version; `none` only adds missing ones. **Landing-only rule files are never deleted** in either mode (UPSERT) — a consumer's own rules survive updates.
+- `--tools` / `--dotnet` are ignored; Phases 1 and 3 don't apply. The Phase 2 rules-layout pre-flight is **built into the script** here: it refuses (exit 65) if `.agents/rules` is a real directory.
+- Re-run with a newer `--template-ref` to upgrade — this is the supported way to consume this repo's rules from other repositories.
 
 ---
 

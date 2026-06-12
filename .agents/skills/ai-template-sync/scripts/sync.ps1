@@ -8,13 +8,16 @@
 param(
   [string]$Template = "",
   [string]$TemplateUrl = "",
+  [string]$TemplateRef = "",
   [Parameter(Mandatory)][string]$Landing,
   [string]$Tools = "",
   [switch]$Dotnet,
-  [ValidateSet("global", "none")][string]$Overwrite = "none"
+  [ValidateSet("global", "none")][string]$Overwrite = "none",
+  [switch]$RulesOnly
 )
 $ErrorActionPreference = "Stop"
 if (-not (Test-Path $Landing)) { throw "landing dir does not exist: $Landing" }
+if ($TemplateRef -and -not $TemplateUrl) { throw "-TemplateRef requires -TemplateUrl" }
 function Test-Tool([string]$t) { return (($Tools -split ',') -contains $t) }
 
 # Resolve the template source: -TemplateUrl (clone) XOR -Template XOR default (git toplevel).
@@ -22,8 +25,19 @@ $CloneDir = $null
 if ($TemplateUrl) {
   if ($Template) { throw "-Template and -TemplateUrl are mutually exclusive" }
   $CloneDir = New-Item -ItemType Directory -Path (Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName()))
-  Write-Host "==> cloning template: $TemplateUrl"
-  git clone --depth 1 $TemplateUrl $CloneDir.FullName
+  Write-Host "==> cloning template: $TemplateUrl $(if ($TemplateRef) { "@ $TemplateRef" })"
+  if ($TemplateRef) {
+    # --branch covers tags and branches; fall back to full clone + checkout for SHAs
+    git clone --depth 1 --branch $TemplateRef $TemplateUrl $CloneDir.FullName 2>$null
+    if ($LASTEXITCODE -ne 0) {
+      Remove-Item (Join-Path $CloneDir.FullName "*") -Recurse -Force -ErrorAction SilentlyContinue
+      git clone $TemplateUrl $CloneDir.FullName
+      git -C $CloneDir.FullName checkout --detach $TemplateRef
+    }
+  }
+  else {
+    git clone --depth 1 $TemplateUrl $CloneDir.FullName
+  }
   $Template = $CloneDir.FullName
 }
 elseif (-not $Template) {
@@ -35,6 +49,41 @@ if (-not (Test-Path (Join-Path $Template ".agents"))) {
 }
 
 try {
+
+# Rules-only mode — distribute/update the rule system and nothing else.
+if ($RulesOnly) {
+  $srcRules = Join-Path $Template ".github\instructions"
+  if (-not (Test-Path $srcRules)) { throw "template has no .github/instructions/: $Template" }
+  Write-Host "==> rules-only: syncing .github/instructions/ + .agents/rules symlink"
+  Set-Location $Landing
+  try { git config core.symlinks true } catch {}
+  New-Item -ItemType Directory -Path .github -Force | Out-Null
+  New-Item -ItemType Directory -Path .github\instructions -Force | Out-Null
+  Get-ChildItem $srcRules -Recurse | ForEach-Object {
+    $dest = $_.FullName.Replace($srcRules, (Resolve-Path .github\instructions).Path)
+    if ($_.PSIsContainer) { New-Item -ItemType Directory -Force -Path $dest | Out-Null }
+    elseif ($Overwrite -eq "global" -or -not (Test-Path $dest)) {
+      $destParent = Split-Path -Parent $dest
+      if ($destParent -and -not (Test-Path $destParent)) { New-Item -ItemType Directory -Force -Path $destParent | Out-Null }
+      Copy-Item $_.FullName $dest -Force   # landing-only rules are kept (UPSERT, no deletes)
+    }
+  }
+  if (Test-Path .agents\rules) {
+    $rulesItem = Get-Item .agents\rules -Force
+    if (-not ($rulesItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+      throw "refusing: .agents\rules is a real directory, not a symlink — move its files into .github/instructions/ first"
+    }
+    Remove-Item .agents\rules -Recurse -Force
+  }
+  if (Test-Path .agents) {
+    New-Item -ItemType SymbolicLink -Name .agents\rules -Target ..\.github\instructions -Force | Out-Null
+  }
+  else {
+    Write-Host "    note: no .agents/ dir in landing repo — skipped the .agents/rules symlink"
+  }
+  Write-Host "==> sync complete (rules only)"
+  return
+}
 
 # Section A — .agents base tree
 Write-Host "==> Section A: syncing .agents/ tree"
