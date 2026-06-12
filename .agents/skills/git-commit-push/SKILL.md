@@ -5,6 +5,7 @@ allowed-tools:
   - Bash(git add:*)
   - Bash(git commit:*)
   - Bash(git push:*)
+  - Bash(.agents/skills/git-commit-push/scripts/push.sh:*)
 models:
   claude: sonnet      # medium-complexity; branch rename logic and upstream tracking require broader reasoning
   copilot: auto
@@ -27,8 +28,8 @@ Commit current changes using conventional commits format and push to remote repo
    - This handles change analysis, staging, and committing with conventional format
    - Respects logical units of work
 3. If there are no changes to commit, skip to step 4
-4. **If `--issue <number>` was passed** — rename the local branch before pushing (see Branch Rename below)
-5. Push to remote repository using `git push` (use `git push --set-upstream origin <new-branch>` if the branch was renamed)
+4. **If `--issue <number>` was passed** — derive a conforming branch name (see Branch Rename below), then push via `scripts/push.sh --rename <new-branch-name>`
+5. Otherwise push via `scripts/push.sh` (handles upstream tracking and the nothing-to-push case)
 6. If there's nothing to commit or push, report this to the user and continue gracefully (this is not an error)
 
 **Note**: This command ONLY commits and pushes. For PR creation/updates, use **git-commit-push-pr** instead.
@@ -47,14 +48,7 @@ This step enforces the branch naming convention from `.agents/rules/git/git-poli
 2. **`<issue>`** — the number passed via `--issue`.
 3. **`short-description`** — generate a concise, lowercase, hyphen-separated description (3–6 words) that summarises what was changed. Derive it from the commit message subject or the staged diff — do not reuse the current branch name verbatim.
 
-**Execution:**
-```bash
-git branch -m <new-branch-name>     # rename local branch
-```
-Then push with upstream tracking:
-```bash
-git push --set-upstream origin <new-branch-name>
-```
+**Execution:** `scripts/push.sh --rename <new-branch-name>` (renames the local branch and pushes with upstream tracking in one step).
 
 **Constraints:**
 - Only rename if the current branch name does NOT already conform to `<type>/<issue>-*` for the given issue number.

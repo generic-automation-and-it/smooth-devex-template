@@ -98,6 +98,7 @@ A skill's folder name MUST equal its `name:` frontmatter (this is the slash-comm
 
 Each skill is a directory containing:
 - **SKILL.md** — The skill definition with workflow steps and `models` frontmatter
+- **AGENTS.md** — Maintenance context for agents *modifying* the skill (coupling, rationale, drift hazards) per `.agents/rules/meta/knowledge-conventional-contexts-quality.instructions.md`
 - **agents/openai.yaml** — OpenAI Codex agent registration with model specification
 - **scripts/** — Helper scripts (if applicable)
 - **references/** — Reference documentation (if applicable)

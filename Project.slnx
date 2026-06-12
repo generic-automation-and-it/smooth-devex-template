@@ -101,13 +101,13 @@
   <Folder Name="/.agents/skills/git-commit-push/">
     <File Path=".agents/skills/git-commit-push/SKILL.md" />
     <File Path=".agents/skills/git-commit-push/agents/openai.yaml" />
+    <File Path=".agents/skills/git-commit-push/scripts/push.sh" />
   </Folder>
   <Folder Name="/.agents/skills/git-commit-push-pr/">
     <File Path=".agents/skills/git-commit-push-pr/SKILL.md" />
     <File Path=".agents/skills/git-commit-push-pr/agents/openai.yaml" />
     <File Path=".agents/skills/git-commit-push-pr/scripts/get-base-branch.sh" />
     <File Path=".agents/skills/git-commit-push-pr/scripts/get-pr-metadata.sh" />
-    <File Path=".agents/skills/git-commit-push-pr/scripts/push.sh" />
   </Folder>
   <Folder Name="/.agents/skills/git-sync/">
     <File Path=".agents/skills/git-sync/SKILL.md" />
