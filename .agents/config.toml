@@ -22,15 +22,23 @@
 project_doc_fallback_filenames = ["AGENTS.md"]
 
 # settings.json "defaultMode": "bypassPermissions" → run autonomously, no prompts.
-approval_policy = "never"
+# Defaulting to "unless-allow-listed" keeps the out-of-the-box behavior closer to
+# the guardrails in settings.json. To replicate full bypass locally, override with:
+#   approval_policy = "never"
+# in a machine-local `~/.codex/config.toml` (or set CODEX_APPROVAL_POLICY=never).
+approval_policy = "unless-allow-listed"
 
 # CC's bypass is guarded by a deny list Codex can't replicate, so scope Codex to
 # the workspace (read/write inside the repo) instead of full host access.
 sandbox_mode = "workspace-write"
 
 [sandbox_workspace_write]
-# settings.json allows network tooling (curl, gh, gh api, az) → enable network.
-network_access = true
+# settings.json allows network tooling (curl, gh, gh api, az).
+# Defaulting to false avoids arbitrary outbound calls without explicit approval.
+# Enable locally when network access is needed, e.g. via a machine-local override:
+#   [sandbox_workspace_write]
+#   network_access = true
+network_access = false
 
 [tools]
 # Parallels settings.json's WebFetch allowance (note: Codex web search is not
