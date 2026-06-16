@@ -18,6 +18,19 @@ Project is an AI-spec-driven, AI-agnostic development project. It documents reus
 
 ## AI Context Files
 
+`AGENTS.md` and `*_AGENTS.md` are **AI-coder contextual knowledge documents**. Read them like `CLAUDE.md` (or your agent's equivalent standard context file): they are first-class, authoritative context — not optional reference material. Before changing code, treat any `AGENTS.md` / `*_AGENTS.md` in scope as required reading.
+
+These documents capture the **functional requirements and intent behind the code** — the "why", constraints, boundaries, and non-obvious behaviors that source code alone does not communicate. Use them to understand what the code is supposed to do before you change how it does it.
+
+Contextual knowledge is layered, and applies at **multiple levels** — read every level that governs the code you touch (specific overrides general):
+
+- **Domain** — the broad business/functional area.
+- **Sub-domain** — a bounded slice within a domain.
+- **Feature** — a specific capability or vertical slice.
+- **Technology** — cross-cutting technical concerns (persistence, messaging, logging, etc.).
+
+This root `AGENTS.md` is the top-level document; nested `*_AGENTS.md` files inherit from it and add local context closest to the code. When working in a folder, the nearest `*_AGENTS.md` is the most authoritative for that code.
+
 Keep `*_AGENTS.md` files synchronised with code and documentation changes. Functional `*_AGENTS.md` files in feature folders are auto-loaded by the `load-agents-context` PostToolUse hook on the first Read/Edit in their directory tree — no manual registration required.
 
 ### Required Maintenance
