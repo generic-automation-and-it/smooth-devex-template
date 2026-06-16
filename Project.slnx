@@ -94,6 +94,12 @@
     <File Path=".agents/skills/context-load-context/SKILL.md" />
     <File Path=".agents/skills/context-load-context/agents/openai.yaml" />
   </Folder>
+  <Folder Name="/.agents/skills/create-hld/">
+    <File Path=".agents/skills/create-hld/SKILL.md" />
+    <File Path=".agents/skills/create-hld/agents/openai.yaml" />
+    <File Path=".agents/skills/create-hld/scripts/scaffold-hld.sh" />
+    <File Path=".agents/skills/create-hld/scripts/hld-agents-rules.sh" />
+  </Folder>
   <Folder Name="/.agents/skills/git-commit/">
     <File Path=".agents/skills/git-commit/SKILL.md" />
     <File Path=".agents/skills/git-commit/agents/openai.yaml" />

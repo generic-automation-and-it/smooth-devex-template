@@ -34,6 +34,7 @@ This is a unified AI development experience folder that centralizes skills, prom
 | `.agents/skills/ai-template-sync/` | UPSERT the smooth-devex-template agentic scaffold into an existing repo |
 | `.agents/skills/context-load-context/` | Load or create functional `*_AGENTS.md` context files |
 | `.agents/skills/context-load-agents-context/` | Load ancestor AGENTS.md context for a target file |
+| `.agents/skills/create-hld/` | Author a design-only High-Level Design under `.docs/hlds/NNN-<slug>/` |
 | `.agents/skills/git-commit/` | Commit with conventional format |
 | `.agents/skills/git-commit-push/` | Commit and push to remote |
 | `.agents/skills/git-commit-push-pr/` | Commit, push, and create/update PRs |

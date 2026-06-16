@@ -14,6 +14,7 @@ Skills live **flat**, one directory per skill directly under `.agents/skills/`. 
 | **ai-template-sync** | UPSERT smooth-devex-template scaffold into an existing repo | `/ai-template-sync` |
 | **context-load-agents-context** | Load ancestor AGENTS.md context for a file | `/context-load-agents-context` |
 | **context-load-context** | Load domain context before implementation | `/context-load-context auth` |
+| **create-hld** | Author a design-only High-Level Design under `.docs/hlds/NNN-<slug>/` | `/create-hld <kebab-slug>` |
 | **git-commit** | Commit with conventional format | `/git-commit [--mansplain]` |
 | **git-commit-push** | Commit and push to remote | `/git-commit-push [--mansplain]` |
 | **git-commit-push-pr** | Commit, push, and create/update PR | `/git-commit-push-pr [--mansplain]` |
@@ -72,6 +73,7 @@ Skills are classified by complexity tier. Each SKILL.md carries a `models` front
 | **ai-mansplain** | low | Single-turn reply reformatting; no tools or deep reasoning |
 | **ai-brain-dump** | high | Multi-turn synthesis + deep requirement reasoning |
 | **ai-template-sync** | high | Interactive multi-turn Q&A + conditional file sync across tools |
+| **create-hld** | high | Multi-turn clarification gates + architectural judgment (LADRs, NFRs, diagrams) |
 
 ### Sub-skill invocation model guidance
 
@@ -90,7 +92,7 @@ Skills are flat under `.agents/skills/`; the category lives in the folder-name p
 | `ai-` | `ai-brain-dump`, `ai-mansplain`, `ai-template-sync` |
 | `context-` | `context-load-agents-context`, `context-load-context` |
 | `git-` | `git-commit`, `git-commit-push`, `git-commit-push-pr`, `git-sync` |
-| _(none)_ | `manage-rule-system` |
+| _(none)_ | `create-hld`, `manage-rule-system` |
 
 A skill's folder name MUST equal its `name:` frontmatter (this is the slash-command name). When adding a skill, pick the prefix of its category and keep the folder one level under `.agents/skills/`.
 
