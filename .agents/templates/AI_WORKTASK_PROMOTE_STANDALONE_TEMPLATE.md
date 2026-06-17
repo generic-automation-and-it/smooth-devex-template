@@ -11,7 +11,7 @@
 
 ### Context Loading (Phase 0 — MANDATORY FIRST)
 - **Load domain/feature context BEFORE asking clarifying questions** — you cannot ask intelligent questions without understanding existing patterns
-- Use the `load-context` skill with `[domain]` to find/create functional context, or rely on the `load-agents-context` PostToolUse hook which auto-injects ancestor `*_AGENTS.md` on first Read/Edit
+- Use the `load-context` skill with `[domain]` to find/create functional context, or rely on the `load-agents-context` PostToolUse hook which auto-injects ancestor `*AGENTS.md` on first Read/Edit
 
 ### Model Selection Strategy
 

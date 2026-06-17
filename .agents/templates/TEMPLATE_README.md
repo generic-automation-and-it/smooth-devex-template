@@ -1,6 +1,6 @@
 # AGENTS.md Template Guide
 
-This guide explains how to create and maintain `*_AGENTS.md` context files for AI assistants.
+This guide explains how to create and maintain `*AGENTS.md` context files for AI assistants.
 
 ## Project Structure
 
@@ -36,8 +36,8 @@ This guide explains how to create and maintain `*_AGENTS.md` context files for A
 
 ### Rule 1: Every PR Must Include AGENTS.md Changes
 Each pull request must either:
-- Create a new `*_AGENTS.md` file, OR
-- Modify an existing `*_AGENTS.md` file
+- Create a new `*AGENTS.md` file, OR
+- Modify an existing `*AGENTS.md` file
 
 This ensures AI context stays synchronized with code changes.
 
@@ -80,7 +80,7 @@ Files must follow `UPPER_SNAKE_CASE_AGENTS.md` pattern:
 ## Validation
 
 The Gemini CLI Code Review workflow validates AGENTS.md requirements:
-- **FULL reviews**: Must include new/modified `*_AGENTS.md` file
+- **FULL reviews**: Must include new/modified `*AGENTS.md` file
 - **Naming**: Must follow `UPPER_SNAKE_CASE_AGENTS.md` pattern
 - **Template sections**: New files must include required sections
 

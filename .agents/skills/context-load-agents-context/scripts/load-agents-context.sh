@@ -141,7 +141,7 @@ while [ "$DEPTH" -lt 20 ]; do
             TO_LOAD+=("$agents_file")
             printf '%s\n' "$agents_file" >> "$TRACKER" || true
         fi
-    done < <(find "$DIR" -maxdepth 1 \( -name "AGENTS.md" -o -name "*_AGENTS.md" \) -type f 2>/dev/null | sort)
+    done < <(find "$DIR" -maxdepth 1 \( -name "AGENTS.md" -o -name "*AGENTS.md" \) -type f 2>/dev/null | sort)
 
     # Stop at repo root
     [ -n "$REPO_ROOT" ] && [ "$DIR" = "$REPO_ROOT" ] && break
@@ -170,7 +170,7 @@ if [ -n "$REPO_ROOT" ]; then
             ;;
     esac
     case "$(basename "$ABS_PATH")" in
-        AGENTS.md|CLAUDE.md|GEMINI.md|*_AGENTS.md)
+        AGENTS.md|CLAUDE.md|GEMINI.md|*AGENTS.md)
             inject_if_new "${REPO_ROOT}/.agents/rules/meta/knowledge-conventional-contexts-quality.instructions.md"
             ;;
     esac

@@ -2,7 +2,7 @@
 
 ## TL;DR
 
-Pure-prompt Phase 0 gate: discovers and loads `*_AGENTS.md` files by domain glob, and BLOCKS (with create/search/manual/bypass options) when none exist — the block is the feature, not an error path.
+Pure-prompt Phase 0 gate: discovers and loads `*AGENTS.md` files by domain glob, and BLOCKS (with create/search/manual/bypass options) when none exist — the block is the feature, not an error path.
 
 ## Key Behaviors
 
