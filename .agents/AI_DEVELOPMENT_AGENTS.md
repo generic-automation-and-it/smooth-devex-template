@@ -32,7 +32,7 @@ This is a unified AI development experience folder that centralizes skills, prom
 | `.agents/skills/ai-brain-dump/` | Listen-first capture session; synthesize on request |
 | `.agents/skills/ai-mansplain/` | Reformat this turn's reply into terse, high-density output with a TL;DR |
 | `.agents/skills/ai-template-sync/` | UPSERT the smooth-devex-template agentic scaffold into an existing repo |
-| `.agents/skills/context-load-context/` | Load or create functional `*_AGENTS.md` context files |
+| `.agents/skills/context-load-context/` | Load or create functional `*AGENTS.md` context files |
 | `.agents/skills/context-load-agents-context/` | Load ancestor AGENTS.md context for a target file |
 | `.agents/skills/create-hld/` | Author a design-only High-Level Design under `.docs/hlds/NNN-<slug>/` |
 | `.agents/skills/git-commit/` | Commit with conventional format |

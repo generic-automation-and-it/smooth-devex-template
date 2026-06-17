@@ -9,7 +9,7 @@ models:
 
 # Load Context — Phase 0 of AI Coding Workflow
 
-**MANDATORY PHASE** — load functional `*_AGENTS.md` context BEFORE clarifying requirements or executing code changes. Without it you cannot ask intelligent clarifying questions or follow existing patterns, architecture, and domain constraints.
+**MANDATORY PHASE** — load functional `*AGENTS.md` context BEFORE clarifying requirements or executing code changes. Without it you cannot ask intelligent clarifying questions or follow existing patterns, architecture, and domain constraints.
 
 ## Workflow Steps
 

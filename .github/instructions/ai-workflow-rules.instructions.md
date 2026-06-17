@@ -12,7 +12,9 @@ Standard execution workflow for all coding tasks. Aligned with `AI_WORKTASK_PROM
 
 ## Phase 0: Context Load (MANDATORY BLOCKING)
 
-**A functional `*_AGENTS.md` file MUST be loaded into the conversation before ANY execution or planning.**
+**A functional `*AGENTS.md` file MUST be loaded into the conversation before ANY execution or planning.**
+
+`AGENTS.md` and `*AGENTS.md` are first-class AI-coder context documents — read them like `CLAUDE.md`, not as optional reference. They carry the functional requirements and intent behind the code (the "why", constraints, boundaries, non-obvious behaviors) that source alone cannot convey. Context is layered — **domain → sub-domain → feature → technology** — so read every level that governs the code you touch; specific overrides general, and the nearest `*AGENTS.md` is most authoritative.
 
 Root AGENTS.md / NFR files alone are NOT sufficient. Domain-specific context is required.
 
@@ -20,7 +22,7 @@ Root AGENTS.md / NFR files alone are NOT sufficient. Domain-specific context is 
 |------------|-------|
 | Backend code (.NET, C#, server-side) | `.agents/rules/backend/*` rules (scoped to `**/*.cs` via frontmatter; attach when a C# file is opened) |
 
-All rules under `.agents/rules/` are auto-loaded every session, organized into category subfolders (`backend/`, `git/`, `meta/`); applicability is scoped per-file via frontmatter (`paths`/`globs`/`applyTo`). For functional `*_AGENTS.md` context: use the `load-context` skill with `[domain]` or manually request the relevant files. The Rule Categories table in root `AGENTS.md` lists each rule and what it covers.
+All rules under `.agents/rules/` are auto-loaded every session, organized into category subfolders (`backend/`, `git/`, `meta/`); applicability is scoped per-file via frontmatter (`paths`/`globs`/`applyTo`). For functional `*AGENTS.md` context: use the `load-context` skill with `[domain]` or manually request the relevant files. The Rule Categories table in root `AGENTS.md` lists each rule and what it covers.
 
 If no context loaded: **BLOCK** → offer: Load / Search / Create / BYPASS.
 
@@ -88,7 +90,7 @@ Quality gate — spec/implementation sync check.
 
 **If no context document existed:** Create from `TEMPLATE_AGENTS.md`, add to root AGENTS.md.
 
-**Why this is mandatory:** The Gemini code review gate requires `*_AGENTS.md` changes on FULL reviews. Skipping Phase 8 will block PRs. This phase also ensures AI-generated changes are documented for future conversations.
+**Why this is mandatory:** The Gemini code review gate requires `*AGENTS.md` changes on FULL reviews. Skipping Phase 8 will block PRs. This phase also ensures AI-generated changes are documented for future conversations.
 
 ## Output Requirements
 
@@ -134,3 +136,4 @@ Use when: 3+ files, new patterns, cross-cutting concerns, or ambiguous scope.
 | Date | Change |
 |:-----|:-------|
 | 2026-05-30 | Initial version. |
+| 2026-06-17 | Phase 0: state that AGENTS.md/`*AGENTS.md` are first-class context (read like CLAUDE.md) and layered domain→sub-domain→feature→technology. Pattern notation `*_AGENTS.md`→`*AGENTS.md` (underscore no longer required). |

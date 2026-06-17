@@ -129,4 +129,4 @@ tests/
 
 - Work on a branch off `main`: `<type>/<ticket>-short-description` (e.g. `feat/1234-add-user-export`).
 - Commits and PR titles follow [Conventional Commits](https://www.conventionalcommits.org). See [`.agents/rules/git/`](.agents/rules/git/).
-- Every PR should create or update at least one `*_AGENTS.md` context file.
+- Every PR should create or update at least one `*AGENTS.md` context file.

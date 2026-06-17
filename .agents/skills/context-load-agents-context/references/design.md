@@ -76,7 +76,7 @@ sequenceDiagram
 
 **Context:** Some guidance is only relevant when a specific kind of file is being edited — e.g., the `manage-rule-system` skill is useful when the agent edits `.agents/rules*/` content, and `knowledge-conventional-contexts-quality.instructions.md` is most useful when editing `*AGENTS.md`. Always-loading both bloats every session; loading neither means the agent reasons without the guidance when it most needs it.
 
-**Decision:** The hook injects targeted SKILL.md / rule files based on the touched file's location or basename: editing under `.agents/rules*/` injects `manage-rule-system/SKILL.md`; editing `AGENTS.md` / `CLAUDE.md` / `GEMINI.md` / `*_AGENTS.md` injects the knowledge-conventional-contexts rule. Each is dedup-tracked per session.
+**Decision:** The hook injects targeted SKILL.md / rule files based on the touched file's location or basename: editing under `.agents/rules*/` injects `manage-rule-system/SKILL.md`; editing `AGENTS.md` / `CLAUDE.md` / `GEMINI.md` / `*AGENTS.md` injects the knowledge-conventional-contexts rule. Each is dedup-tracked per session.
 
 **Consequences:** Modest token cost (one file per trigger, gated by dedup); large quality win because the guidance arrives precisely when needed. If a file qualifies for multiple triggers, all matching contexts inject (the cap is one per session per file).
 
@@ -85,12 +85,12 @@ sequenceDiagram
 1. **Trigger filter**: In hook mode, exits 0 immediately for any tool that is not `Read` or `Edit`. In explicit skill mode, accepts `--file PATH` or a positional path.
 2. **Path resolution**: Uses `cd "$(dirname ...)" && pwd` pattern to resolve relative paths correctly regardless of the AI agent's working directory.
 3. **Repo root detection**: `git rev-parse --show-toplevel` is called from the file's directory, not the process CWD — handles nested repos and monorepos correctly.
-4. **File pattern**: Matches `AGENTS.md` and `*_AGENTS.md` at `maxdepth 1` per directory. Does not recurse, so only the immediate directory's context is loaded at each level.
+4. **File pattern**: Matches `AGENTS.md` and `*AGENTS.md` at `maxdepth 1` per directory. Does not recurse, so only the immediate directory's context is loaded at each level.
 5. **Auto-loaded dir skip**: Paths matching `.agents/rules/`, `.ai/rules/`, `.claude/rules/`, `.cursor/rules/`, `.github/instructions/` are silently skipped.
 6. **Session tracker**: `/tmp/.agents_ctx_${SESSION_ID}` — one absolute path per line, checked via `grep -qxF` (exact full-line match, no partial hits).
 7. **Output envelope**: All emitted content is wrapped in `<context-auto-loaded>` tags for traceability. Each file is prefixed with `## Context: <relative-path>`.
 8. **Tool agnostic**: Plain bash with `jq` as the only external dependency. Claude Code uses hook mode. Codex and Copilot use explicit skill invocation and session identifiers (`CODEX_THREAD_ID`/`CODEX_SESSION_ID`, `COPILOT_SESSION_ID`/`GITHUB_COPILOT_SESSION_ID`) for stable deduplication.
-9. **Skill-on-path injection**: Touching a file under `.agents/rules/` / `.claude/rules/` / `.cursor/rules/` / `.github/instructions/` injects `.agents/skills/manage-rule-system/SKILL.md`. Touching `AGENTS.md` / `CLAUDE.md` / `GEMINI.md` / `*_AGENTS.md` injects `.agents/rules/meta/knowledge-conventional-contexts-quality.instructions.md`. Each is dedup-tracked per session. (Rule files themselves are auto-loaded by the AI tool and scoped per-file via frontmatter — the hook does not inject them.)
+9. **Skill-on-path injection**: Touching a file under `.agents/rules/` / `.claude/rules/` / `.cursor/rules/` / `.github/instructions/` injects `.agents/skills/manage-rule-system/SKILL.md`. Touching `AGENTS.md` / `CLAUDE.md` / `GEMINI.md` / `*AGENTS.md` injects `.agents/rules/meta/knowledge-conventional-contexts-quality.instructions.md`. Each is dedup-tracked per session. (Rule files themselves are auto-loaded by the AI tool and scoped per-file via frontmatter — the hook does not inject them.)
 
 ## Transferring to Another Repo
 
