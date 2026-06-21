@@ -107,6 +107,8 @@ Human-facing reviewer documentation lives in `.docs/wiki/`. Detailed high-level 
 
 PR gate — `.github/workflows/pr-gate.yml` (triggers: `pull_request` → `main`, `push` → `main`, `workflow_dispatch`): restore → build (Release) → Aspire-backed test with coverage via the local action `.github/actions/aspire-test-with-coverage`, then publish + upload the coverage report. Full step list, service ports, timing, and local .NET tools: `.docs/wiki/ci.md`.
 
+Skill security gate — `.github/workflows/skill-scan.yml` (triggers on changes to `.agents/skills/**`): scans AI agent skills with [NVIDIA SkillSpector](https://github.com/NVIDIA/SkillSpector) (pinned commit; non-blocking warning when upstream `main` moves past the pin). Hard gate — fails the PR on any HIGH/CRITICAL finding (SkillSpector exits `1` when risk score > 50). SARIF is published to the **Security → Code scanning** tab. LLM semantic analysis runs when `ANTHROPIC_API_KEY` is present (provider `anthropic`); otherwise it falls back to static-only (`--no-llm`).
+
 ## Git Constraints
 
 This repository is hosted on **GitHub** at `https://github.com/generic-automation-and-it/project`.

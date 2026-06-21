@@ -1,0 +1,94 @@
+name: Skill Security Scan
+
+# Gates AI agent skills in .agents/skills/ with NVIDIA SkillSpector.
+# SkillSpector exit codes (src/skillspector/cli.py): risk_score > 50 -> 1 (HIGH/CRITICAL),
+# error -> 2, otherwise 0. A non-zero exit fails this job = hard gate.
+# SkillSpector publishes no git tags and is not on PyPI, so we pin a commit SHA and
+# emit a non-blocking warning when upstream main has moved past the pin.
+
+on:
+  pull_request:
+    paths:
+      - '.agents/skills/**'
+      - '.github/workflows/skill-scan.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.agents/skills/**'
+      - '.github/workflows/skill-scan.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write   # upload SARIF to GitHub code scanning
+
+env:
+  # Pinned SkillSpector commit. Bump after reviewing the warning from the
+  # "Check for newer SkillSpector version" step below.
+  SKILLSPECTOR_REF: a5092dd9b9521ff57a9b53612bb129ce78019002
+
+jobs:
+  skill-scan:
+    name: SkillSpector
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install SkillSpector (pinned)
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none https://github.com/NVIDIA/SkillSpector.git /tmp/skillspector
+          git -C /tmp/skillspector checkout "$SKILLSPECTOR_REF"
+          pip install -e /tmp/skillspector
+          skillspector --version
+
+      - name: Check for newer SkillSpector version (warning only)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          latest=$(gh api repos/NVIDIA/SkillSpector/commits/main --jq .sha)
+          if [ "$latest" != "$SKILLSPECTOR_REF" ]; then
+            echo "::warning title=SkillSpector update available::Pinned $SKILLSPECTOR_REF but upstream main is $latest. Review changes and bump SKILLSPECTOR_REF in .github/workflows/skill-scan.yml."
+            {
+              echo "### ⚠️ SkillSpector update available"
+              echo ""
+              echo "- Pinned: \`$SKILLSPECTOR_REF\`"
+              echo "- Upstream \`main\`: \`$latest\`"
+              echo ""
+              echo "Review upstream changes, then bump \`SKILLSPECTOR_REF\` in \`.github/workflows/skill-scan.yml\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ SkillSpector pin is current (\`$SKILLSPECTOR_REF\`)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Scan skills (hard gate on HIGH/CRITICAL)
+        env:
+          # Provider + key supplied via org/repo secrets. When ANTHROPIC_API_KEY is
+          # absent the scan falls back to fast static-only analysis (--no-llm).
+          SKILLSPECTOR_PROVIDER: anthropic
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "Running with LLM semantic analysis (provider: $SKILLSPECTOR_PROVIDER)."
+            llm_flag=""
+          else
+            echo "ANTHROPIC_API_KEY not set — running static-only (--no-llm)."
+            llm_flag="--no-llm"
+          fi
+          skillspector scan .agents/skills/ $llm_flag --format sarif --output skillspector.sarif
+
+      - name: Upload SARIF to code scanning
+        if: ${{ !cancelled() && hashFiles('skillspector.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: skillspector.sarif
+          category: skillspector
