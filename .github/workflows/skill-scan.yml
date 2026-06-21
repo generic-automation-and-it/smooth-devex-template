@@ -8,6 +8,9 @@ name: Skill Security Scan
 
 on:
   pull_request:
+    # Run on ready PRs only. Draft PRs still emit opened/synchronize, but the
+    # job-level `if` below skips them; marking ready fires ready_for_review.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - '.agents/skills/**'
       - '.github/workflows/skill-scan.yml'
@@ -31,6 +34,8 @@ jobs:
   skill-scan:
     name: SkillSpector
     runs-on: ubuntu-latest
+    # Skip draft PRs; push and workflow_dispatch have no PR context so they always run.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

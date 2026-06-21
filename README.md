@@ -2,7 +2,7 @@
 
 [![Skill Security Scan](https://github.com/generic-automation-and-it/smooth-devex-template/actions/workflows/skill-scan.yml/badge.svg)](https://github.com/generic-automation-and-it/smooth-devex-template/actions/workflows/skill-scan.yml)
 
-> AI agent skills in `.agents/skills/` are scanned on every PR by [NVIDIA SkillSpector](https://github.com/NVIDIA/SkillSpector). A green badge means the latest scan found no HIGH/CRITICAL findings; results are published to the repository's **Security → Code scanning** tab.
+> AI agent skills in `.agents/skills/` are scanned by [NVIDIA SkillSpector](https://github.com/NVIDIA/SkillSpector) on pull requests that touch `.agents/skills/**` (or the workflow itself), once the PR is marked ready for review. A green badge means the latest scan found no HIGH/CRITICAL findings; results are published to the repository's **Security → Code scanning** tab.
 
 > One-line description of what the service does and who it is for. _(Placeholder — update once the project is named.)_
 
