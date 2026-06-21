@@ -7,6 +7,13 @@ name: Skill Security Scan
 # key off the raw exit code; skillspector-report.py applies .github/skillspector-baseline.yml
 # (accepted findings, each justified) and the gate fails only on ACTIVE (non-baselined)
 # findings. A scan error (exit 2) still hard-fails. New/unexpected findings still block.
+#
+# Scan-mode policy (A): the GATE runs on a deterministic STATIC scan (--no-llm). The LLM
+# semantic stage is nondeterministic across model/prompt drift, so it runs as a separate
+# NON-BLOCKING advisory scan whose findings are rendered in the summary for human review
+# only and never affect the gate decision. Gating on static keeps the gate stable while
+# static analyzers still catch real dangerous patterns; see .agents/skills/AGENTS.md.
+#
 # SkillSpector publishes no git tags and is not on PyPI, so we pin a commit SHA and
 # emit a non-blocking warning when upstream main has moved past the pin.
 
@@ -91,44 +98,58 @@ jobs:
             echo "✅ SkillSpector pin is current (\`$SKILLSPECTOR_REF\`)." >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      # Scan once with --format json (the richest output). The render step below
-      # derives both the job summary and the SARIF from that single run, so the
-      # LLM stage is not paid for twice. This step records the SkillSpector exit
-      # code instead of failing, so the summary/upload steps always run; the gate
-      # is enforced last by the "Enforce gate" step.
-      - name: Scan skills
+      # GATING scan: deterministic, static-only (--no-llm), --format json (the richest
+      # output). Its exit code plus the baseline-aware decision drive the gate. The
+      # render step derives both the job summary and the SARIF from this run. This step
+      # records the SkillSpector exit code instead of failing, so the summary/upload
+      # steps always run; the gate is enforced last by the "Enforce gate" step.
+      - name: Scan skills (gating, static)
         id: scan
+        run: |
+          set -uo pipefail
+          echo "Running deterministic static gate scan (--no-llm)."
+          set +e
+          skillspector scan .agents/skills/ --no-llm --format json --output skillspector.json
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          set -e
+
+      # ADVISORY scan: full LLM semantic analysis. Non-blocking and NOT part of the gate
+      # decision — its findings are nondeterministic across model/prompt drift, so they
+      # are rendered in the summary for human review only (policy A). Self-skips when no
+      # API key is configured. continue-on-error keeps a provider hiccup from failing CI.
+      - name: Scan skills (advisory, LLM)
+        id: scan_llm
+        continue-on-error: true
         env:
-          # Provider config supplied via org/repo settings. The left-hand names are
-          # the fixed env vars SkillSpector reads; the ${{ }} sources are namespaced
-          # org variables/secrets. When the API key is absent the scan falls back to
-          # fast static-only analysis (--no-llm), so the gate works with zero secrets.
+          # Provider config supplied via org/repo settings. The left-hand names are the
+          # fixed env vars SkillSpector reads; the ${{ }} sources are namespaced org
+          # variables/secrets. When the API key is absent this step self-skips and the
+          # gate runs static-only — so the gate works with zero secrets.
           SKILLSPECTOR_PROVIDER: ${{ vars.SKILLSPECTOR_PROVIDER || 'openai' }}
           SKILLSPECTOR_MODEL: ${{ vars.SKILLSPECTOR_MODEL }}              # bare model id; empty = provider default
           OPENAI_BASE_URL: ${{ vars.SKILLSPECTOR_OPENAI_BASE_URL }}      # OpenAI-compatible base, must end at /v1
           OPENAI_API_KEY: ${{ secrets.SKILLSPECTOR_OPENAI_API_KEY }}
         run: |
           set -uo pipefail
-          if [ -n "${OPENAI_API_KEY:-}" ]; then
-            echo "Running LLM semantic analysis (provider: $SKILLSPECTOR_PROVIDER, model: ${SKILLSPECTOR_MODEL:-provider default}, base: ${OPENAI_BASE_URL:-api.openai.com/v1})."
-            llm_flag=""
-          else
-            echo "SKILLSPECTOR_OPENAI_API_KEY not set — running static-only (--no-llm)."
-            llm_flag="--no-llm"
+          if [ -z "${OPENAI_API_KEY:-}" ]; then
+            echo "SKILLSPECTOR_OPENAI_API_KEY not set — skipping LLM advisory scan (gate is static-only)."
+            exit 0
           fi
-          set +e
-          skillspector scan .agents/skills/ $llm_flag --format json --output skillspector.json
-          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
-          set -e
+          echo "Running LLM semantic analysis (advisory; provider: $SKILLSPECTOR_PROVIDER, model: ${SKILLSPECTOR_MODEL:-provider default}, base: ${OPENAI_BASE_URL:-api.openai.com/v1})."
+          # Advisory only: never fail the build on the LLM scan's exit code.
+          skillspector scan .agents/skills/ --format json --output skillspector-llm.json || true
 
       - name: Render report (job summary + SARIF + gate decision)
         if: ${{ !cancelled() }}
         run: |
           set -euo pipefail
+          advisory=()
+          [ -s skillspector-llm.json ] && advisory=(--advisory skillspector-llm.json)
           python3 .github/scripts/skillspector-report.py \
             skillspector.json skillspector.sarif .agents/skills \
             --baseline .github/skillspector-baseline.yml \
             --decision-file skillspector-gate.txt \
+            "${advisory[@]}" \
             >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload SARIF to code scanning

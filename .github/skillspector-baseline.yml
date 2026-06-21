@@ -15,6 +15,11 @@
 # function (or is benign documentation), and removing it would break the skill.
 # Re-review this list whenever SKILLSPECTOR_REF is bumped (finding ids/lines may move).
 #
+# SCOPE: this baseline gates the DETERMINISTIC STATIC scan only (the workflow runs the
+# gating scan with --no-llm; policy A). The LLM semantic stage runs advisory/non-blocking
+# and is NOT gated by this file, so its nondeterministic findings are intentionally absent
+# here — they are reported in the job summary for human review. See .agents/skills/AGENTS.md.
+#
 # NOTE: No real secret leakage exists in any skill today. The standing guardrail for
 # any future secret handling is .github/instructions/skill-secret-handling.instructions.md.
 

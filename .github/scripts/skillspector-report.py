@@ -18,9 +18,17 @@ pinned at 100 and a raw `risk > 50` gate would block every PR forever. The basel
 justification. The gate fails only on ACTIVE (non-baselined) findings, so a genuinely new
 dangerous pattern — real exfiltration, hidden instructions, supply-chain — still blocks.
 
+Scan-mode policy (A): the GATE is computed from the deterministic STATIC report passed
+as <report.json> (the workflow runs the gating scan with --no-llm). The LLM semantic
+stage is nondeterministic across model/prompt drift, so it runs as a separate ADVISORY
+scan whose report is passed via --advisory and rendered as an informational, NON-GATING
+section. The advisory report never changes the decision file. Static analyzers still
+catch real dangerous patterns (curl|bash, eval, rm -rf, secret exfiltration), so gating
+on static keeps the gate meaningful while staying stable.
+
 Usage:
   skillspector-report.py <report.json> <out.sarif> [path_prefix]
-                         [--baseline FILE] [--decision-file FILE]
+                         [--baseline FILE] [--decision-file FILE] [--advisory FILE]
 
 `path_prefix` (default ".agents/skills") is prepended to each finding's file so SARIF
 locations resolve from the repo root. Missing/empty JSON (e.g. SkillSpector errored
@@ -262,6 +270,51 @@ def build_summary(
     return "\n".join(out)
 
 
+def build_advisory(report: dict, accepted: dict[tuple[str, str], str]) -> str:
+    """Render the LLM semantic report as a NON-GATING advisory section. These findings
+    are nondeterministic across model/prompt drift (policy A), so they are surfaced for
+    human review only and never feed the gate decision."""
+    issues = report.get("issues") or []
+    meta = report.get("metadata") or {}
+    model = meta.get("model") or meta.get("llm_model")
+    model_s = f" (model: `{model}`)" if model else ""
+
+    out = [f"### 🔬 LLM semantic analysis — advisory, NON-GATING{model_s}", ""]
+    out.append(
+        "Informational only. The gate decision comes from the deterministic static scan "
+        "above; these semantic findings are nondeterministic across model/prompt changes, "
+        "so they are reported for human review and never block the PR."
+    )
+    out.append("")
+    if not issues:
+        out.append("No semantic findings.")
+        out.append("")
+        return "\n".join(out)
+
+    known = [it for it in issues if is_baselined(it, accepted) is not None]
+    novel = [it for it in issues if is_baselined(it, accepted) is None]
+    out.append(
+        f"**{len(issues)} semantic finding(s)** — {len(novel)} not matched by the static "
+        f"baseline, {len(known)} also covered by it."
+    )
+    out.append("")
+
+    def _table(title: str, items: list[dict]) -> None:
+        out.append(f"#### {title}")
+        out.append("")
+        out.append("| Sev | ID | Skill | Category | Pattern | Location | Conf |")
+        out.append("|-----|----|-------|----------|---------|----------|------|")
+        for it in sorted(items, key=lambda i: SEV_ORDER.get((i.get("severity") or "").upper(), 9)):
+            out.append(_issue_row(it))
+        out.append("")
+
+    if novel:
+        _table("Semantic-only — not matched by the static baseline (review, not gating)", novel)
+    if known:
+        _table("Also covered by the static baseline", known)
+    return "\n".join(out)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Render SkillSpector JSON -> job summary + SARIF, apply baseline gate.")
     ap.add_argument("report_json")
@@ -269,6 +322,7 @@ def main() -> int:
     ap.add_argument("path_prefix", nargs="?", default=".agents/skills")
     ap.add_argument("--baseline", help="Path to skillspector-baseline.yml (accepted findings).")
     ap.add_argument("--decision-file", help="Write the gate decision (pass|fail) here for the workflow to read.")
+    ap.add_argument("--advisory", help="Path to a secondary (LLM) report rendered as a NON-GATING advisory section. Never affects the decision.")
     args = ap.parse_args()
 
     def write_decision(value: str) -> None:
@@ -292,7 +346,18 @@ def main() -> int:
     Path(args.sarif_out).write_text(json.dumps(build_sarif(report, args.path_prefix, accepted)))
     print(build_summary(report, active, accepted_issues, accepted, baseline_err))
 
+    # Advisory LLM section (non-gating). Rendered only when a non-empty report is given;
+    # a parse error is noted but never changes the gate decision.
+    if args.advisory:
+        ap_path = Path(args.advisory)
+        if ap_path.exists() and ap_path.stat().st_size > 0:
+            try:
+                print(build_advisory(json.loads(ap_path.read_text()), accepted))
+            except json.JSONDecodeError as exc:
+                print(f"\n### 🔬 LLM semantic analysis — advisory, NON-GATING\n\n> ⚠️ Advisory report could not be parsed ({exc}); skipped. Gate unaffected.\n")
+
     # Gate: fail on ANY active (non-baselined) finding, or on a baseline parse error.
+    # The advisory (LLM) report above NEVER contributes to this decision (policy A).
     write_decision("fail" if (active or baseline_err) else "pass")
     return 0
 
