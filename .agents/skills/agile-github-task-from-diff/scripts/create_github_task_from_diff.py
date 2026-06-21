@@ -14,6 +14,9 @@ import sys
 
 
 def run(cmd, check=True, capture=True):
+    # cmd is always a list (shell=False), so argv is passed directly to the OS with
+    # no shell interpretation — git/gh args cannot be shell-injected even if a value
+    # contains spaces or metacharacters. Never pass a string or add shell=True here.
     result = subprocess.run(cmd, check=check, text=True, capture_output=capture)
     return result.stdout.strip()
 
