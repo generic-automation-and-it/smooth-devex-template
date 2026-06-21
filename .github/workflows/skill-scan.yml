@@ -71,17 +71,21 @@ jobs:
 
       - name: Scan skills (hard gate on HIGH/CRITICAL)
         env:
-          # Provider + key supplied via org/repo secrets. When ANTHROPIC_API_KEY is
-          # absent the scan falls back to fast static-only analysis (--no-llm).
-          SKILLSPECTOR_PROVIDER: anthropic
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Provider config supplied via org/repo settings. The left-hand names are
+          # the fixed env vars SkillSpector reads; the ${{ }} sources are namespaced
+          # org variables/secrets. When the API key is absent the scan falls back to
+          # fast static-only analysis (--no-llm), so the gate works with zero secrets.
+          SKILLSPECTOR_PROVIDER: ${{ vars.SKILLSPECTOR_PROVIDER || 'openai' }}
+          SKILLSPECTOR_MODEL: ${{ vars.SKILLSPECTOR_MODEL }}              # bare model id; empty = provider default
+          OPENAI_BASE_URL: ${{ vars.SKILLSPECTOR_OPENAI_BASE_URL }}      # OpenAI-compatible base, must end at /v1
+          OPENAI_API_KEY: ${{ secrets.SKILLSPECTOR_OPENAI_API_KEY }}
         run: |
           set -euo pipefail
-          if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
-            echo "Running with LLM semantic analysis (provider: $SKILLSPECTOR_PROVIDER)."
+          if [ -n "${OPENAI_API_KEY:-}" ]; then
+            echo "Running LLM semantic analysis (provider: $SKILLSPECTOR_PROVIDER, model: ${SKILLSPECTOR_MODEL:-provider default}, base: ${OPENAI_BASE_URL:-api.openai.com/v1})."
             llm_flag=""
           else
-            echo "ANTHROPIC_API_KEY not set — running static-only (--no-llm)."
+            echo "SKILLSPECTOR_OPENAI_API_KEY not set — running static-only (--no-llm)."
             llm_flag="--no-llm"
           fi
           skillspector scan .agents/skills/ $llm_flag --format sarif --output skillspector.sarif
