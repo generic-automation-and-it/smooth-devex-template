@@ -28,6 +28,11 @@ on:
       - '.github/scripts/skillspector-report.py'
       - '.github/skillspector-baseline.yml'
   workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch or ref to scan. Leave empty to scan the branch this run was dispatched from.'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -47,6 +52,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Manual runs may target any branch via the `branch` input; empty falls
+          # back to the dispatching/triggering ref (normal PR/push behavior).
+          ref: ${{ inputs.branch }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
