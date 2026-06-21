@@ -74,7 +74,13 @@ jobs:
             echo "✅ SkillSpector pin is current (\`$SKILLSPECTOR_REF\`)." >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Scan skills (hard gate on HIGH/CRITICAL)
+      # Scan once with --format json (the richest output). The render step below
+      # derives both the job summary and the SARIF from that single run, so the
+      # LLM stage is not paid for twice. This step records the SkillSpector exit
+      # code instead of failing, so the summary/upload steps always run; the gate
+      # is enforced last by the "Enforce gate" step.
+      - name: Scan skills
+        id: scan
         env:
           # Provider config supplied via org/repo settings. The left-hand names are
           # the fixed env vars SkillSpector reads; the ${{ }} sources are namespaced
@@ -85,7 +91,7 @@ jobs:
           OPENAI_BASE_URL: ${{ vars.SKILLSPECTOR_OPENAI_BASE_URL }}      # OpenAI-compatible base, must end at /v1
           OPENAI_API_KEY: ${{ secrets.SKILLSPECTOR_OPENAI_API_KEY }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           if [ -n "${OPENAI_API_KEY:-}" ]; then
             echo "Running LLM semantic analysis (provider: $SKILLSPECTOR_PROVIDER, model: ${SKILLSPECTOR_MODEL:-provider default}, base: ${OPENAI_BASE_URL:-api.openai.com/v1})."
             llm_flag=""
@@ -93,7 +99,16 @@ jobs:
             echo "SKILLSPECTOR_OPENAI_API_KEY not set — running static-only (--no-llm)."
             llm_flag="--no-llm"
           fi
-          skillspector scan .agents/skills/ $llm_flag --format sarif --output skillspector.sarif
+          set +e
+          skillspector scan .agents/skills/ $llm_flag --format json --output skillspector.json
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          set -e
+
+      - name: Render report (job summary + SARIF)
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/skillspector-report.py skillspector.json skillspector.sarif .agents/skills >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload SARIF to code scanning
         if: ${{ !cancelled() && hashFiles('skillspector.sarif') != '' }}
@@ -101,3 +116,13 @@ jobs:
         with:
           sarif_file: skillspector.sarif
           category: skillspector
+
+      - name: Enforce gate
+        if: ${{ !cancelled() }}
+        run: |
+          code="${{ steps.scan.outputs.exit_code }}"
+          if [ "$code" != "0" ]; then
+            echo "::error title=SkillSpector gate failed::SkillSpector exited $code (1 = HIGH/CRITICAL risk > 50, 2 = scan error). See the job summary."
+            exit 1
+          fi
+          echo "✅ SkillSpector gate passed."
