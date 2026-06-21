@@ -1,22 +1,35 @@
 #!/usr/bin/env python3
-"""Render a SkillSpector JSON report into a GitHub job summary (stdout) and SARIF.
+"""Render a SkillSpector JSON report into a GitHub job summary (stdout) and SARIF,
+applying an accepted-findings baseline to decide the gate.
 
 SkillSpector emits one --format per run, and its native SARIF is minimal (no
 risk score, category, or confidence). The JSON report carries everything, so we
-scan once with --format json and derive both artifacts here:
+scan once with --format json and derive everything here:
 
   - Markdown summary -> stdout (redirect into $GITHUB_STEP_SUMMARY)
   - SARIF 2.1.0      -> <sarif_out> (for GitHub code scanning, when enabled)
+  - Gate decision    -> --decision-file (pass|fail), read by the workflow
 
-Usage: skillspector-report.py <report.json> <out.sarif> [path_prefix]
+Why a baseline instead of SkillSpector's own exit code: these are FIRST-PARTY agent
+skills that legitimately run shell, gh/git, and template file operations. SkillSpector
+(correctly, for an untrusted third-party skill) rates those HIGH, so its risk score is
+pinned at 100 and a raw `risk > 50` gate would block every PR forever. The baseline
+(.github/skillspector-baseline.yml) lists each such finding by (id, file) WITH a written
+justification. The gate fails only on ACTIVE (non-baselined) findings, so a genuinely new
+dangerous pattern — real exfiltration, hidden instructions, supply-chain — still blocks.
 
-`path_prefix` (default ".agents/skills") is prepended to each finding's file so
-SARIF locations resolve from the repo root. Missing/empty JSON (e.g. SkillSpector
-errored before writing) is handled gracefully: a note is emitted and an empty
-SARIF is written so the upload step has a valid file.
+Usage:
+  skillspector-report.py <report.json> <out.sarif> [path_prefix]
+                         [--baseline FILE] [--decision-file FILE]
+
+`path_prefix` (default ".agents/skills") is prepended to each finding's file so SARIF
+locations resolve from the repo root. Missing/empty JSON (e.g. SkillSpector errored
+before writing) is handled gracefully: a note is emitted, an empty SARIF is written,
+and the gate decision is `fail` (a scan that did not complete must not pass).
 """
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -47,7 +60,52 @@ def empty_sarif() -> dict:
     }
 
 
-def build_sarif(report: dict, prefix: str) -> dict:
+def load_baseline(path: str | None) -> tuple[dict[tuple[str, str], str], str | None]:
+    """Return ({(id, file): reason}, error). Empty dict if no baseline configured.
+
+    Parses YAML (PyYAML is a hard SkillSpector dependency, so it is present in the
+    scan environment). Falls back to JSON if YAML is unavailable, so the script never
+    hard-crashes on an environment quirk — it just reports the problem and treats the
+    baseline as empty, which fails the gate loudly rather than silently muting it.
+    """
+    if not path:
+        return {}, None
+    p = Path(path)
+    if not p.exists():
+        return {}, f"baseline file not found: {path}"
+    text = p.read_text()
+    data = None
+    try:
+        import yaml  # type: ignore
+
+        data = yaml.safe_load(text)
+    except ModuleNotFoundError:
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as exc:
+            return {}, f"PyYAML unavailable and baseline is not JSON: {exc}"
+    except Exception as exc:  # malformed YAML
+        return {}, f"could not parse baseline {path}: {exc}"
+
+    accepted: dict[tuple[str, str], str] = {}
+    for entry in (data or {}).get("accepted", []) or []:
+        rid = (entry.get("id") or "").strip()
+        f = (entry.get("file") or "").strip()
+        reason = (entry.get("reason") or "").strip()
+        if rid and f:
+            accepted[(rid, f)] = reason
+    return accepted, None
+
+
+def is_baselined(issue: dict, accepted: dict[tuple[str, str], str]) -> str | None:
+    """Return the baseline reason if this issue is accepted, else None. Match on
+    (id, file) — line-agnostic, so it survives the line drift the upstream pin warns of."""
+    rid = issue.get("id") or ""
+    f = (issue.get("location") or {}).get("file") or ""
+    return accepted.get((rid, f))
+
+
+def build_sarif(report: dict, prefix: str, accepted: dict[tuple[str, str], str]) -> dict:
     issues = report.get("issues") or []
     version = (report.get("metadata") or {}).get("skillspector_version")
     rules: dict[str, dict] = {}
@@ -78,14 +136,20 @@ def build_sarif(report: dict, prefix: str) -> dict:
         physical = {"artifactLocation": {"uri": uri}}
         if region:
             physical["region"] = region
-        results.append(
-            {
-                "ruleId": rid,
-                "level": LEVEL.get(sev, "warning"),
-                "message": {"text": f"[{sev}] {it.get('pattern') or it.get('category') or rid}: {it.get('explanation') or ''}".strip()},
-                "locations": [{"physicalLocation": physical}],
-            }
-        )
+        result = {
+            "ruleId": rid,
+            "level": LEVEL.get(sev, "warning"),
+            "message": {"text": f"[{sev}] {it.get('pattern') or it.get('category') or rid}: {it.get('explanation') or ''}".strip()},
+            "locations": [{"physicalLocation": physical}],
+        }
+        # Baselined findings are reported but marked suppressed, so GitHub code
+        # scanning shows them as accepted risk rather than open alerts.
+        reason = is_baselined(it, accepted)
+        if reason is not None:
+            result["suppressions"] = [
+                {"kind": "external", "justification": reason or "Accepted in skillspector-baseline.yml"}
+            ]
+        results.append(result)
     driver = {
         "name": "SkillSpector",
         "informationUri": "https://github.com/NVIDIA/SkillSpector",
@@ -100,11 +164,38 @@ def build_sarif(report: dict, prefix: str) -> dict:
     }
 
 
-def build_summary(report: dict) -> str:
+def _skill(it: dict) -> str:
+    """The owning skill = first path segment of the finding's file, relative to the
+    scanned skills dir (e.g. 'ai-template-sync/scripts/sync.sh' -> 'ai-template-sync').
+    Files directly under the scan root (e.g. 'README.md') have no owning skill."""
+    f = (it.get("location") or {}).get("file") or ""
+    head = f.split("/", 1)[0]
+    return head if head and "/" in f else "(root)"
+
+
+def _issue_row(it: dict) -> str:
+    loc = it.get("location") or {}
+    where = loc.get("file", "?")
+    if loc.get("start_line"):
+        where += f":{loc['start_line']}"
+    conf = it.get("confidence")
+    conf_s = f"{conf:.0%}" if isinstance(conf, (int, float)) else ""
+    return (
+        f"| {(it.get('severity') or '?').upper()} | {it.get('id','')} | "
+        f"`{_skill(it)}` | {it.get('category','')} | {it.get('pattern','')} | `{where}` | {conf_s} |"
+    )
+
+
+def build_summary(
+    report: dict,
+    active: list[dict],
+    accepted_issues: list[dict],
+    accepted: dict[tuple[str, str], str],
+    baseline_err: str | None,
+) -> str:
     ra = report.get("risk_assessment") or {}
     score = ra.get("score")
     sev = (ra.get("severity") or "?").upper()
-    reco = ra.get("recommendation") or "?"
     issues = report.get("issues") or []
     meta = report.get("metadata") or {}
     llm = "LLM semantic + static" if meta.get("llm_available") else "static-only"
@@ -117,48 +208,93 @@ def build_summary(report: dict) -> str:
         f"{counts[s]} {s}" for s in sorted(counts, key=lambda x: SEV_ORDER.get(x, 9))
     ) or "none"
 
-    out = []
-    out.append("## 🛡️ SkillSpector scan")
-    out.append("")
+    out = ["## 🛡️ SkillSpector scan", ""]
     badge = EMOJI.get(sev, "⬜")
-    out.append(f"{badge} **Risk score: {score}/100 — {sev} — {reco}**")
+    out.append(f"{badge} **SkillSpector raw score: {score}/100 — {sev}** (first-party skills; gate uses the baseline below, not this raw score)")
     out.append("")
     out.append(f"**{len(issues)} findings** ({breakdown}) · analysis: {llm}")
     out.append("")
-    if issues:
-        out.append("| Sev | ID | Category | Pattern | Location | Conf |")
-        out.append("|-----|----|----------|---------|----------|------|")
-        for it in sorted(issues, key=lambda i: SEV_ORDER.get((i.get("severity") or "").upper(), 9)):
-            loc = it.get("location") or {}
-            where = loc.get("file", "?")
-            if loc.get("start_line"):
-                where += f":{loc['start_line']}"
-            conf = it.get("confidence")
-            conf_s = f"{conf:.0%}" if isinstance(conf, (int, float)) else ""
-            out.append(
-                f"| {(it.get('severity') or '?').upper()} | {it.get('id','')} | "
-                f"{it.get('category','')} | {it.get('pattern','')} | `{where}` | {conf_s} |"
-            )
-    out.append("")
+
+    # Gate verdict
+    if active:
+        out.append(f"### ❌ Gate: FAIL — {len(active)} active (non-baselined) finding(s)")
+        out.append("")
+        out.append("These are NOT in `.github/skillspector-baseline.yml`. Fix them, or add a justified")
+        out.append("baseline entry if the behavior is inherent and safe for first-party tooling.")
+        out.append("")
+        out.append("| Sev | ID | Skill | Category | Pattern | Location | Conf |")
+        out.append("|-----|----|-------|----------|---------|----------|------|")
+        for it in sorted(active, key=lambda i: SEV_ORDER.get((i.get("severity") or "").upper(), 9)):
+            out.append(_issue_row(it))
+        out.append("")
+    else:
+        out.append("### ✅ Gate: PASS — no active (non-baselined) findings")
+        out.append("")
+
+    if baseline_err:
+        out.append(f"> ⚠️ Baseline problem: {baseline_err} — treated as empty (all findings active).")
+        out.append("")
+
+    # Accepted / baselined section
+    if accepted_issues:
+        out.append(f"### Accepted (baselined) — {len(accepted_issues)} finding(s), report-only")
+        out.append("")
+        out.append("Suppressed from the gate per `.github/skillspector-baseline.yml`. Each is inherent")
+        out.append("first-party capability or benign documentation; see the file for per-entry justification.")
+        out.append("")
+        out.append("| Sev | ID | Skill | Category | Pattern | Location | Conf |")
+        out.append("|-----|----|-------|----------|---------|----------|------|")
+        for it in sorted(accepted_issues, key=lambda i: SEV_ORDER.get((i.get("severity") or "").upper(), 9)):
+            out.append(_issue_row(it))
+        out.append("")
+
+    # Stale baseline entries (matched nothing) — surfaces drift after a fix removes a finding
+    present = {(it.get("id") or "", (it.get("location") or {}).get("file") or "") for it in issues}
+    stale = sorted(k for k in accepted if k not in present)
+    if stale:
+        out.append("### ℹ️ Stale baseline entries (matched no current finding)")
+        out.append("")
+        out.append("A fix or pin bump removed these findings — prune them from the baseline.")
+        out.append("")
+        for rid, f in stale:
+            out.append(f"- `{rid}` in `{f}`")
+        out.append("")
+
     return "\n".join(out)
 
 
 def main() -> int:
-    if len(sys.argv) < 3:
-        print("usage: skillspector-report.py <report.json> <out.sarif> [path_prefix]", file=sys.stderr)
-        return 2
-    json_in, sarif_out = sys.argv[1], sys.argv[2]
-    prefix = sys.argv[3] if len(sys.argv) > 3 else ".agents/skills"
+    ap = argparse.ArgumentParser(description="Render SkillSpector JSON -> job summary + SARIF, apply baseline gate.")
+    ap.add_argument("report_json")
+    ap.add_argument("sarif_out")
+    ap.add_argument("path_prefix", nargs="?", default=".agents/skills")
+    ap.add_argument("--baseline", help="Path to skillspector-baseline.yml (accepted findings).")
+    ap.add_argument("--decision-file", help="Write the gate decision (pass|fail) here for the workflow to read.")
+    args = ap.parse_args()
 
-    p = Path(json_in)
+    def write_decision(value: str) -> None:
+        if args.decision_file:
+            Path(args.decision_file).write_text(value + "\n")
+
+    p = Path(args.report_json)
     if not p.exists() or p.stat().st_size == 0:
-        Path(sarif_out).write_text(json.dumps(empty_sarif()))
-        print("## 🛡️ SkillSpector scan\n\n⚠️ No JSON report produced — the scan likely errored before completing. See the scan step log.\n")
+        Path(args.sarif_out).write_text(json.dumps(empty_sarif()))
+        write_decision("fail")  # an incomplete scan must not pass the gate
+        print("## 🛡️ SkillSpector scan\n\n❌ **Gate: FAIL** — no JSON report produced; the scan likely errored before completing. See the scan step log.\n")
         return 0
 
     report = json.loads(p.read_text())
-    Path(sarif_out).write_text(json.dumps(build_sarif(report, prefix)))
-    print(build_summary(report))
+    accepted, baseline_err = load_baseline(args.baseline)
+
+    issues = report.get("issues") or []
+    active = [it for it in issues if is_baselined(it, accepted) is None]
+    accepted_issues = [it for it in issues if is_baselined(it, accepted) is not None]
+
+    Path(args.sarif_out).write_text(json.dumps(build_sarif(report, args.path_prefix, accepted)))
+    print(build_summary(report, active, accepted_issues, accepted, baseline_err))
+
+    # Gate: fail on ANY active (non-baselined) finding, or on a baseline parse error.
+    write_decision("fail" if (active or baseline_err) else "pass")
     return 0
 
 

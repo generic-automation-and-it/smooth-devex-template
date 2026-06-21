@@ -2,7 +2,11 @@ name: Skill Security Scan
 
 # Gates AI agent skills in .agents/skills/ with NVIDIA SkillSpector.
 # SkillSpector exit codes (src/skillspector/cli.py): risk_score > 50 -> 1 (HIGH/CRITICAL),
-# error -> 2, otherwise 0. A non-zero exit fails this job = hard gate.
+# error -> 2, otherwise 0. These are first-party skills that legitimately run shell/gh/git,
+# so SkillSpector pins the raw score at 100 (exit 1) by design. The GATE therefore does NOT
+# key off the raw exit code; skillspector-report.py applies .github/skillspector-baseline.yml
+# (accepted findings, each justified) and the gate fails only on ACTIVE (non-baselined)
+# findings. A scan error (exit 2) still hard-fails. New/unexpected findings still block.
 # SkillSpector publishes no git tags and is not on PyPI, so we pin a commit SHA and
 # emit a non-blocking warning when upstream main has moved past the pin.
 
@@ -14,11 +18,15 @@ on:
     paths:
       - '.agents/skills/**'
       - '.github/workflows/skill-scan.yml'
+      - '.github/scripts/skillspector-report.py'
+      - '.github/skillspector-baseline.yml'
   push:
     branches: [main]
     paths:
       - '.agents/skills/**'
       - '.github/workflows/skill-scan.yml'
+      - '.github/scripts/skillspector-report.py'
+      - '.github/skillspector-baseline.yml'
   workflow_dispatch:
 
 permissions:
@@ -104,11 +112,15 @@ jobs:
           echo "exit_code=$?" >> "$GITHUB_OUTPUT"
           set -e
 
-      - name: Render report (job summary + SARIF)
+      - name: Render report (job summary + SARIF + gate decision)
         if: ${{ !cancelled() }}
         run: |
           set -euo pipefail
-          python3 .github/scripts/skillspector-report.py skillspector.json skillspector.sarif .agents/skills >> "$GITHUB_STEP_SUMMARY"
+          python3 .github/scripts/skillspector-report.py \
+            skillspector.json skillspector.sarif .agents/skills \
+            --baseline .github/skillspector-baseline.yml \
+            --decision-file skillspector-gate.txt \
+            >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload SARIF to code scanning
         if: ${{ !cancelled() && hashFiles('skillspector.sarif') != '' }}
@@ -120,9 +132,18 @@ jobs:
       - name: Enforce gate
         if: ${{ !cancelled() }}
         run: |
+          set -uo pipefail
           code="${{ steps.scan.outputs.exit_code }}"
-          if [ "$code" != "0" ]; then
-            echo "::error title=SkillSpector gate failed::SkillSpector exited $code (1 = HIGH/CRITICAL risk > 50, 2 = scan error). See the job summary."
+          decision="$(cat skillspector-gate.txt 2>/dev/null || echo missing)"
+          # Scan error (exit 2) always hard-fails — an incomplete scan must not pass.
+          if [ "$code" = "2" ]; then
+            echo "::error title=SkillSpector scan error::SkillSpector exited 2 (scan error). See the scan step log."
             exit 1
           fi
-          echo "✅ SkillSpector gate passed."
+          # Otherwise the baseline-aware decision is authoritative. Raw exit 1 (risk > 50)
+          # is expected for first-party skills and is fine when decision=pass.
+          if [ "$decision" != "pass" ]; then
+            echo "::error title=SkillSpector gate failed::Active (non-baselined) findings present (decision=$decision). See the job summary; fix them or add a justified entry to .github/skillspector-baseline.yml."
+            exit 1
+          fi
+          echo "✅ SkillSpector gate passed (raw exit $code; baseline-aware decision: pass)."
