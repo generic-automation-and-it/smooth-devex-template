@@ -23,26 +23,35 @@ C4Context
     Rel(thisSystem, ext1, "Calls", "Protocol")
 ```
 
-<!--
-Recommended additional diagrams — keep only those that add understanding, delete the rest:
+---
 
-## Container View (C2)        — when the system splits into >1 deployable/runtime unit
-```mermaid
+### Authoring guide — optional additional diagrams (delete this whole section before finalizing)
+
+The snippets below are a copy-paste catalog for the human or agent composing the HLD. They
+are shown as plain `text` fences so they do not render (they contain placeholders like `...`).
+When you keep one, copy it into its own `## ` section and change the fence to `mermaid`; delete
+the rest **and** delete this guide section.
+
+**Container View (C2)** — when the system splits into >1 deployable/runtime unit:
+
+```text
 C4Container
     title {{TITLE}} — Containers
     ...
 ```
 
-## Flow — <named flow>        — process/decision flows; a path through the system
-```mermaid
+**Flow — <named flow>** — process/decision flows; a path through the system:
+
+```text
 flowchart TD
     A[Start] --> B{Decision}
     B -->|yes| C[Action]
     B -->|no| D[Alternative]
 ```
 
-## Sequence — <named flow>    — interactions with 3+ steps OR side effects (email, queue, external call)
-```mermaid
+**Sequence — <named flow>** — interactions with 3+ steps OR side effects (email, queue, external call):
+
+```text
 sequenceDiagram
     participant A as Caller
     participant B as Service
@@ -50,16 +59,17 @@ sequenceDiagram
     B-->>A: response
 ```
 
-## Data Model               — 3+ related entities with non-obvious relationships
-```mermaid
+**Data Model** — 3+ related entities with non-obvious relationships:
+
+```text
 erDiagram
     ENTITY_A ||--o{ ENTITY_B : has
 ```
 
-## Domain Types             — key classes/types and their relationships
-```mermaid
+**Domain Types** — key classes/types and their relationships:
+
+```text
 classDiagram
     class TypeA
     TypeA --> TypeB
 ```
--->

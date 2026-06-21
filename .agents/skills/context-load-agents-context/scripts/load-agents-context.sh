@@ -113,7 +113,9 @@ else
 fi
 SAFE_SESSION_ID=$(printf '%s' "$SESSION_ID" | tr -c 'A-Za-z0-9._-' '_')
 TRACKER="/tmp/.agents_ctx_${SAFE_SESSION_ID}"
-[ "$RESET_SESSION" -eq 1 ] && rm -f "$TRACKER" 2>/dev/null || true
+if [ "$RESET_SESSION" -eq 1 ]; then
+    : > "$TRACKER" 2>/dev/null || true   # reset: truncate the per-session tracker (no unlink; avoids rm + && chaining)
+fi
 touch "$TRACKER" 2>/dev/null || exit 0
 
 # --- Find git repo root to stop walk at repo boundary ---
