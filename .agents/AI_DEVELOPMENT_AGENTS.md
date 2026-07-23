@@ -136,5 +136,6 @@ ls -la | grep -E '(\.claude|\.codex|\.cursor)'
 
 | Date | Change | Reason |
 | :---- | :---- | :---- |
+| 2026-07-23 | Changed Codex `approval_policy` from `unless-allow-listed` to `never` to resolve configuration load error. | #54 |
 | 2026-05-30 | Initial version. | |
 | 2026-06-10 | Registered orphaned `UserPromptSubmit` hooks (`worktask-create.sh`, `agentmd-create-update.sh`, `knowledge-rule-enforce.sh`) in `settings.json` — they existed on disk but never fired. | #32 |
