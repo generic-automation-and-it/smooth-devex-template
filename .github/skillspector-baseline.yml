@@ -57,27 +57,27 @@ accepted:
       gh/git; calls use shell=False with an explicit argument list, so there is no shell
       interpolation of untrusted input.
 
-  # --- MEDIUM: --mansplain opt-in autonomy phrasing (git skills + index) ---
+  # --- MEDIUM: --autonomous opt-in autonomy phrasing (git skills + index) ---
   - id: EA2
     file: README.md
     reason: >-
-      "Autonomous Decision Making" — describes the opt-in `--mansplain` switch (suppress
+      "Autonomous Decision Making" — describes the opt-in `--autonomous` switch (suppress
       questions) and the agent fleet model. git-policy already forbids any commit/push
       without explicit user instruction; nothing destructive runs unprompted.
   - id: EA2
     file: git-commit/SKILL.md
     reason: >-
-      "without asking" documents the `--mansplain` flag. The skill never commits unless
+      "without asking" documents the `--autonomous` flag. The skill never commits unless
       the user explicitly invokes it (git-policy). Removing it breaks the documented UX.
   - id: EA2
     file: git-commit-push/SKILL.md
     reason: >-
-      "without asking" documents `--mansplain`. Push happens only on explicit user
+      "without asking" documents `--autonomous`. Push happens only on explicit user
       request per git-policy.
   - id: EA2
     file: git-commit-push-pr/SKILL.md
     reason: >-
-      "without asking" documents `--mansplain`. PR creation happens only on explicit
+      "without asking" documents `--autonomous`. PR creation happens only on explicit
       user request per git-policy.
 
   # --- MEDIUM: session-scoped /tmp dedup tracker (doc-only) ---

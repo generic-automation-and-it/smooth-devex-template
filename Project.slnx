@@ -77,9 +77,9 @@
     <File Path=".agents/skills/ai-brain-dump/README.md" />
     <File Path=".agents/skills/ai-brain-dump/agents/openai.yaml" />
   </Folder>
-  <Folder Name="/.agents/skills/ai-mansplain/">
-    <File Path=".agents/skills/ai-mansplain/SKILL.md" />
-    <File Path=".agents/skills/ai-mansplain/agents/openai.yaml" />
+  <Folder Name="/.agents/skills/ai-terse/">
+    <File Path=".agents/skills/ai-terse/SKILL.md" />
+    <File Path=".agents/skills/ai-terse/agents/openai.yaml" />
   </Folder>
   <Folder Name="/.agents/skills/ai-template-sync/">
     <File Path=".agents/skills/ai-template-sync/SKILL.md" />

@@ -8,7 +8,7 @@ Middle of the git skill chain: delegates committing to `git-commit` (haiku-tier 
 
 - `scripts/push.sh --rename <branch>` renames and pushes with `--set-upstream` in one step; the *derivation* of the conforming branch name (`<type>/<issue>-slug`) stays with the agent — the script never invents names.
 - "Nothing to commit or push" is a graceful no-op by contract, not an error — `git-commit-push-pr` relies on this to update a PR description without new commits.
-- `--mansplain` and `--issue` are pass-through arguments: `--mansplain` forwards down to `git-commit`; `--issue` is consumed here (rename) but its number is re-derived upstream by `git-commit-push-pr` from the branch name.
+- `--autonomous` and `--issue` are pass-through arguments: `--autonomous` forwards down to `git-commit`; `--issue` is consumed here (rename) but its number is re-derived upstream by `git-commit-push-pr` from the branch name.
 
 ## Changelog
 
