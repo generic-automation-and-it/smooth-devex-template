@@ -28,7 +28,7 @@ PRs are created as **draft by default**. The state is controlled by two switches
 | _(none)_ / `--draft` | Create the PR as a **draft** (default). On an existing draft PR, leave it as draft |
 | `--ready` | Create the PR **ready for review** (omit `--draft`). On an existing draft PR, mark it ready via `gh pr ready` |
 
-`--draft` and `--ready` are mutually exclusive; if both are passed, **STOP and ask the user** _(when `--mansplain` is also passed, default to `--draft` instead of asking)_. Resolve the requested state once at the start and apply it consistently in Step 6 (new PR) and the Update Existing PR section.
+`--draft` and `--ready` are mutually exclusive; if both are passed, **STOP and ask the user** _(when `--autonomous` is also passed, default to `--draft` instead of asking)_. Resolve the requested state once at the start and apply it consistently in Step 6 (new PR) and the Update Existing PR section.
 
 ## Issue Auto-Close (default: ON)
 
@@ -58,7 +58,7 @@ Invoke the **git-commit-push** skill as a sub-agent (medium-complexity task):
 - Codex: invoke git-commit-push agent (model: `gpt-5.4`)
 - If commit message provided, pass it to git-commit-push
 - If `--issue <number>` was passed, forward it to git-commit-push so the branch is renamed before the push
-- If `--mansplain` was passed, forward it to git-commit-push (and transitively to git-commit)
+- If `--autonomous` was passed, forward it to git-commit-push (and transitively to git-commit)
 - This handles staging, committing with conventional format, branch renaming (when `--issue` is passed), and pushing to remote
 - Respects logical units of work
 - If there are no changes to commit or push, continue gracefully (not an error)
@@ -78,7 +78,7 @@ Run `gh pr list --head $(git rev-parse --abbrev-ref HEAD) --json number,title`
 
 Run `scripts/get-pr-metadata.sh` to derive the prefix deterministically: its `pr_title_prefix` field is `<type>[<issue>]` (or `<type>[NO-TICKET]` for a ticketless conforming branch); append `: <description>` yourself. If the field is empty, the branch name is non-conforming — derive the type from the commits instead.
 
-This title becomes the squash commit message on `main`, so it must be descriptive and follow the format precisely. **If a conforming ticket/title cannot be determined, STOP and ask the user — do not guess or proceed with a non-conforming title.** _(When `--mansplain` is passed: make your best determination and proceed without asking.)_
+This title becomes the squash commit message on `main`, so it must be descriptive and follow the format precisely. **If a conforming ticket/title cannot be determined, STOP and ask the user — do not guess or proceed with a non-conforming title.** _(When `--autonomous` is passed: make your best determination and proceed without asking.)_
 
 ### Step 4: Read PR Template
 
@@ -144,7 +144,7 @@ If a PR already exists for the current branch (detected in Step 2):
 - `--issue <number>` — two effects:
   1. Renames the local branch to `<type>/<number>-short-description` before pushing (delegated to **git-commit-push**)
   2. Sets the issue number used for the `Closes #<number>` link explicitly. **Note:** the close link is added **by default** even without `--issue` — when `--issue` is omitted the number is parsed from the branch name. Use `--issue` only to override that, or `--noclose` to suppress the link entirely
-- `--mansplain` — suppress all interactive questions throughout the entire chain (commit → push → PR). The agent uses its best judgment on commit grouping, messages, and PR title without stopping to ask. If `--draft` and `--ready` are both passed alongside `--mansplain`, defaults to `--draft`.
+- `--autonomous` — suppress all interactive questions throughout the entire chain (commit → push → PR). The agent uses its best judgment on commit grouping, messages, and PR title without stopping to ask. If `--draft` and `--ready` are both passed alongside `--autonomous`, defaults to `--draft`.
 
 ## Usage Examples
 
@@ -156,9 +156,9 @@ If a PR already exists for the current branch (detected in Step 2):
 /git-commit-push-pr --noclose                        # draft PR WITHOUT a Closes #<issue> link
 /git-commit-push-pr --issue 42                       # draft PR, renames branch to feat/42-*, closes #42 on merge
 /git-commit-push-pr --ready --issue 42               # ready PR, renames branch to feat/42-*, closes #42 on merge
-/git-commit-push-pr --mansplain                      # draft PR; no questions asked — agent decides everything
-/git-commit-push-pr --mansplain --issue 42           # draft PR, renames branch, no questions asked
-/git-commit-push-pr --mansplain --ready              # ready PR; no questions asked
+/git-commit-push-pr --autonomous                      # draft PR; no questions asked — agent decides everything
+/git-commit-push-pr --autonomous --issue 42           # draft PR, renames branch, no questions asked
+/git-commit-push-pr --autonomous --ready              # ready PR; no questions asked
 ```
 
 All `gh` commands (shown inline in the steps above) require GitHub CLI authenticated via `gh auth login`.

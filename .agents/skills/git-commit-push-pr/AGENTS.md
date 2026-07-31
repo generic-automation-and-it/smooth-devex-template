@@ -12,8 +12,8 @@ sequenceDiagram
     participant Push as git-commit-push (sub-agent)
     participant Commit as git-commit (sub-agent)
     participant GH as GitHub (gh CLI)
-    PR->>Push: delegate commit+push (forwards --issue, --mansplain)
-    Push->>Commit: delegate commit (forwards --mansplain)
+    PR->>Push: delegate commit+push (forwards --issue, --autonomous)
+    Push->>Commit: delegate commit (forwards --autonomous)
     Push->>GH: push (scripts/push.sh, optional rename)
     PR->>PR: get-pr-metadata.sh → type/issue/pr_title_prefix
     PR->>GH: gh pr create/edit (template body, Closes #issue)

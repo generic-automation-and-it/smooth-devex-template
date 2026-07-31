@@ -7,7 +7,7 @@ Base of the git skill chain (`git-commit-push-pr` → `git-commit-push` → `git
 ## Non-Negotiables
 
 - **The SKILL.md type list is a FALLBACK, not a source of truth.** `git-policy.instructions.md` is authoritative; the inline "Fallback types" list exists only for runners that don't auto-load `.agents/rules/` (e.g. Codex) and MUST be kept in sync with the rule on every vocabulary change — a previous unsynced copy drifted (it allowed `style`, which the policy does not).
-- **`--mansplain` must stay forwardable**: it arrives from the parent skills and suppresses every "ask the user" branch. Adding a new interactive question without a `--mansplain` bypass breaks the autonomous chain.
+- **`--autonomous` must stay forwardable**: it arrives from the parent skills and suppresses every "ask the user" branch. Adding a new interactive question without a `--autonomous` bypass breaks the autonomous chain.
 
 ## Changelog
 

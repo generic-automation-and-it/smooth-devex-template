@@ -10,14 +10,14 @@ Skills live **flat**, one directory per skill directly under `.agents/skills/`. 
 |-------|---------|-------|
 | **agile-github-task-from-diff** | Create a GitHub Task (sub-issue) from the current git diff vs main | `/agile-github-task-from-diff` |
 | **ai-brain-dump** | Listen-first capture session; synthesize on request | `/ai-brain-dump [--oktoask] [--thinking] [--oktoreaddocs] [--oktowebsearch]` |
-| **ai-mansplain** | Reformat this turn's reply into terse, high-density output with a TL;DR | `/ai-mansplain` |
+| **ai-terse** | Reformat this turn's reply into terse, high-density output with a TL;DR | `/ai-terse` |
 | **ai-template-sync** | UPSERT smooth-devex-template scaffold into an existing repo | `/ai-template-sync` |
 | **context-load-agents-context** | Load ancestor AGENTS.md context for a file | `/context-load-agents-context` |
 | **context-load-context** | Load domain context before implementation | `/context-load-context auth` |
 | **create-hld** | Author a design-only High-Level Design under `.docs/hlds/NNN-<slug>/` | `/create-hld <kebab-slug>` |
-| **git-commit** | Commit with conventional format | `/git-commit [--mansplain]` |
-| **git-commit-push** | Commit and push to remote | `/git-commit-push [--mansplain]` |
-| **git-commit-push-pr** | Commit, push, and create/update PR | `/git-commit-push-pr [--mansplain]` |
+| **git-commit** | Commit with conventional format | `/git-commit [--autonomous]` |
+| **git-commit-push** | Commit and push to remote | `/git-commit-push [--autonomous]` |
+| **git-commit-push-pr** | Commit, push, and create/update PR | `/git-commit-push-pr [--autonomous]` |
 | **git-sync** | Sync with main (optionally auto-resolve conflicts) | `/git-sync` |
 | **manage-rule-system** | Create/update rule files in `.agents/rules/` | `/manage-rule-system` |
 
@@ -39,14 +39,14 @@ listen-first default avoids — use deliberately.
 
 ### git-commit / git-commit-push / git-commit-push-pr switches
 
-The `--mansplain` switch suppresses all interactive questions across the entire commit chain. When passed, the agent uses its best judgment on commit grouping, message selection, and PR title — it never stops to ask.
+The `--autonomous` switch suppresses all interactive questions across the entire commit chain. When passed, the agent uses its best judgment on commit grouping, message selection, and PR title — it never stops to ask.
 
 | Switch | Effect |
 |--------|--------|
 | _(none)_ | Default — ask for clarification when grouping is unclear or a conforming message cannot be determined |
-| `--mansplain` | **No questions asked.** Agent decides everything autonomously and proceeds without confirmation |
+| `--autonomous` | **No questions asked.** Agent decides everything autonomously and proceeds without confirmation |
 
-`--mansplain` is forwarded automatically through the skill chain: `git-commit-push-pr` → `git-commit-push` → `git-commit`.
+`--autonomous` is forwarded automatically through the skill chain: `git-commit-push-pr` → `git-commit-push` → `git-commit`.
 
 ## Model Selection
 
@@ -70,7 +70,7 @@ Skills are classified by complexity tier. Each SKILL.md carries a `models` front
 | **git-commit-push-pr** | medium | PR template authoring + state management |
 | **agile-github-task-from-diff** | medium | Diff classification + issue authoring |
 | **manage-rule-system** | medium | Cross-tool frontmatter authoring |
-| **ai-mansplain** | low | Single-turn reply reformatting; no tools or deep reasoning |
+| **ai-terse** | low | Single-turn reply reformatting; no tools or deep reasoning |
 | **ai-brain-dump** | high | Multi-turn synthesis + deep requirement reasoning |
 | **ai-template-sync** | high | Interactive multi-turn Q&A + conditional file sync across tools |
 | **create-hld** | high | Multi-turn clarification gates + architectural judgment (LADRs, NFRs, diagrams) |
@@ -89,7 +89,7 @@ Skills are flat under `.agents/skills/`; the category lives in the folder-name p
 | Prefix | Skills |
 |--------|--------|
 | `agile-` | `agile-github-task-from-diff` |
-| `ai-` | `ai-brain-dump`, `ai-mansplain`, `ai-template-sync` |
+| `ai-` | `ai-brain-dump`, `ai-terse`, `ai-template-sync` |
 | `context-` | `context-load-agents-context`, `context-load-context` |
 | `git-` | `git-commit`, `git-commit-push`, `git-commit-push-pr`, `git-sync` |
 | _(none)_ | `create-hld`, `manage-rule-system` |
