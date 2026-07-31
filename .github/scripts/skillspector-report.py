@@ -118,6 +118,13 @@ def build_sarif(report: dict, prefix: str, accepted: dict[tuple[str, str], str])
     rules: dict[str, dict] = {}
     results = []
     for it in issues:
+        # Baselined findings are excluded from the SARIF entirely so the
+        # code-scanning check stays green; they remain visible (and auditable)
+        # in the job summary's "Accepted (baselined)" section, which reads the
+        # scan output directly. SARIF `suppressions` are not reliably honored by
+        # every code-scanning backend, so omitting is the robust choice.
+        if is_baselined(it, accepted) is not None:
+            continue
         rid = it.get("id") or "UNKNOWN"
         sev = (it.get("severity") or "MEDIUM").upper()
         if rid not in rules:
@@ -149,13 +156,6 @@ def build_sarif(report: dict, prefix: str, accepted: dict[tuple[str, str], str])
             "message": {"text": f"[{sev}] {it.get('pattern') or it.get('category') or rid}: {it.get('explanation') or ''}".strip()},
             "locations": [{"physicalLocation": physical}],
         }
-        # Baselined findings are reported but marked suppressed, so GitHub code
-        # scanning shows them as accepted risk rather than open alerts.
-        reason = is_baselined(it, accepted)
-        if reason is not None:
-            result["suppressions"] = [
-                {"kind": "external", "justification": reason or "Accepted in skillspector-baseline.yml"}
-            ]
         results.append(result)
     driver = {
         "name": "SkillSpector",
