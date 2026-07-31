@@ -8,11 +8,13 @@ description: >-
 <!-- code-review-graph MCP tools -->
 ## MCP Tools: code-review-graph
 
-**IMPORTANT: This project has a knowledge graph. ALWAYS use the
-code-review-graph MCP tools BEFORE using file/search tools to
-explore the codebase.** The graph is faster, cheaper (fewer
-tokens), and gives you structural context (callers, dependents,
-test coverage) that file scanning cannot.
+**IMPORTANT: This project has a knowledge graph. When the
+code-review-graph MCP server is available, use its tools BEFORE
+file/search tools to explore the codebase** — they are faster,
+cheaper (fewer tokens), and give you structural context (callers,
+dependents, test coverage) that file scanning cannot. If the MCP
+tools are not configured in your environment, fall back to
+file/search tools directly.
 
 ### When to use graph tools FIRST
 
@@ -22,8 +24,8 @@ test coverage) that file scanning cannot.
 - **Finding relationships**: `query_graph_tool` callers_of/callees_of
 - **Architecture questions**: `get_architecture_overview_tool`
 
-Fall back to file/search tools **only** when the graph doesn't
-cover what you need.
+Fall back to file/search tools when the graph doesn't cover what
+you need — or whenever the MCP tools aren't available.
 
 ### Key Tools
 
