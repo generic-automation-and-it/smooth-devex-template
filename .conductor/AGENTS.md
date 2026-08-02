@@ -99,7 +99,7 @@ This section describes the kit's repo-agnostic behavior. It ships with the kit i
   silently, until they delete or reconcile it — verify which one actually ran (check for the
   code-review-graph install log lines, only present via this file's `setup.sh`) rather than assuming.
 - **Cloud-sandbox assumptions, still not verified on local macOS.** The Linux-only branch in
-  `imposter-container.sh` (starting `dockerd` with `sudo -n nohup`, defaulting `DOCKER_HOST`) matches the
+  `imposter-container.sh` (starting `dockerd` with `sudo -n setsid nohup`, defaulting `DOCKER_HOST`) matches the
   Amazon Linux 2023 cloud sandbox lifecycle, which has no systemd as PID 1. The macOS path — skip that
   branch, let the docker CLI resolve Docker Desktop's socket through the active context — is written but has
   only been reasoned about, not run: nobody has executed `restart-imposter` on a Mac yet. `[scripts] setup`
@@ -256,3 +256,4 @@ default as-is. To stop OpenCode session token usage, uncomment the two exports, 
 | 2026-08-01 | Fix `publish-conductor-kit.yml`: split release creation and publication into two steps. The action cannot upload assets to a published release on an immutable-release repository, and the previous single-step create+upload burned v0.0.1 and v1.0.0 (permanently asset-less, irreparable). Create as draft, upload assets into the draft, then `gh release edit --draft=false` with `make_latest` placed on the publish step (drafts cannot be latest). | #108 |
 | 2026-08-01 | Two facts learned while fixing the release workflow, beyond the split itself: deleting a release **and** its tag does NOT free the version — GitHub reserves a tag name permanently once an immutable release has used it (`tag_name was used by an immutable release`), so that cleanup attempt on v0.0.1/v1.0.0 was wasted; and the fix is proven end to end — `v0.0.2` published with all three assets and the documented `curl … --ref v0.0.2` install verified in a scratch directory. | #108 |
 | 2026-08-01 | Trimmed comments across `install.sh`, the four kit scripts and the release workflow — 33-71% comment lines down to 13-17%. Rationale that belongs in this file was removed from the code rather than duplicated. Verified comments-only: the non-comment diff against `main` for `.conductor/scripts/` is empty. | — |
+| 2026-08-02 | Corrected the Linux-branch description in Key Behaviors: `dockerd` starts under `sudo -n setsid nohup`, not `sudo -n nohup` — matches the code and the Architecture Decisions row. | — |
