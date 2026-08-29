@@ -85,6 +85,8 @@ dotnet run --project src/Project.ChatHost     # ChatHost standalone (separate pr
 
 Target a single test project directly when needed (e.g. `dotnet test tests/Project.Domain.UnitTest`); `ls tests/` lists them — no Trait annotations required. **Gotcha:** the dev Aspire dashboard runs at `http://localhost:15278`; when started from a terminal, use the printed `/login?t=...` URL on first browser visit.
 
+Container builds intentionally mirror the repo-root layout inside the SDK stage (`src/Project.*` under a non-`/src` working directory — the root `Dockerfile` uses `WORKDIR /build`, so `dotnet restore` logs clean `src/Project.*` paths, never `/src/src/Project.*`). When editing `Dockerfile`, keep `Project.slnx`, `Directory.*.props`, `NuGet.Config`, and `src/` in their repo-root-relative positions so solution/project references and central package props continue to resolve. `.github/workflows/publish-image.yml` pushes the GHCR image from the repo-root `Dockerfile`.
+
 ## Test Framework
 
 xunit.v3 · Shouldly · Bogus · Respawn. Three tiers (the distinction is non-obvious and drives where a test belongs):

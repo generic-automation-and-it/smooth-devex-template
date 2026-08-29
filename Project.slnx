@@ -140,5 +140,10 @@
   </Folder>
   <Folder Name="/.docs/adr/" />
   <Folder Name="/.docs/nfr/" />
+  <Folder Name="/docker/">
+    <File Path="Dockerfile" />
+    <File Path="docker-compose.yml" />
+    <File Path=".dockerignore" />
+  </Folder>
   <File Path="AGENTS.md" />
 </Solution>
