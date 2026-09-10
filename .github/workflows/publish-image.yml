@@ -40,6 +40,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      # workflow_dispatch inputs cannot express a regex constraint (the Actions
+      # workflow parser rejects any key other than description/type/required/
+      # default/options), so the semver shape is enforced here instead — before
+      # checkout, QEMU, or the GHCR login, so a bad input costs nothing.
+      - name: Validate dispatch version
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Input 'version' ('$VERSION') is not a semver-compatible identifier. Expected MAJOR.MINOR.PATCH with optional -prerelease/+build and no leading 'v' (e.g. 1.0.0-rc.1)."
+            exit 1
+          fi
+          echo "Validated dispatch version: $VERSION"
+
       - name: Checkout
         uses: actions/checkout@v4
 
