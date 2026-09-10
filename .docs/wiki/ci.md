@@ -1,6 +1,6 @@
 # CI/CD
 
-The pipeline is a single PR gate that builds and tests every change before it can merge to `main`.
+The pipeline is a PR gate that builds and tests every change before it can merge to `main`, plus a publish workflow that pushes the Host container image to GHCR.
 
 ## PR Gate
 
@@ -22,6 +22,17 @@ The pipeline is a single PR gate that builds and tests every change before it ca
    - Stops the Aspire host from the action script's teardown trap once tests and coverage have finished or failed.
 6. **Publish coverage summary** (`if: always()`) — appends `artifacts/coverage/SummaryGithub.md` to the GitHub step summary.
 7. **Upload coverage artifacts** (`if: always()`) — uploads `artifacts/coverage/` as `coverage-report`.
+
+## Publish image
+
+- **Workflow:** `.github/workflows/publish-image.yml`
+- **Triggers:** `push` → `main` (tags `:latest`), `push` → tags `v*` (semver tags), and manual `workflow_dispatch` (publishes the supplied pre-release version — never `:latest`, so a pre-release can be cut from any branch).
+
+### Dispatch input validation
+
+`workflow_dispatch` inputs accept only `description`, `type`, `required`, `default`, and `options` — the Actions workflow parser rejects the file outright on any other key, so a `pattern:` regex on the input is **not** valid YAML for this event. The semver constraint on `inputs.version` is therefore enforced by the job's first step, **Validate dispatch version**, which runs before checkout/QEMU/GHCR login so an invalid input fails in seconds. The value is passed through `env:` rather than `${{ }}` interpolation inside `run:`, keeping it out of the shell command string.
+
+Accepted: `MAJOR.MINOR.PATCH` with optional `-prerelease` and `+build`, no leading `v` (e.g. `1.0.0`, `1.0.0-rc.1`, `1.2.3-alpha.1+build.7`). Rejected: `v1.0.0`, `1.0`, `latest`, empty.
 
 ## .NET local tools
 

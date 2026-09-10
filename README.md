@@ -79,6 +79,20 @@ Target a single test project directly when iterating, e.g. `dotnet test tests/Pr
 dotnet run --project src/Project.Host      # start the API
 ```
 
+### Run in a container
+
+The repo ships a multi-stage [`Dockerfile`](Dockerfile) and [`docker-compose.yml`](docker-compose.yml):
+
+```bash
+docker build -t project:local .     # or: docker compose build
+docker compose up -d                # serves the Host on http://localhost:5080
+```
+
+The build stage uses `WORKDIR /build` (not `/src`) with `COPY src/ src/`, so restore/publish logs show clean
+repo-root-relative `src/Project.*` paths — never a `/src/src/Project.*` double path. Keep the working directory
+distinct from the copied `src/` folder if you edit the `Dockerfile`. `.dockerignore` keeps the build context to
+`src/` plus the central build files (`Project.slnx`, `Directory.*.props`, `NuGet.Config`).
+
 Once the stack is up:
 
 | Interface | URL |
@@ -99,6 +113,10 @@ Once the stack is up:
   skills/                        # Executable multi-file workflows
   setup/                         # One-time symlink / config setup scripts
   settings.json                  # Tool permissions, compile/test commands
+
+Dockerfile                       # Multi-stage container build (WORKDIR /build — no /src/src)
+docker-compose.yml               # Compose run (build: . + GHCR image:)
+.dockerignore                    # Lean build context (src + central build files only)
 
 src/
   Project.Domain/          # Entities, value objects, invariants — no external deps
