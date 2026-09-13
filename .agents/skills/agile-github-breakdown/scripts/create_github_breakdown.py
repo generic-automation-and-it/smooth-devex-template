@@ -15,6 +15,7 @@ import sys
 
 
 TRANSLATION_HEADING = "## Translation (AI context)"
+TRANSLATION_TABLE_MARKER = "| Role | GitHub |"
 
 TRANSLATION_TABLE = """\
 ## Translation (AI context)
@@ -86,13 +87,21 @@ def parse_issue_ref(value):
 
 
 def ensure_translation_table(body):
-    """Append the translation table unless the heading is already present."""
+    """Append the translation table unless the table itself is already present."""
     body = (body or "").rstrip()
-    if TRANSLATION_HEADING in body:
+    if TRANSLATION_TABLE_MARKER in body:
         return body + "\n"
+    if TRANSLATION_HEADING in body:
+        after_heading = TRANSLATION_TABLE.split(TRANSLATION_HEADING, 1)[-1].lstrip("\n")
+        return body + "\n\n" + after_heading
     if body:
         return body + "\n\n" + TRANSLATION_TABLE
     return TRANSLATION_TABLE
+
+
+def md_cell(value):
+    """Flatten whitespace and escape pipes so a title cannot split a table row."""
+    return " ".join(str(value).split()).replace("|", r"\|")
 
 
 def build_tasks_table(created):
@@ -104,8 +113,55 @@ def build_tasks_table(created):
         "|-----|-------|-------|",
     ]
     for item in created:
-        lines.append(f"| {item['key']} | #{item['number']} | {item['title']} |")
+        lines.append(
+            f"| {md_cell(item['key'])} | #{item['number']} | {md_cell(item['title'])} |"
+        )
     return "\n".join(lines) + "\n"
+
+
+def parse_tasks_table(body):
+    """Return existing Tasks-table rows from a Feature body, or []."""
+    rows = []
+    in_table = False
+    for line in (body or "").splitlines():
+        if line.startswith("## Tasks"):
+            in_table = True
+            continue
+        if in_table and line.startswith("## "):
+            break
+        if not in_table or not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) < 3:
+            continue
+        if cells[0].lower() == "key" or set(cells[0]) <= {"-", ":"}:
+            continue
+        try:
+            number = int(cells[1].lstrip("#"))
+        except ValueError:
+            continue
+        rows.append({"key": cells[0], "number": number, "title": cells[2]})
+    return rows
+
+
+def merge_created(existing, created):
+    """Keep prior key→issue rows; current-batch rows win on the same key."""
+    by_key = {row["key"]: row for row in existing}
+    order = [row["key"] for row in existing]
+    for row in created:
+        by_key[row["key"]] = row
+        if row["key"] not in order:
+            order.append(row["key"])
+    return [by_key[key] for key in order]
+
+
+def _rest_after_tasks_section(remainder):
+    if remainder.startswith("## "):
+        return remainder
+    found = remainder.find("\n## ")
+    if found == -1:
+        return ""
+    return remainder[found + 1 :]
 
 
 def ensure_tasks_table(body, created):
@@ -116,10 +172,8 @@ def ensure_tasks_table(body, created):
     if marker not in body:
         return body + "\n" + table
     before, _, rest = body.partition(marker)
-    # Drop the old table: from heading through the next heading or EOF.
     remainder = rest.lstrip("\n")
-    next_heading = remainder.find("\n## ")
-    after = remainder[next_heading + 1 :] if next_heading != -1 else ""
+    after = _rest_after_tasks_section(remainder)
     return before + table + ("\n" + after if after else "")
 
 
@@ -166,10 +220,11 @@ def link_sub_issue(owner, repo, parent_number, child_id):
 def add_blocked_by(owner, repo, blocked_number, blocker_id):
     """Mark blocked_number as blocked by blocker_id (database id). Soft-fail."""
     try:
-        run_json([
+        # 201 may have an empty body; do not json-parse stdout. -F types issue_id as int.
+        run([
             "gh", "api", "--method", "POST",
             f"/repos/{owner}/{repo}/issues/{blocked_number}/dependencies/blocked_by",
-            "-f", f"issue_id={blocker_id}",
+            "-F", f"issue_id={blocker_id}",
         ])
         return True
     except Exception:
@@ -216,6 +271,28 @@ def resolve_dep(dep, key_to_number):
     if dep in key_to_number:
         return key_to_number[dep]
     return parse_issue_ref(dep)
+
+
+def validate_tasks(tasks):
+    """Reject malformed tasks before any GitHub write."""
+    seen = set()
+    for i, task in enumerate(tasks):
+        if not isinstance(task, dict) or not task.get("key"):
+            raise RuntimeError(f"tasks[{i}] is missing a non-empty \"key\".")
+        if not isinstance(task["key"], str):
+            raise RuntimeError(f"tasks[{i}][\"key\"] must be a string.")
+        if not task.get("title"):
+            raise RuntimeError(f"tasks[{i}] ({task['key']}) is missing a title.")
+        if task["key"] in seen:
+            raise RuntimeError(f"duplicate task key {task['key']!r}.")
+        seen.add(task["key"])
+        deps = task.get("depends_on")
+        if deps is None:
+            continue
+        if not isinstance(deps, list) or any(not isinstance(dep, str) for dep in deps):
+            raise RuntimeError(
+                f"tasks[{i}] ({task['key']}) depends_on must be a list of strings."
+            )
 
 
 def main():
@@ -281,11 +358,7 @@ def main():
     feature_body = ensure_translation_table(feature.get("body") or "")
     feature_number = parse_issue_ref(args.feature_issue) or parse_issue_ref(feature.get("number"))
 
-    for i, task in enumerate(tasks):
-        if not isinstance(task, dict) or not task.get("key"):
-            raise RuntimeError(f"tasks[{i}] is missing a non-empty \"key\".")
-        if not task.get("title"):
-            raise RuntimeError(f"tasks[{i}] ({task['key']}) is missing a title.")
+    validate_tasks(tasks)
 
     if not args.apply:
         print(f"Repo: {owner}/{repo}")
@@ -298,12 +371,17 @@ def main():
         else:
             print(f"Feature: CREATE --type Feature — {feature_title}")
         print()
+        print("Feature body:")
+        print(feature_body)
+        print()
         print("Tasks:")
         for task in tasks:
             deps = task.get("depends_on") or []
             dep_note = f" blocked by {', '.join(deps)}" if deps else " (unblocked)"
             print(f"  {task['key']}: CREATE --type Task — {task['title']}{dep_note}")
-        print()
+            print()
+            print(ensure_translation_table(task.get("body") or ""))
+            print()
         print("Dry run. Re-run with --apply after explicit go-ahead.")
         return 0
 
@@ -379,8 +457,9 @@ def main():
     # Keep the Feature body mapped to created Task numbers for later agents.
     try:
         current = fetch_issue(owner, repo, feature_number)
-        updated = ensure_translation_table(current.get("body") or feature_body)
-        updated = ensure_tasks_table(updated, created)
+        current_body = current.get("body") or feature_body
+        updated = ensure_translation_table(current_body)
+        updated = ensure_tasks_table(updated, merge_created(parse_tasks_table(current_body), created))
         patch_issue_body(owner, repo, feature_number, updated)
         print(f"Updated Feature #{feature_number} Tasks table.")
     except Exception as exc:

@@ -15,6 +15,8 @@ allowed-tools: >
     Bash(.agents/skills/agile-github-breakdown/scripts/parse_frnfr.py:*),
     Bash(.agents/skills/agile-github-breakdown/scripts/validate_story_graph.py:*),
     Bash(.agents/skills/agile-github-breakdown/scripts/create_github_breakdown.py:*),
+    Bash(gh issue view:*),
+    Bash(gh api:*),
     Read, Write, Edit
 models:
   claude: opus        # high-complexity; multi-step clarification + dependency-graph judgment

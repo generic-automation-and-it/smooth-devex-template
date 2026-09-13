@@ -29,6 +29,45 @@ validate/extract.
 - **The local context-doc mirror (`.context/*-context.md` or similar) is a Conductor-workspace
   convenience, not a universal repo convention.** Never create one unprompted.
 
+## System Context
+
+Writes GitHub Issues + Project items. Agent authors content; `create_github_breakdown.py` owns `gh`.
+
+```mermaid
+C4Context
+    title agile-github-breakdown
+    Person(agent, "Agent")
+    System(skill, "agile-github-breakdown")
+    System_Ext(gh, "GitHub Issues + Projects")
+    Rel(agent, skill, "draft + --apply")
+    Rel(skill, gh, "Feature, Task, sub-issue, blocked_by, project item")
+```
+
+```mermaid
+sequenceDiagram
+    participant Agent
+    participant Parse as parse_frnfr.py
+    participant Graph as validate_story_graph.py
+    participant Write as create_github_breakdown.py
+    participant GH as GitHub
+    Agent->>Parse: FR/NFR lines
+    Agent->>Graph: stories JSON
+    Agent->>Write: dry-run payload
+    Write-->>Agent: titles + bodies
+    Agent->>Write: --apply
+    Write->>GH: Feature, Tasks, links
+    Note over Write,GH: sub-issue and blocked_by fail soft
+```
+
+## Architecture Decisions
+
+### LADR-001 — Dry-run default; GitHub links fail soft
+
+- **Date:** 2026-09-13 · **Status:** Accepted
+- **Context:** Live issue create is irreversible shared state. Sub-issue / `blocked_by` APIs fail on some tokens.
+- **Decision:** No GitHub write without `--apply`. Sub-issue and `blocked_by` print a manual fallback instead of aborting a partial graph.
+- **Consequences:** "Created but not linked" is expected. Do not hard-fail those calls; that would leave Tasks without a Feature parent and no report.
+
 ## Key Behaviors
 
 - Vanilla GitHub graph, matching `builder-catalogue#21`: Project (initiative) → Feature (epic) →
@@ -78,3 +117,4 @@ skills are not production code. Add a case here for any defect found in parse/va
 | Date | Change | Ref |
 |:-----|:-------|:----|
 | 2026-09-13 | Ported from `epic-breakdown` onto vanilla GitHub Projects (Feature/Task/Project; no Epic type). | |
+| 2026-09-13 | Copilot review: translation-table marker, payload preflight, dry-run bodies, merge Tasks table, diagrams. | |

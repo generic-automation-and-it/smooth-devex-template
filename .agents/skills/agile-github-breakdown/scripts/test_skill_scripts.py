@@ -301,5 +301,53 @@ class ParserPipelineIntegration(unittest.TestCase):
         self.assertEqual(json.loads(report)["missing_coverage"], ["FR-2"])
 
 
+create_github_breakdown = load("create_github_breakdown")
+
+
+class CreateGithubBreakdownHelpers(unittest.TestCase):
+    def test_heading_without_table_still_stamps(self):
+        body = "## Translation (AI context)\n\nplaceholder only\n"
+        out = create_github_breakdown.ensure_translation_table(body)
+        self.assertIn(create_github_breakdown.TRANSLATION_TABLE_MARKER, out)
+        self.assertEqual(out.count("## Translation (AI context)"), 1)
+
+    def test_existing_table_is_not_duplicated(self):
+        body = create_github_breakdown.TRANSLATION_TABLE
+        out = create_github_breakdown.ensure_translation_table(body)
+        self.assertEqual(out.count(create_github_breakdown.TRANSLATION_TABLE_MARKER), 1)
+
+    def test_pipe_in_title_is_escaped(self):
+        table = create_github_breakdown.build_tasks_table(
+            [{"key": "S1", "number": 7, "title": "Support A | B"}]
+        )
+        self.assertIn(r"Support A \| B", table)
+
+    def test_adjacent_heading_is_kept(self):
+        body = "## Tasks\n\n| Key | Issue | Title |\n|-----|-------|-------|\n| S1 | #1 | old |\n## Open questions\n- leftover\n"
+        out = create_github_breakdown.ensure_tasks_table(
+            body, [{"key": "S2", "number": 2, "title": "new"}]
+        )
+        self.assertIn("## Open questions", out)
+        self.assertIn("#2", out)
+
+    def test_merge_keeps_prior_keys(self):
+        existing = [{"key": "S1", "number": 1, "title": "old"}]
+        created = [{"key": "S2", "number": 2, "title": "new"}]
+        merged = create_github_breakdown.merge_created(existing, created)
+        self.assertEqual([row["key"] for row in merged], ["S1", "S2"])
+
+    def test_string_depends_on_is_rejected(self):
+        with self.assertRaises(RuntimeError):
+            create_github_breakdown.validate_tasks(
+                [{"key": "S1", "title": "one", "depends_on": "S2"}]
+            )
+
+    def test_duplicate_key_is_rejected(self):
+        with self.assertRaises(RuntimeError):
+            create_github_breakdown.validate_tasks(
+                [{"key": "S1", "title": "one"}, {"key": "S1", "title": "two"}]
+            )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

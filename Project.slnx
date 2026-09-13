@@ -39,8 +39,10 @@
   </Folder>
   <Folder Name="/.agents/rules/">
     <File Path=".agents/rules/ai-workflow-rules.instructions.md" />
+    <File Path=".agents/rules/clean-code.instructions.md" />
     <File Path=".agents/rules/code-review-standards.instructions.md" />
     <File Path=".agents/rules/project-overview.instructions.md" />
+    <File Path=".agents/rules/solid-principles.instructions.md" />
   </Folder>
   <Folder Name="/.agents/rules/backend/">
     <File Path=".agents/rules/backend/api-mediator-validation.instructions.md" />
@@ -48,6 +50,7 @@
     <File Path=".agents/rules/backend/backend-logging-conventions.instructions.md" />
     <File Path=".agents/rules/backend/external-api-clients.instructions.md" />
     <File Path=".agents/rules/backend/migrations.instructions.md" />
+    <File Path=".agents/rules/backend/readonly-collections.instructions.md" />
     <File Path=".agents/rules/backend/wiremock-stubbing.instructions.md" />
   </Folder>
   <Folder Name="/.agents/rules/git/">
