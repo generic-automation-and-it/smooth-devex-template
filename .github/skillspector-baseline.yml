@@ -40,6 +40,25 @@ accepted:
       so there is no injection path. Calling gh/git is the skill's entire purpose;
       removing subprocess breaks it. Hardened with an explicit shell=False comment.
 
+  # --- HIGH: ai-asset-sync OpenCode CLI installer (curl | bash) + git/gh ---
+  - id: TM1
+    file: ai-asset-sync/scripts/lib/install-opencode.sh
+    reason: >-
+      "Tool Parameter Abuse" / curl|bash on the official OpenCode installer
+      (`curl -fsSL https://opencode.ai/install | bash`). Same install contract
+      as smooth-ai-report-review LADR-048: a single lib honours
+      OPENCODE_CLI_VERSION, verifies the binary, and refuses a version
+      mismatch. The URL is fixed, not user-controlled. Removing the pipe
+      breaks CI OpenCode install.
+  - id: TM1
+    file: ai-asset-sync/scripts/run-sync.sh
+    reason: >-
+      Skill entrypoint shells out to git/gh to clone upstream assets, restore
+      blocker paths, and open the chore PR. That IS the skill. Paths come from
+      the parsed manifest (rejected if they contain ..). Secrets stay in the
+      environment (gh uses GITHUB_TOKEN; never interpolated into argv).
+      Removing git/gh guts the action.
+
   # --- HIGH: ai-template-sync rm of the rules symlink + instructions refresh ---
   - id: TM1
     file: ai-template-sync/scripts/sync.sh
