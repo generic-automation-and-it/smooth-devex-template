@@ -62,6 +62,20 @@ accepted:
       credential is read, written, or exfiltrated. Removing it weakens the
       injection-surface test.
 
+  # --- HIGH: ai-asset-sync entrypoint replace-then-copy chain ---
+  - id: TM2
+    file: ai-asset-sync/scripts/run-sync.sh
+    reason: >-
+      "Chaining Abuse" on the resolve→fetch→replace(`rm -rf`)→copy chain in the
+      overwrite/absent-local path. Replacing the local asset with the upstream
+      snapshot IS the sync's function (type-change-safe overwrite, added for
+      PR #66 review). The target path is constrained: strict manifest charset
+      validation (no `..`, no `.`/`.git`/workflow destinations, no absolute/`~`
+      paths), symlink-physical resolution that dies outside the repo root, and
+      a pre-flight clean-tree guard so only committed (git-recoverable) state
+      is ever replaced. Removing the rm reintroduces the file↔directory
+      type-change bug.
+
   # --- HIGH: ai-asset-sync AGENTS.md LADR safety documentation ---
   - id: TM1
     file: ai-asset-sync/AGENTS.md
