@@ -9,7 +9,12 @@ import re
 import sys
 from typing import Any
 
-SOURCE_RE = re.compile(r"^([^/]+)/([^@]+)@(.+)$")
+# Strict charsets: these values flow into `gh api repos/<owner>/<repo>/commits/<ref>`
+# and `gh repo clone`, so URL metacharacters / option-looking values are rejected here.
+SOURCE_RE = re.compile(
+    r"^([A-Za-z0-9][A-Za-z0-9-]*)/([A-Za-z0-9_.][A-Za-z0-9._-]*)@([^:]+):(.+)$"
+)
+REF_RE = re.compile(r"^[A-Za-z0-9._/-]+$")
 
 ALLOWED_STRATEGIES = ("ai-merge", "overwrite")
 
@@ -26,17 +31,19 @@ def parse_source(source: str) -> dict[str, str]:
     m = SOURCE_RE.match(raw)
     if not m:
         raise ManifestError(
-            f"invalid source '{source}': expected owner/repo@ref:path"
+            f"invalid source '{source}': expected owner/repo@ref:path "
+            "(owner/repo limited to [A-Za-z0-9._-], no leading '-')"
         )
-    owner, repo, rest = m.group(1), m.group(2), m.group(3)
-    if ":" not in rest:
-        raise ManifestError(
-            f"invalid source '{source}': missing ':path' after ref"
-        )
-    ref, path = rest.split(":", 1)
+    owner, repo, ref, path = m.group(1), m.group(2), m.group(3), m.group(4)
     if not owner or not repo or not ref or not path:
         raise ManifestError(f"invalid source '{source}': empty field")
-    if path.startswith("/") or path.startswith("~") or ".." in path.split("/"):
+    if (
+        not REF_RE.match(ref)
+        or ref.startswith(("-", "/"))
+        or ".." in ref.split("/")
+    ):
+        raise ManifestError(f"unsafe ref in source '{source}'")
+    if path.startswith(("/", "~", "-")) or ".." in path.split("/"):
         raise ManifestError(f"unsafe path in source '{source}'")
     return {
         "owner": owner,
@@ -166,7 +173,13 @@ def parse_lockfile(text: str) -> dict[str, Any]:
         if stripped == "entries: []":
             return {"version": version, "entries": []}
         if re.match(r"^version:\s*", stripped):
-            version = int(_unquote(stripped.split(":", 1)[1]))
+            value = _unquote(stripped.split(":", 1)[1])
+            try:
+                version = int(value)
+            except ValueError as exc:
+                raise ManifestError(
+                    f"line {lineno}: lockfile version must be an int"
+                ) from exc
             continue
         if stripped == "entries:":
             in_entries = True

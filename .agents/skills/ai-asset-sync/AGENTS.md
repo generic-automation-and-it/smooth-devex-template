@@ -83,7 +83,9 @@ sequenceDiagram
 ## Key Behaviors
 
 - Manifest schema is a **YAML subset** parsed by `scripts/lib/parse_manifest.py` (stdlib, not PyYAML). Keep entries as `- source:` / optional `strategy:` — do not add nested maps the parser cannot see.
-- `source` shape is `owner/repo@ref:path`. First `:` after `@` starts the path, so refs must not contain `:`.
+- `source` shape is `owner/repo@ref:path`. First `:` after `@` starts the path, so refs must not contain `:`. Charsets are strict (owner/repo `[A-Za-z0-9._-]`, ref `[A-Za-z0-9._/-]`, no leading `-`, no `..` segments) because these values flow into `gh api` / `gh repo clone` — loosening them reopens an injection surface.
+- Staging is containment-scoped: only paths whose sidecar action is `applied`/`merged` (plus the lockfile) are `git add`ed. Edits the agent makes outside those paths are left unstaged and warned about — a prompt-injected upstream cannot smuggle changes to other entries into the commit.
+- 3-way limitation: the lockfile base SHA is passed to the model as provenance text only; the base tree is NOT checked out. Merge quality relies on local + remote trees.
 - Strategy `overwrite` never calls the model. Strategy `ai-merge` (default) calls it only when the local path already exists and the lockfile SHA differs.
 - Fresh clone of a missing local path is `applied` without a model call.
 - Branch is always new: `chore/ai-sync-{UTC YYYYMMDD-HHMM}`. Do not force-push a stable branch.
@@ -100,3 +102,4 @@ sequenceDiagram
 | Date | Change | Ref |
 |:-----|:-------|:----|
 | 2026-09-13 | Initial skill: manifest/lockfile, AI-merge, composite action, reusable workflow. | |
+| 2026-09-13 | Review hardening: strict source charsets + negative tests, containment-scoped staging, fd-3 work loop, `synced_at` stamped, tools_ref precedence (input > Variable), 3-way limitation documented. | |

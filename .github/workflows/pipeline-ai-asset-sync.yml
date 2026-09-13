@@ -133,7 +133,9 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           repository: generic-automation-and-it/smooth-devex-template
-          ref: ${{ vars.SMOOTH_DEVEX_TOOLS_REF || inputs.tools_ref || github.job_workflow_sha }}
+          # Explicit caller input wins over the org/repo Variable; both fall back
+          # to the commit of this reusable workflow file.
+          ref: ${{ inputs.tools_ref || vars.SMOOTH_DEVEX_TOOLS_REF || github.job_workflow_sha }}
           path: .smooth-devex-template
 
       - name: Sync AI assets

@@ -51,6 +51,55 @@ class ParseSourceTests(unittest.TestCase):
         with self.assertRaises(pm.ManifestError):
             pm.parse_source("acme/tools@main:/etc/passwd")
 
+    def test_rejects_slash_in_repo(self):
+        # `a/b/c@main:x` must NOT parse as repo="b/c".
+        with self.assertRaises(pm.ManifestError):
+            pm.parse_source("acme/nested/tools@main:.agents/skills/x")
+
+    def test_rejects_hostile_owner_charset(self):
+        for src in (
+            "-acme/tools@main:.agents/skills/x",  # option-looking owner
+            "ac me/tools@main:.agents/skills/x",  # space
+            "acme%2f../tools@main:.agents/skills/x",  # URL metachar
+        ):
+            with self.assertRaises(pm.ManifestError, msg=src):
+                pm.parse_source(src)
+
+    def test_rejects_hostile_repo_charset(self):
+        for src in (
+            "acme/-tools@main:.agents/skills/x",
+            "acme/to?ols@main:.agents/skills/x",
+            "acme/to ols@main:.agents/skills/x",
+        ):
+            with self.assertRaises(pm.ManifestError, msg=src):
+                pm.parse_source(src)
+
+    def test_rejects_hostile_ref(self):
+        for src in (
+            "acme/tools@..:.agents/skills/x",
+            "acme/tools@heads/../../x:.agents/skills/x",
+            "acme/tools@ref?per_page=1:.agents/skills/x",
+            "acme/tools@ref#frag:.agents/skills/x",
+            "acme/tools@-ref:.agents/skills/x",
+            "acme/tools@/ref:.agents/skills/x",
+            "acme/tools@a ref:.agents/skills/x",
+        ):
+            with self.assertRaises(pm.ManifestError, msg=src):
+                pm.parse_source(src)
+
+    def test_rejects_embedded_traversal_and_tilde_and_dash_path(self):
+        for src in (
+            "acme/tools@main:a/../b",
+            "acme/tools@main:~role",
+            "acme/tools@main:-rf",
+        ):
+            with self.assertRaises(pm.ManifestError, msg=src):
+                pm.parse_source(src)
+
+    def test_ref_with_slash_allowed(self):
+        p = pm.parse_source("acme/tools@release/v1.2:.agents/skills/x")
+        self.assertEqual(p["ref"], "release/v1.2")
+
 
 class ParseManifestTests(unittest.TestCase):
     def test_two_entries_default_strategy(self):
@@ -97,6 +146,14 @@ entries:
         data = pm.parse_manifest(text)
         self.assertEqual(data["entries"][0]["path"], ".agents/skills/x")
 
+    def test_missing_entries_key(self):
+        with self.assertRaises(pm.ManifestError):
+            pm.parse_manifest("version: 1\n")
+
+    def test_empty_text(self):
+        with self.assertRaises(pm.ManifestError):
+            pm.parse_manifest("")
+
 
 class LockfileTests(unittest.TestCase):
     def test_roundtrip(self):
@@ -120,6 +177,16 @@ class LockfileTests(unittest.TestCase):
         )
         idx = pm.lockfile_index(lock)
         self.assertEqual(idx["acme/tools@main:.agents/skills/x"]["resolved_sha"], "abcdef0")
+
+    def test_bad_lockfile_version(self):
+        with self.assertRaises(pm.ManifestError):
+            pm.parse_lockfile("version: banana\nentries: []\n")
+
+    def test_bad_resolved_sha(self):
+        with self.assertRaises(pm.ManifestError):
+            pm.parse_lockfile(
+                "version: 1\nentries:\n  - source: acme/tools@main:.agents/skills/x\n    resolved_sha: $(id)\n"
+            )
 
 
 if __name__ == "__main__":

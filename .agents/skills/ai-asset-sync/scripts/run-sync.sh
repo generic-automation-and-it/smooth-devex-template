@@ -248,6 +248,8 @@ Source: ${source}
 Local path (consumer, write here if merging): ${local_path}
 Remote path (read-only upstream snapshot): ${remote_path}
 ${base_note}
+(The lockfile base SHA above is provenance only — the base tree snapshot is NOT
+checked out for you; reconcile from the local and remote trees you can read.)
 
 Rules:
 - Read local and remote trees before deciding.
@@ -324,7 +326,9 @@ open(sys.argv[1], "a", encoding="utf-8").write(json.dumps(row) + "\n")
 PY
 }
 
-while IFS=$'\t' read -r idx owner repo ref path source strategy locked_sha; do
+# fd 3 carries the work list so gh/git/opencode inside the loop cannot eat
+# work-list lines from stdin.
+while IFS=$'\t' read -r -u 3 idx owner repo ref path source strategy locked_sha; do
   [ -n "${source:-}" ] || continue
   log "==> ${source}"
   sha="$(resolve_sha "$owner" "$repo" "$ref")" || die "cannot resolve ${owner}/${repo}@${ref}"
@@ -386,7 +390,7 @@ data["resolved_sha"] = sys.argv[2]
 data["advance_lock"] = data["action"] in {"applied", "merged"}
 open(sys.argv[3], "a", encoding="utf-8").write(json.dumps(data) + "\n")
 PY
-done <"${REPORT_DIR}/work-list.txt"
+done 3<"${REPORT_DIR}/work-list.txt"
 
 python3 - "${REPORT_DIR}/manifest.json" "${LOCKFILE_PATH}" <<'PY' >"${REPORT_DIR}/watch-paths.txt"
 import json, sys
@@ -408,6 +412,7 @@ done <"${REPORT_DIR}/watch-paths.txt"
 export PARSE_PY RESULTS
 python3 - "${REPORT_DIR}/lock.json" "${REPORT_DIR}/manifest.json" "${RESULTS}" "${REPORT_DIR}/lock.next.yml" <<'PY'
 import importlib.util, json, sys
+from datetime import datetime, timezone
 from pathlib import Path
 lock_path, manifest_path, results_path, out_path = sys.argv[1:5]
 spec = importlib.util.spec_from_file_location("pm", __import__("os").environ["PARSE_PY"])
@@ -419,12 +424,13 @@ results = []
 text = Path(results_path).read_text(encoding="utf-8")
 if text.strip():
     results = [json.loads(line) for line in text.splitlines() if line.strip()]
+now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 for row in results:
     if row.get("advance_lock"):
         idx[row["source"]] = {
             "source": row["source"],
             "resolved_sha": row["resolved_sha"],
-            "synced_at": "",
+            "synced_at": now,
         }
 manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
 ordered, seen = [], set()
@@ -492,24 +498,47 @@ DATETIME="$(date -u +%Y%m%d-%H%M)"
 BRANCH="chore/ai-sync-${DATETIME}"
 DEFAULT_BRANCH="$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name 2>/dev/null || echo main)"
 
-git config user.name "github-actions[bot]"
-git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+# CI-scoped bot identity; leave a local operator's git config alone.
+if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
+  git config user.name "github-actions[bot]"
+  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+fi
 git checkout -b "$BRANCH"
 
-# Stage manifest asset paths + lockfile only (not the whole workspace).
-# The model may write files under those paths that are not in CHANGED_PATHS.
-python3 - "${REPORT_DIR}/manifest.json" "${LOCKFILE_PATH}" "${REPORT_DIR}/stage-paths.txt" <<'PY'
+# Stage ONLY paths whose entry action is applied/merged, plus the lockfile.
+# Blocker/no-op entries were restored from snapshot, and a prompt-injected
+# upstream must not be able to smuggle edits to OTHER entries' paths into
+# the commit (cross-entry containment).
+python3 - "${REPORT_DIR}/manifest.json" "${RESULTS}" "${LOCKFILE_PATH}" "${REPORT_DIR}/stage-paths.txt" <<'PY'
 import json, sys
 from pathlib import Path
 manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-lines = [e["path"] for e in manifest["entries"]]
-lines.append(sys.argv[2])
-Path(sys.argv[3]).write_text("\n".join(lines) + "\n", encoding="utf-8")
+path_by_source = {e["source"]: e["path"] for e in manifest["entries"]}
+lines = []
+for line in Path(sys.argv[2]).read_text(encoding="utf-8").splitlines():
+    if not line.strip():
+        continue
+    row = json.loads(line)
+    if row.get("action") in {"applied", "merged"}:
+        p = path_by_source.get(row["source"])
+        if p:
+            lines.append(p)
+lines.append(sys.argv[3])
+Path(sys.argv[4]).write_text("\n".join(lines) + "\n", encoding="utf-8")
 PY
 while IFS= read -r p; do
   [ -n "$p" ] || continue
-  git add -- "$p" 2>/dev/null || true
+  if [ -e "$p" ] || [ -n "$(git -C "$REPO_ROOT" status --porcelain -- "$p")" ]; then
+    git add -A -- "$p" || die "failed to stage ${p}"
+  fi
 done <"${REPORT_DIR}/stage-paths.txt"
+
+# Anything else the agent touched is intentionally NOT staged; surface it.
+UNSTAGED="$(git status --porcelain | grep -v '^[MARCD]' || true)"
+if [ -n "$UNSTAGED" ]; then
+  log "warn: unstaged changes outside applied/merged entry paths (not committed):"
+  log "$UNSTAGED"
+fi
 
 if git diff --cached --quiet; then
   log "nothing staged after add — no PR"
