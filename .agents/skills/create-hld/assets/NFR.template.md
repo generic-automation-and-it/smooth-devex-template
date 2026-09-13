@@ -4,9 +4,11 @@
 
 <!-- BEFORE WRITING THIS FILE, apply the specificity test:
      "Would this read the same for any other feature in this repo?"
-       YES → delete the file. i18n coverage, keyboard operability, structured logging, HTTPS,
-             "write tests", "no secrets in code" are project standards, already binding through the
-             repo rules and ADRs. Repeating them here dilutes the NFRs that matter.
+       YES → delete the file ONLY IF a documented repo rule or ADR already binds the concern
+             (typical examples: i18n coverage, keyboard operability, structured logging, HTTPS,
+             "write tests", "no secrets in code"). Repeating a documented standard here dilutes
+             the NFRs that matter. If nothing in the repo covers it, keep it — or raise it as a
+             repo-wide standard instead.
        NO  → keep it. This design puts an unusual demand on the attribute: a specific latency budget
              under a named load, a migration that must not lose a specific field, a contract that
              must not break a named consumer.

@@ -74,9 +74,9 @@ decision. See [`./ladrs/`](./ladrs/).
 
 ## Non-Functional Requirements
 
-Only quality concerns **this** design puts an unusual demand on — project standards (i18n, logging,
-a11y baseline, secrets hygiene) are binding elsewhere and are not repeated here. Each carries a
-measurable target, a verification mechanism, and acceptance criteria. See [`./nfrs/`](./nfrs/).
+Only quality concerns **this** design puts an unusual demand on — concerns already bound by a
+documented repo rule or ADR (e.g. logging conventions, secrets hygiene) are not repeated here. Each
+carries a measurable target, a verification mechanism, and acceptance criteria. See [`./nfrs/`](./nfrs/).
 
 | NFR | Attribute | Target (summary) | Status |
 |-----|-----------|------------------|--------|

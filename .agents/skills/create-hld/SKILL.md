@@ -67,11 +67,13 @@ Budgets are ceilings, not targets. Over budget means cut content, not reformat i
 | AGENTS.md | ~700 words | Guardrails only, never narrative |
 
 **NFR specificity test** — an NFR earns a file only if *"would this read the same for any other feature
-in this repo?"* answers **no**. Delete it if yes: i18n coverage, keyboard operability, structured
-logging, HTTPS, "write tests", "no secrets in code" are project standards already binding through the
-repo rules and ADRs — repeating them here dilutes the ones that matter. An NFR belongs here when *this*
-design puts an unusual demand on the attribute: a specific latency budget under a named load, a
-migration that must not lose a specific field, a contract that must not break a named consumer.
+in this repo?"* answers **no**. Delete it if yes **and** the concern is already bound by a documented
+repo rule or ADR (typical examples: i18n coverage, keyboard operability, structured logging, HTTPS,
+"write tests", "no secrets in code") — repeating a documented standard here dilutes the NFRs that
+matter. If no repo rule covers it, keep it (or raise it as a repo-wide standard instead). An NFR
+belongs here when *this* design puts an unusual demand on the attribute: a specific latency budget
+under a named load, a migration that must not lose a specific field, a contract that must not break a
+named consumer.
 
 **Line test** — every line must prevent a wrong decision, state a measurable bar, or record a constraint
 the reader cannot derive. Cut lines that justify the document ("this diagram earns its place"), restate

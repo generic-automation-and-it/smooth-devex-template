@@ -49,8 +49,8 @@ Architecture diagrams belong in diagrams/, NOT here. Budget ~700 words. Apply th
 - Duplicating LADR prose or NFR targets — link/summarise instead.
 - Generic boilerplate (e.g. "required env vars: ...").
 - Business value / problem-solution-impact blocks (those belong in README.md).
-- Project-wide standards already binding through repo rules and ADRs. Note one only where THIS design
-  bends or sharpens it.
+- Restating a standard already bound by a documented repo rule or ADR. Note one only where THIS design
+  bends or sharpens it; if no repo rule covers the concern, it is not "already binding" — keep it.
 - Prescribed mechanism where the outcome is what matters. A guardrail names a mechanism only when a
   different one would violate an LADR; otherwise state what must hold and let the implementer choose.
 - Guidance for a need that does not exist yet — deferrals live as one-line Open items in the LADR.
