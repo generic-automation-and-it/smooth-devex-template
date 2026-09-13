@@ -57,6 +57,10 @@
     <File Path=".agents/rules/git/git-policy.instructions.md" />
     <File Path=".agents/rules/git/pr-standards.instructions.md" />
   </Folder>
+  <Folder Name="/.agents/rules/skills/">
+    <File Path=".agents/rules/skills/skill-secret-handling.instructions.md" />
+    <File Path=".agents/rules/skills/skillspector-pre-pr.instructions.md" />
+  </Folder>
   <Folder Name="/.agents/rules/meta/">
     <File Path=".agents/rules/meta/knowledge-conventional-contexts-quality.instructions.md" />
     <File Path=".agents/rules/meta/rules.instructions.md" />

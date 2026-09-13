@@ -21,7 +21,7 @@
 # here — they are reported in the job summary for human review. See .agents/skills/AGENTS.md.
 #
 # NOTE: No real secret leakage exists in any skill today. The standing guardrail for
-# any future secret handling is .github/instructions/skill-secret-handling.instructions.md.
+# any future secret handling is .github/instructions/skills/skill-secret-handling.instructions.md.
 
 accepted:
   # --- HIGH: subprocess wrappers that MUST shell out to gh/git ---

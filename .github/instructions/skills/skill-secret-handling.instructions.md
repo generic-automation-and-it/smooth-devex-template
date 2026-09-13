@@ -37,4 +37,5 @@ The secret value flows: **runtime environment → script → tool**. It is never
 
 | Date | Change |
 |:-----|:-------|
+| 2026-09-13 | Moved into the new `skills/` rule category (with `skillspector-pre-pr`); cross-references updated. |
 | 2026-06-21 | Initial version — env-via-script secret handling for skills; mirrors the skill-scan workflow's key handling. |
