@@ -35,8 +35,8 @@ Exit codes:
   2  malformed input
 
 Usage:
-  parse_requirements.py requirements.txt
-  printf 'FR-1 | text\\nNFR-2 | other\\n' | parse_requirements.py --prefix FR NFR
+  parse_frnfr.py ids.txt
+  printf 'FR-1 | text\\nNFR-2 | other\\n' | parse_frnfr.py --prefix FR NFR
 """
 import argparse
 import json

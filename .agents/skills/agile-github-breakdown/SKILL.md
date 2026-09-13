@@ -12,7 +12,7 @@ description: >
     diff; this one sources Feature + Task issues from contextual knowledge (braindumps,
     transcripts, existing Features), never a diff.
 allowed-tools: >
-    Bash(.agents/skills/agile-github-breakdown/scripts/parse_requirements.py:*),
+    Bash(.agents/skills/agile-github-breakdown/scripts/parse_frnfr.py:*),
     Bash(.agents/skills/agile-github-breakdown/scripts/validate_story_graph.py:*),
     Bash(.agents/skills/agile-github-breakdown/scripts/create_github_breakdown.py:*),
     Read, Write, Edit
@@ -113,7 +113,7 @@ Reference graph: `generic-automation-and-it/builder-catalogue` — Project (init
    not assume a parent for a new Feature — Features are top-level. Do not create a Project.
 2. **Gather source material** — load the Feature via `gh issue view` and/or the local context
    doc if the user points at one. You now hold the body, so **extract the FR/NFR rows yourself**
-   and hand them to `scripts/parse_requirements.py --prefix FR NFR` as an explicit list, one per
+   and hand them to `scripts/parse_frnfr.py --prefix FR NFR` as an explicit list, one per
    line:
 
    ```
@@ -184,7 +184,7 @@ guessing that the write succeeded.
 
 ## Agent-agnostic notes
 
-- `scripts/parse_requirements.py` and `scripts/validate_story_graph.py` are `python3` stdlib only —
+- `scripts/parse_frnfr.py` and `scripts/validate_story_graph.py` are `python3` stdlib only —
   no Claude-specific behaviour, no third-party deps. They handle the deterministic parts (ID
   extraction, cycle/dangling-reference detection, coverage diff, sub-numbering suggestion) so the
   agent isn't manually cross-referencing IDs by eye. The actual Task content (AC wording, which
@@ -205,7 +205,7 @@ guessing that the write succeeded.
 
 ## Scripts
 
-- `scripts/parse_requirements.py [file]` — normalise an **explicitly delimited** requirement list
+- `scripts/parse_frnfr.py [file]` — normalise an **explicitly delimited** requirement list
   (one `<ID> | <text>` per line, from step 2) into JSON: strict validation with line numbers, prefix
   filtering, duplicate detection, numeric-aware sorting. Reads a file arg or stdin. **It does not
   parse Markdown** — do not pipe a raw Feature body at it. Exit 0 parsed, **exit 1** nothing matched

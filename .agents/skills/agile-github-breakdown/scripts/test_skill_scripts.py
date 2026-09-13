@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Skill: agile-github-breakdown
-Regression tests for parse_requirements.py and validate_story_graph.py.
+Regression tests for parse_frnfr.py and validate_story_graph.py.
 
 Stdlib `unittest` only — no pytest, no third-party deps, nothing to install, matching the
 "python3 stdlib only" constraint the scripts themselves follow. Run from anywhere:
@@ -14,7 +14,7 @@ Stdlib `unittest` only — no pytest, no third-party deps, nothing to install, m
 **Deliberately not wired into CI** — skills are not production code. This is a manual
 authoring aid, run by hand when someone edits either script.
 
-Note what is *absent*: there are no Markdown table-shape tests any more. `parse_requirements`
+Note what is *absent*: there are no Markdown table-shape tests any more. `parse_frnfr`
 used to discover tables inside an arbitrary Markdown document, and eleven review rounds each
 found another way for that discovery to silently return the wrong requirements — fenced
 examples, block quotes, list items, ragged rows, indentation, fence-closing rules. Narrowing
@@ -38,12 +38,14 @@ def load(name):
     return module
 
 
-parse_requirements = load("parse_requirements")
+parse_frnfr = load("parse_frnfr")
 validate_story_graph = load("validate_story_graph")
 
 
 def run_script(name, payload, *args):
     """Run a script with payload on stdin; return (exit_code, stdout, stderr)."""
+    # argv list, shell=False (default): sys.executable plus a sibling script name from
+    # this directory. Payload is stdin, never interpolated into the command.
     result = subprocess.run(
         [sys.executable, str(SCRIPTS / f"{name}.py"), *args],
         input=payload,
@@ -57,7 +59,7 @@ class ParseRequirementsContract(unittest.TestCase):
     """One requirement per line, `<ID> | <text>`. Nothing else is input."""
 
     def parse(self, text, prefixes=None):
-        return parse_requirements.parse(text, prefixes)
+        return parse_frnfr.parse(text, prefixes)
 
     def test_single_requirement(self):
         reqs, dups, problems = self.parse("FR-1 | System must do X\n")
@@ -98,7 +100,7 @@ class ParseRequirementsMalformedInput(unittest.TestCase):
     """A dropped requirement is invisible downstream, so nothing is skipped silently."""
 
     def problems(self, text, prefixes=None):
-        return parse_requirements.parse(text, prefixes)[2]
+        return parse_frnfr.parse(text, prefixes)[2]
 
     def test_line_without_a_pipe_is_an_error(self):
         problems = self.problems("FR-1 the pipe is missing\n")
@@ -133,7 +135,7 @@ class ParseRequirementsMalformedInput(unittest.TestCase):
 
     def test_filtered_prefix_is_not_an_error(self):
         # Deliberately excluded, as opposed to malformed: no problem is recorded.
-        reqs, _, problems = parse_requirements.parse("EXT-350 | an external key\n", ["FR", "NFR"])
+        reqs, _, problems = parse_frnfr.parse("EXT-350 | an external key\n", ["FR", "NFR"])
         self.assertEqual((reqs, problems), ({}, []))
 
 
@@ -141,43 +143,43 @@ class ParseRequirementsExitCodes(unittest.TestCase):
     """0 parsed, 1 nothing matched, 2 malformed. The workflow branches on these."""
 
     def test_success(self):
-        code, out, _ = run_script("parse_requirements", "FR-1 | x\n", "--prefix", "FR")
+        code, out, _ = run_script("parse_frnfr", "FR-1 | x\n", "--prefix", "FR")
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(out)["requirements"], [{"id": "FR-1", "text": "x"}])
 
     def test_malformed_input_exits_2(self):
-        code, _, err = run_script("parse_requirements", "not a requirement\n")
+        code, _, err = run_script("parse_frnfr", "not a requirement\n")
         self.assertEqual(code, 2)
         self.assertIn("malformed requirement list", err)
 
     def test_zero_matches_exits_1(self):
-        code, _, err = run_script("parse_requirements", "EXT-350 | noise\n", "--prefix", "FR", "NFR")
+        code, _, err = run_script("parse_frnfr", "EXT-350 | noise\n", "--prefix", "FR", "NFR")
         self.assertEqual(code, 1)
         self.assertIn("no requirements", err)
 
     def test_empty_input_exits_1(self):
-        self.assertEqual(run_script("parse_requirements", "\n\n")[0], 1)
+        self.assertEqual(run_script("parse_frnfr", "\n\n")[0], 1)
 
     def test_prefix_requires_at_least_one_value(self):
         # nargs="*" would let a bare `--prefix` yield [], which is falsy and would silently
         # disable both the filter and the zero-match hard stop.
-        code, _, err = run_script("parse_requirements", "FR-1 | x\n", "--prefix")
+        code, _, err = run_script("parse_frnfr", "FR-1 | x\n", "--prefix")
         self.assertEqual(code, 2)
         self.assertIn("expected at least one argument", err)
 
     def test_output_is_sorted_numerically_not_lexically(self):
         # The reason this is a script and not eyeballed: FR-10 sorts after FR-9.
-        _, out, _ = run_script("parse_requirements", "FR-10 | ten\nFR-9 | nine\nFR-1 | one\n")
+        _, out, _ = run_script("parse_frnfr", "FR-10 | ten\nFR-9 | nine\nFR-1 | one\n")
         self.assertEqual([r["id"] for r in json.loads(out)["requirements"]], ["FR-1", "FR-9", "FR-10"])
 
     def test_duplicate_warning_goes_to_stderr_without_failing(self):
-        code, _, err = run_script("parse_requirements", "FR-1 | first\nFR-1 | second\n")
+        code, _, err = run_script("parse_frnfr", "FR-1 | first\nFR-1 | second\n")
         self.assertEqual(code, 0)
         self.assertIn("duplicate", err)
 
     def test_no_syntax_warning_on_import(self):
         result = subprocess.run(
-            [sys.executable, "-W", "error::SyntaxWarning", str(SCRIPTS / "parse_requirements.py")],
+            [sys.executable, "-W", "error::SyntaxWarning", str(SCRIPTS / "parse_frnfr.py")],
             input="FR-1 | x\n", capture_output=True, text=True,
         )
         self.assertEqual(result.returncode, 0)
@@ -288,10 +290,10 @@ class ValidateStoryGraphReport(unittest.TestCase):
 
 
 class ParserPipelineIntegration(unittest.TestCase):
-    """parse_requirements output must feed validate_story_graph unchanged."""
+    """parse_frnfr output must feed validate_story_graph unchanged."""
 
     def test_requirement_ids_flow_into_the_validator(self):
-        _, out, _ = run_script("parse_requirements", "FR-1 | one\nFR-2 | two\n", "--prefix", "FR")
+        _, out, _ = run_script("parse_frnfr", "FR-1 | one\nFR-2 | two\n", "--prefix", "FR")
         ids = [r["id"] for r in json.loads(out)["requirements"]]
         payload = {"requirement_ids": ids, "stories": [{"key": "S1", "ac_ids": ["FR-1"]}]}
         code, report, _ = run_script("validate_story_graph", json.dumps(payload))

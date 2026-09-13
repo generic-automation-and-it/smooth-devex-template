@@ -53,7 +53,7 @@ validate/extract.
   check off.
 - Existing GitHub issue refs in `depends_on` (e.g. `#42`) must be passed via `--known-external` to
   `validate_story_graph.py`, or the script will flag them as dangling.
-- **`parse_requirements.py` does not parse Markdown, and must not be given a raw Feature body.**
+- **`parse_frnfr.py` does not parse Markdown, and must not be given a raw Feature body.**
   Its input is an explicit `<ID> | <text>` list that the agent extracts. Narrowing the contract
   deleted a class of silent mis-parses; do not re-add table discovery.
 - **Exit codes: 0 parsed, 1 nothing matched, 2 malformed input.** Exit 1 is a real stop, not "this

@@ -71,7 +71,7 @@
     <File Path=".agents/skills/agile-github-breakdown/SKILL.md" />
     <File Path=".agents/skills/agile-github-breakdown/agents/openai.yaml" />
     <File Path=".agents/skills/agile-github-breakdown/scripts/create_github_breakdown.py" />
-    <File Path=".agents/skills/agile-github-breakdown/scripts/parse_requirements.py" />
+    <File Path=".agents/skills/agile-github-breakdown/scripts/parse_frnfr.py" />
     <File Path=".agents/skills/agile-github-breakdown/scripts/validate_story_graph.py" />
   </Folder>
   <Folder Name="/.agents/skills/agile-github-task-from-diff/">

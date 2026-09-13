@@ -64,6 +64,12 @@ accepted:
       gh/git; calls use shell=False with an explicit argument list, so there is no shell
       interpolation of untrusted input.
   - id: AST4
+    file: agile-github-breakdown/scripts/test_skill_scripts.py
+    reason: >-
+      "subprocess module call" — stdlib unittest helper runs the sibling parse/validate
+      scripts via sys.executable with a fixed argv list (shell=False). No user input
+      reaches the command; removing subprocess would gut the exit-code contract tests.
+  - id: AST4
     file: agile-github-task-from-diff/scripts/create_github_task_from_diff.py
     reason: >-
       "subprocess module call" — same wrappers as OH1. subprocess is required to invoke

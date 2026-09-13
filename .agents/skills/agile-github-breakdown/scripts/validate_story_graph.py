@@ -5,7 +5,7 @@ Validate a drafted Task dependency graph and check FR/NFR coverage.
 
 Input JSON (file argument or stdin):
 {
-  "requirement_ids": ["FR-1", "NFR-11", ...],        // optional; from parse_requirements.py
+  "requirement_ids": ["FR-1", "NFR-11", ...],        // optional; from parse_frnfr.py
   "stories": [
     {"key": "S1", "depends_on": [], "ac_ids": ["NFR-11"]},
     {"key": "S2", "depends_on": ["S1"], "ac_ids": ["FR-1"]}
