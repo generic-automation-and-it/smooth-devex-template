@@ -240,6 +240,11 @@ def lockfile_index(lock: dict[str, Any]) -> dict[str, dict[str, str]]:
     return {e["source"]: e for e in lock.get("entries") or []}
 
 
+def _read_file(path: str) -> str:
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+
 def main(argv: list[str]) -> int:
     if len(argv) < 2 or argv[0] not in {"manifest", "lockfile", "source"}:
         print(
@@ -251,7 +256,7 @@ def main(argv: list[str]) -> int:
     if mode == "source":
         print(parse_source(target)["path"])
         return 0
-    text = sys.stdin.read() if target == "-" else open(target, encoding="utf-8").read()
+    text = sys.stdin.read() if target == "-" else _read_file(target)
     data = parse_manifest(text) if mode == "manifest" else parse_lockfile(text)
     import json
 
