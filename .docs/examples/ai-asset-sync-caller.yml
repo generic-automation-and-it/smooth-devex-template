@@ -67,6 +67,7 @@ jobs:
       model: ${{ inputs.model || '' }}
       dry_run: ${{ inputs.dry_run || false }}
       entries_filter: ${{ inputs.entries_filter || '' }}
+      # pr_title: 'chore: sync AI assets'   # override the default chore[NO-TICKET] title convention
       # runner: self-hosted
       # tools_ref: <sha>   # pin the skill checkout; default = workflow file commit
     # Explicit mapping works for same-org AND cross-org callers. Only the

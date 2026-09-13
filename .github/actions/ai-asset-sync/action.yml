@@ -1,6 +1,21 @@
 name: AI asset sync
 description: Install OpenCode CLI, run ai-asset-sync, and open a chore PR when AI assets differ from upstream.
 
+# Direct-use env contract (composite actions do NOT see repo/org vars or
+# secrets automatically — the CALLING job must map them as env):
+#
+#   env:
+#     OPENCODE_AI_SYNC_PROVIDER: ${{ vars.OPENCODE_AI_SYNC_PROVIDER || 'GEMINI' }}
+#     OPENCODE_AI_SYNC_MODEL_PRIMARY: ${{ vars.OPENCODE_AI_SYNC_MODEL_PRIMARY || '' }}
+#     OPENCODE_AI_SYNC_MODEL_SECONDARY: ${{ vars.OPENCODE_AI_SYNC_MODEL_SECONDARY || '' }}
+#     OPENCODE_AI_SYNC_CONFIG: ${{ vars.OPENCODE_AI_SYNC_CONFIG || '' }}
+#     OPENCODE_CLI_VERSION: ${{ vars.OPENCODE_CLI_VERSION || '' }}
+#     OPENCODE_<PROVIDER>_API_KEY: ${{ secrets.OPENCODE_<PROVIDER>_API_KEY }}
+#
+# Only the selected provider's key is read. Without these mappings the run
+# defaults to GEMINI and dies on the missing-key check. The reusable workflow
+# (pipeline-ai-asset-sync.yml) maps all of this for you — prefer it.
+
 inputs:
   manifest_path:
     description: Path to the YAML manifest in the consumer repo.
@@ -18,6 +33,10 @@ inputs:
     description: Comma or newline-separated substring filter on source/path.
     required: false
     default: ""
+  pr_title:
+    description: 'PR title/commit subject. Blank → chore[NO-TICKET]: sync AI assets.'
+    required: false
+    default: ""
   tools_path:
     description: Checkout path of smooth-devex-template when the skill is not in the consumer repo.
     required: false
@@ -33,6 +52,7 @@ runs:
         AI_ASSET_SYNC_ENTRIES_FILTER: ${{ inputs.entries_filter }}
         AI_ASSET_SYNC_MODEL: ${{ inputs.model }}
         AI_ASSET_SYNC_DRY_RUN: ${{ inputs.dry_run }}
+        AI_ASSET_SYNC_PR_TITLE: ${{ inputs.pr_title }}
         TOOLS_PATH: ${{ inputs.tools_path }}
         GITHUB_TOKEN: ${{ github.token }}
       run: |

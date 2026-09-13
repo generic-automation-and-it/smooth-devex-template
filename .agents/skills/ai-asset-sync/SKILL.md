@@ -24,7 +24,7 @@ CI packaging (composite action + reusable workflow) calls **`scripts/run-sync.sh
 1. Consumer lists sources in `.github/assets/ai-sync.yml` (`owner/repo@ref:path`, remote path == local path).
 2. Lockfile `.github/assets/ai-sync.lock` records last-synced SHA; unchanged SHA → skip, no model.
 3. Changed entries: overwrite or AI-merge. Blocker → leave local untouched.
-4. Any file diff → one PR on `chore/ai-sync-{datetime}`, title `chore: sync AI assets`, PR template + provenance/conflicts sections.
+4. Any file diff → one PR on `chore/ai-sync-{datetime}-{runid}`, title `chore[NO-TICKET]: sync AI assets` (override via `--pr-title` / `AI_ASSET_SYNC_PR_TITLE`), PR template + provenance/conflicts sections.
 5. No diff → no PR. Lockfile does not advance without a PR.
 
 ## Local / agent use
@@ -35,7 +35,7 @@ bash .agents/skills/ai-asset-sync/scripts/run-sync.sh \
   --dry-run
 ```
 
-Omit `--dry-run` only when the user asked to open a PR. Default in an interactive session: `--dry-run` (analyse + summary, no push).
+**The script itself does NOT default to dry-run** — invoked bare it will commit, push, and open a PR. When running interactively for a user, ALWAYS pass `--dry-run` unless the user explicitly asked to open a PR.
 
 | Flag | Meaning |
 |------|---------|
@@ -45,6 +45,7 @@ Omit `--dry-run` only when the user asked to open a PR. Default in an interactiv
 | `--entries-filter` | Comma/newline substring filter on `source` or `path` |
 | `--model` | Override `OPENCODE_AI_SYNC_MODEL_PRIMARY` |
 | `--repo-root` | Consumer repo root (default git toplevel) |
+| `--pr-title` | PR title/commit subject (default `chore[NO-TICKET]: sync AI assets`) |
 
 ## Manifest
 

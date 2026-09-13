@@ -36,7 +36,7 @@ Consumer side: `schedule` (cron) + `workflow_dispatch` only. The reusable workfl
 | Heavy divergence | yes | **untouched** | yes only if *other* entries changed | that entry not advanced |
 | AI says local already equivalent | yes | no | **no** | unchanged (re-analyse next run) |
 
-Branch: `chore/ai-sync-{UTC YYYYMMDD-HHMM}` (fresh each run). Title: `chore: sync AI assets`. Body: repo PR template + provenance table + Conflicts / Gaps / Issues / Blockers.
+Branch: `chore/ai-sync-{UTC YYYYMMDD-HHMM}-{run id}` (fresh each run, collision-safe). Title: `chore[NO-TICKET]: sync AI assets` (override: `pr_title` input / `AI_ASSET_SYNC_PR_TITLE`). Body: repo PR template + provenance table + Conflicts / Gaps / Issues / Blockers.
 
 ## Packaging
 

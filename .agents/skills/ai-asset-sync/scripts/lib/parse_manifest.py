@@ -45,6 +45,16 @@ def parse_source(source: str) -> dict[str, str]:
         raise ManifestError(f"unsafe ref in source '{source}'")
     if path.startswith(("/", "~", "-")) or ".." in path.split("/"):
         raise ManifestError(f"unsafe path in source '{source}'")
+    segments = path.split("/")
+    # Dangerous destinations: repo root itself, git control files, executable CI.
+    if path in {".", "./"} or "" in segments or "." in segments:
+        raise ManifestError(f"unsafe path in source '{source}'")
+    if ".git" in segments:
+        raise ManifestError(f"unsafe path in source '{source}': .git is not syncable")
+    if path == ".github/workflows" or path.startswith(".github/workflows/"):
+        raise ManifestError(
+            f"unsafe path in source '{source}': workflow files are executable CI and are not syncable"
+        )
     return {
         "owner": owner,
         "repo": repo,
@@ -139,6 +149,13 @@ def parse_manifest(text: str) -> dict[str, Any]:
         if src in seen:
             raise ManifestError(f"duplicate source '{src}'")
         seen.add(src)
+    # Overlapping local paths break cross-entry staging containment: an applied
+    # parent would stage a blocked child's changes.
+    paths = [e["path"].rstrip("/") for e in entries]
+    for i, a in enumerate(paths):
+        for b in paths[i + 1 :]:
+            if a == b or a.startswith(b + "/") or b.startswith(a + "/"):
+                raise ManifestError(f"overlapping entry paths '{a}' and '{b}'")
     return {"version": version, "entries": entries}
 
 
@@ -171,6 +188,8 @@ def parse_lockfile(text: str) -> dict[str, Any]:
             continue
         stripped = line.strip()
         if stripped == "entries: []":
+            if version != 1:
+                raise ManifestError(f"unsupported lockfile version {version}")
             return {"version": version, "entries": []}
         if re.match(r"^version:\s*", stripped):
             value = _unquote(stripped.split(":", 1)[1])
@@ -201,6 +220,8 @@ def parse_lockfile(text: str) -> dict[str, Any]:
         current[key.strip()] = _unquote(value)
     if current:
         entries.append(_finalize_lock_entry(current))
+    if version != 1:
+        raise ManifestError(f"unsupported lockfile version {version}")
     return {"version": version, "entries": entries}
 
 

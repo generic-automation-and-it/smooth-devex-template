@@ -100,6 +100,29 @@ class ParseSourceTests(unittest.TestCase):
         p = pm.parse_source("acme/tools@release/v1.2:.agents/skills/x")
         self.assertEqual(p["ref"], "release/v1.2")
 
+    def test_rejects_dangerous_destinations(self):
+        for src in (
+            "acme/tools@main:.",  # repo root
+            "acme/tools@main:./",  # repo root
+            "acme/tools@main:.git",  # git control dir
+            "acme/tools@main:.git/hooks",  # git control subpath
+            "acme/tools@main:a/.git/b",  # embedded .git segment
+            "acme/tools@main:a/./b",  # '.' segment
+            "acme/tools@main:a//b",  # empty segment
+            "acme/tools@main:.github/workflows",  # executable CI
+            "acme/tools@main:.github/workflows/x.yml",
+        ):
+            with self.assertRaises(pm.ManifestError, msg=src):
+                pm.parse_source(src)
+
+    def test_allows_dotted_asset_roots(self):
+        for src in (
+            "acme/tools@main:.agents/skills/x",
+            "acme/tools@main:.github/instructions/git",
+            "acme/tools@main:.claude/skills/y",
+        ):
+            pm.parse_source(src)  # must not raise
+
 
 class ParseManifestTests(unittest.TestCase):
     def test_two_entries_default_strategy(self):
@@ -154,6 +177,24 @@ entries:
         with self.assertRaises(pm.ManifestError):
             pm.parse_manifest("")
 
+    def test_rejects_overlapping_paths(self):
+        text = """
+entries:
+  - source: acme/tools@main:.agents/skills
+  - source: acme/tools@main:.agents/skills/x
+"""
+        with self.assertRaises(pm.ManifestError):
+            pm.parse_manifest(text)
+
+    def test_sibling_paths_ok(self):
+        text = """
+entries:
+  - source: acme/tools@main:.agents/skills/x
+  - source: acme/tools@main:.agents/skills/x-ray
+"""
+        data = pm.parse_manifest(text)
+        self.assertEqual(len(data["entries"]), 2)
+
 
 class LockfileTests(unittest.TestCase):
     def test_roundtrip(self):
@@ -181,6 +222,11 @@ class LockfileTests(unittest.TestCase):
     def test_bad_lockfile_version(self):
         with self.assertRaises(pm.ManifestError):
             pm.parse_lockfile("version: banana\nentries: []\n")
+
+    def test_unsupported_lockfile_version(self):
+        for text in ("version: 2\nentries: []\n", "version: 2\nentries:\n  - source: acme/tools@main:.agents/skills/x\n"):
+            with self.assertRaises(pm.ManifestError, msg=text):
+                pm.parse_lockfile(text)
 
     def test_bad_resolved_sha(self):
         with self.assertRaises(pm.ManifestError):

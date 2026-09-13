@@ -25,6 +25,9 @@ NO_PR=0
 ENTRIES_FILTER="${AI_ASSET_SYNC_ENTRIES_FILTER:-}"
 MODEL_OVERRIDE="${AI_ASSET_SYNC_MODEL:-}"
 REPO_ROOT="${AI_ASSET_SYNC_REPO_ROOT:-}"
+# Default follows this repo's `<type>[{ticket}]:` PR-title convention; consumers
+# with a different convention override via --pr-title / AI_ASSET_SYNC_PR_TITLE.
+PR_TITLE="${AI_ASSET_SYNC_PR_TITLE:-chore[NO-TICKET]: sync AI assets}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -35,6 +38,7 @@ while [ $# -gt 0 ]; do
     --entries-filter) ENTRIES_FILTER="$2"; shift 2 ;;
     --model) MODEL_OVERRIDE="$2"; shift 2 ;;
     --repo-root) REPO_ROOT="$2"; shift 2 ;;
+    --pr-title) PR_TITLE="$2"; shift 2 ;;
     *) echo "unknown arg: $1" >&2; exit 64 ;;
   esac
 done
@@ -56,11 +60,41 @@ need_cmd git
 
 [ -f "$MANIFEST_PATH" ] || die "manifest not found: $MANIFEST_PATH"
 
-WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/ai-asset-sync.XXXXXX")"
+# Scratch space lives INSIDE the repo root so the OpenCode agent can read the
+# upstream clone with external_directory DENIED (prompt-injected upstream
+# content cannot edit paths outside the repo). Hidden from git via the
+# worktree-local exclude file; removed on exit.
+WORKDIR="$(mktemp -d "${REPO_ROOT}/.ai-sync-tmp.XXXXXX")"
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  EXCLUDE_FILE="$(git rev-parse --git-path info/exclude)"
+  mkdir -p "$(dirname "$EXCLUDE_FILE")"
+  grep -qxF '.ai-sync-tmp.*' "$EXCLUDE_FILE" 2>/dev/null \
+    || echo '.ai-sync-tmp.*' >>"$EXCLUDE_FILE"
+fi
 REPORT_DIR="${WORKDIR}/report"
 mkdir -p "$REPORT_DIR"
 cleanup() { rm -rf "$WORKDIR"; }
 trap cleanup EXIT
+
+# Resolve an entry path to its PHYSICAL repo-relative path (symlink-aware:
+# e.g. `.agents/rules` may be a symlink to `.github/instructions`; git
+# pathspecs do not traverse symlinks, so status/staging must target the
+# physical tree). Dies if the physical path escapes the repo root.
+resolve_physical_rel() {
+  local rel="$1"
+  python3 - "$REPO_ROOT" "$rel" <<'PY'
+import os, sys
+root = os.path.realpath(sys.argv[1])
+rel = sys.argv[2]
+candidate = os.path.join(root, rel)
+# Resolve symlinks in every existing ancestor + the leaf itself.
+resolved = os.path.realpath(candidate)
+if resolved != root and not resolved.startswith(root + os.sep):
+    print(f"path '{rel}' resolves outside the repo root: {resolved}", file=sys.stderr)
+    sys.exit(1)
+print(os.path.relpath(resolved, root))
+PY
+}
 
 python3 "$PARSE_PY" manifest "$MANIFEST_PATH" >"${REPORT_DIR}/manifest.json" \
   || die "failed to parse manifest"
@@ -171,6 +205,12 @@ ensure_opencode() {
     return
   fi
   bash "${LIB_DIR}/install-opencode.sh"
+  # The installer exports PATH only in its own child shell (and GITHUB_PATH
+  # affects later Actions steps, not this one) — propagate into THIS shell.
+  if ! command -v opencode >/dev/null 2>&1; then
+    export PATH="${HOME}/.opencode/bin:${PATH}"
+  fi
+  command -v opencode >/dev/null 2>&1 || die "opencode CLI not on PATH after install"
   local cfg="${OPENCODE_AI_SYNC_CONFIG:-}"
   if [ -n "$cfg" ]; then
     [ -f "$cfg" ] || die "OPENCODE_AI_SYNC_CONFIG not a file: $cfg"
@@ -238,8 +278,16 @@ invoke_ai_merge() {
   key_var="$(key_var_for "$provider")"
   [ -n "${!key_var:-}" ] || die "$provider selected but $key_var is empty/unset"
   local primary secondary
-  primary="${MODEL_OVERRIDE:-${OPENCODE_AI_SYNC_MODEL_PRIMARY:-gemini-3.1-pro-preview}}"
-  secondary="${OPENCODE_AI_SYNC_MODEL_SECONDARY:-gemini-2.5-pro}"
+  if [ "$provider" = "GEMINI" ]; then
+    primary="${MODEL_OVERRIDE:-${OPENCODE_AI_SYNC_MODEL_PRIMARY:-gemini-3.1-pro-preview}}"
+    secondary="${OPENCODE_AI_SYNC_MODEL_SECONDARY:-gemini-2.5-pro}"
+  else
+    # No cross-provider defaults: a Gemini model id would not exist in the
+    # selected provider's config. Fail fast instead of failing both attempts.
+    primary="${MODEL_OVERRIDE:-${OPENCODE_AI_SYNC_MODEL_PRIMARY:-}}"
+    [ -n "$primary" ] || die "provider ${provider} requires an explicit model (OPENCODE_AI_SYNC_MODEL_PRIMARY or --model)"
+    secondary="${OPENCODE_AI_SYNC_MODEL_SECONDARY:-}"
+  fi
   local prompt="${WORKDIR}/prompt.md"
   cat >"$prompt" <<EOF
 You are an AI developer-experience expert reconciling an upstream AI asset with the consumer repo's local copy.
@@ -287,6 +335,25 @@ EOF
     rc=$?
     set -e
   fi
+  if [ "$rc" -ne 0 ]; then
+    # A nonzero exit means the run is not trustworthy even if it printed a
+    # plausible sidecar — force skipped-blocker so the caller restores the
+    # pre-run snapshot and the lockfile does not advance.
+    python3 - "$sidecar" "$source" "$rc" <<'PY'
+import json, sys
+dest, source, rc = sys.argv[1:4]
+json.dump({
+    "source": source,
+    "action": "skipped-blocker",
+    "conflicts": [],
+    "gaps": [],
+    "issues": [f"opencode exited nonzero (rc={rc})"],
+    "blockers": ["model run failed; local tree restored from snapshot"],
+    "notes": "nonzero opencode exit",
+}, open(dest, "w", encoding="utf-8"))
+PY
+    return 0
+  fi
   extract_sidecar "$raw" "$sidecar" "$source"
 }
 
@@ -318,6 +385,19 @@ PY
 CLONES="${WORKDIR}/clones"
 mkdir -p "$CLONES"
 
+# Pre-flight: entry paths must be CLEAN before we mutate anything, otherwise
+# pre-existing local edits would be indistinguishable from this run's output
+# and could be bundled into the sync PR.
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  while IFS=$'\t' read -r -u 3 _ _ _ _ path _ _ _; do
+    [ -n "${path:-}" ] || continue
+    phys="$(resolve_physical_rel "$path")" || die "unsafe entry path: ${path}"
+    if [ -n "$(git -C "$REPO_ROOT" status --porcelain -- "$phys")" ]; then
+      die "entry path '${path}' (physical: ${phys}) has uncommitted changes — commit/stash before syncing"
+    fi
+  done 3<"${REPORT_DIR}/work-list.txt"
+fi
+
 append_result() {
   python3 - "$RESULTS" <<'PY'
 import json, os, sys
@@ -344,7 +424,10 @@ while IFS=$'\t' read -r -u 3 idx owner repo ref path source strategy locked_sha;
   dest="${CLONES}/${idx}"
   fetch_source "$owner" "$repo" "$sha" "$dest"
   remote_asset="${dest}/${path}"
-  local_asset="${REPO_ROOT}/${path}"
+  # Physical (symlink-resolved) local target — required for git pathspecs and
+  # validated to stay inside the repo root.
+  phys_rel="$(resolve_physical_rel "$path")" || die "unsafe entry path: ${path}"
+  local_asset="${REPO_ROOT}/${phys_rel}"
 
   if [ ! -e "$remote_asset" ]; then
     die "upstream path '${path}' does not exist in ${owner}/${repo}@${sha}"
@@ -353,6 +436,9 @@ while IFS=$'\t' read -r -u 3 idx owner repo ref path source strategy locked_sha;
   if [ ! -e "$local_asset" ] || [ "$strategy" = "overwrite" ]; then
     local_existed=0
     [ -e "$local_asset" ] && local_existed=1
+    # Replace, don't layer: a file↔directory type change would otherwise
+    # nest the file inside the old dir or fail mkdir.
+    [ "$local_existed" -eq 1 ] && rm -rf "$local_asset"
     copy_tree "$remote_asset" "$local_asset"
     note="applied upstream without model (${strategy})"
     if [ "$local_existed" -eq 0 ]; then
@@ -403,6 +489,7 @@ PY
 ANY_FILE_CHANGE=0
 while IFS= read -r watch; do
   [ -n "$watch" ] || continue
+  watch="$(resolve_physical_rel "$watch")" || die "unsafe path: ${watch}"
   if [ -n "$(git -C "$REPO_ROOT" status --porcelain -- "$watch")" ]; then
     ANY_FILE_CHANGE=1
     break
@@ -448,8 +535,6 @@ PY
 SHOULD_PR=0
 if [ "$ANY_FILE_CHANGE" -eq 1 ]; then
   SHOULD_PR=1
-  mkdir -p "$(dirname "$LOCKFILE_PATH")"
-  cp "${REPORT_DIR}/lock.next.yml" "$LOCKFILE_PATH"
 fi
 
 python3 - "$RESULTS" "${REPORT_DIR}/summary.md" <<'PY'
@@ -494,8 +579,15 @@ fi
 
 need_cmd gh
 export GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
+# Lockfile advances ONLY on the real-PR path (LADR-002): a dry-run/no-pr run
+# must not leave an advanced lockfile in the worktree.
+mkdir -p "$(dirname "$LOCKFILE_PATH")"
+cp "${REPORT_DIR}/lock.next.yml" "$LOCKFILE_PATH"
+
 DATETIME="$(date -u +%Y%m%d-%H%M)"
-BRANCH="chore/ai-sync-${DATETIME}"
+# Run id suffix avoids collisions between queued runs / retries in the same minute.
+BRANCH="chore/ai-sync-${DATETIME}-${GITHUB_RUN_ID:-$$}"
 DEFAULT_BRANCH="$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name 2>/dev/null || echo main)"
 
 # CI-scoped bot identity; leave a local operator's git config alone.
@@ -528,6 +620,7 @@ Path(sys.argv[4]).write_text("\n".join(lines) + "\n", encoding="utf-8")
 PY
 while IFS= read -r p; do
   [ -n "$p" ] || continue
+  p="$(resolve_physical_rel "$p")" || die "unsafe path: ${p}"
   if [ -e "$p" ] || [ -n "$(git -C "$REPO_ROOT" status --porcelain -- "$p")" ]; then
     git add -A -- "$p" || die "failed to stage ${p}"
   fi
@@ -545,7 +638,7 @@ if git diff --cached --quiet; then
   exit 0
 fi
 
-git commit -m "chore: sync AI assets"
+git commit -m "$PR_TITLE"
 
 TEMPLATE="${REPO_ROOT}/.github/pull_request_template.md"
 python3 - "$TEMPLATE" "${REPORT_DIR}/summary.md" "${REPORT_DIR}/pr-body.md" <<'PY'
@@ -580,7 +673,7 @@ PY
 
 git push origin "$BRANCH"
 gh pr create \
-  --title "chore: sync AI assets" \
+  --title "$PR_TITLE" \
   --body-file "${REPORT_DIR}/pr-body.md" \
   --base "$DEFAULT_BRANCH"
 

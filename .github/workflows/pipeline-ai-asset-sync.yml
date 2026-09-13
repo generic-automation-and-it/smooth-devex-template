@@ -37,6 +37,11 @@ on:
         required: false
         type: string
         default: ""
+      pr_title:
+        description: 'PR title/commit subject. Blank → chore[NO-TICKET]: sync AI assets.'
+        required: false
+        type: string
+        default: ""
       tools_ref:
         description: Ref of smooth-devex-template to fetch the skill from when it is not installed locally. Prefer a SHA. Blank → github.job_workflow_sha.
         required: false
@@ -74,6 +79,11 @@ on:
         required: false
         type: string
         default: ""
+      pr_title:
+        description: 'PR title/commit subject. Blank → chore[NO-TICKET]: sync AI assets.'
+        required: false
+        type: string
+        default: ""
     secrets:
       OPENCODE_GEMINI_API_KEY:
         required: false
@@ -106,9 +116,13 @@ jobs:
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     env:
       OPENCODE_AI_SYNC_PROVIDER: ${{ vars.OPENCODE_AI_SYNC_PROVIDER || 'GEMINI' }}
-      OPENCODE_AI_SYNC_MODEL_PRIMARY: ${{ inputs.model || vars.OPENCODE_AI_SYNC_MODEL_PRIMARY || 'gemini-3.1-pro-preview' }}
-      OPENCODE_AI_SYNC_MODEL_SECONDARY: ${{ vars.OPENCODE_AI_SYNC_MODEL_SECONDARY || 'gemini-2.5-pro' }}
+      # No literal model fallbacks here: run-sync.sh applies Gemini defaults for
+      # the GEMINI provider and fails fast when a non-Gemini provider has no
+      # explicit model (a Gemini id would not exist in that provider's config).
+      OPENCODE_AI_SYNC_MODEL_PRIMARY: ${{ inputs.model || vars.OPENCODE_AI_SYNC_MODEL_PRIMARY || '' }}
+      OPENCODE_AI_SYNC_MODEL_SECONDARY: ${{ vars.OPENCODE_AI_SYNC_MODEL_SECONDARY || '' }}
       OPENCODE_AI_SYNC_CONFIG: ${{ vars.OPENCODE_AI_SYNC_CONFIG || '' }}
+      AI_ASSET_SYNC_PR_TITLE: ${{ inputs.pr_title || vars.AI_ASSET_SYNC_PR_TITLE || '' }}
       OPENCODE_CLI_VERSION: ${{ vars.OPENCODE_CLI_VERSION || '' }}
       OPENCODE_GEMINI_API_KEY: ${{ secrets.OPENCODE_GEMINI_API_KEY }}
       OPENCODE_COPILOT_API_KEY: ${{ secrets.OPENCODE_COPILOT_API_KEY }}
