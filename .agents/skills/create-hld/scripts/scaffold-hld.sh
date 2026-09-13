@@ -90,6 +90,14 @@ fi
 SLUG_UPPER=$(printf '%s' "$SLUG" | tr '[:lower:]-' '[:upper:]_')
 DATE=$(date +%F)
 
+# Escape a string for use in a sed replacement (delimiter '|'): backslash,
+# ampersand, and the '|' delimiter are special and must be backslash-escaped.
+sed_escape() { printf '%s' "$1" | sed -e 's/[\&|]/\\&/g'; }
+# Escape a string for embedding inside a JSON double-quoted string.
+json_escape() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
+
+TITLE_SED=$(sed_escape "$TITLE")
+
 # Render a template file to a destination with placeholder substitution.
 # Placeholders: {{INDEX}} {{SLUG}} {{SLUG_UPPER}} {{TITLE}} {{DATE}}
 render() {
@@ -98,7 +106,7 @@ render() {
     sed -e "s|{{INDEX}}|${INDEX}|g" \
         -e "s|{{SLUG}}|${SLUG}|g" \
         -e "s|{{SLUG_UPPER}}|${SLUG_UPPER}|g" \
-        -e "s|{{TITLE}}|${TITLE}|g" \
+        -e "s|{{TITLE}}|${TITLE_SED}|g" \
         -e "s|{{DATE}}|${DATE}|g" \
         "$src" > "$dst"
 }
@@ -123,7 +131,7 @@ rel() { printf '%s' "${1#"$REPO_ROOT"/}"; }
 printf '{\n'
 printf '  "index": "%s",\n' "$INDEX"
 printf '  "slug": "%s",\n' "$SLUG"
-printf '  "title": "%s",\n' "$TITLE"
+printf '  "title": "%s",\n' "$(json_escape "$TITLE")"
 printf '  "folder": "%s",\n' "$(rel "$TARGET")"
 printf '  "created": [\n'
 for i in "${!created[@]}"; do
