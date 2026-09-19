@@ -1,6 +1,6 @@
 ---
 name: ai-understanding
-description: Export this session's hard-won knowledge into Understandings under .context/understandings/<slug>/ (one folder per unit), import matching ones back at task start, and publish/consume them across repos. Trigger on "export the understandings", "make an Understanding of this", "encode this", "what did we learn", "/ai-understanding", or when a session resolved something that cost real effort and would cost the same again. Not a session log and not code documentation.
+description: Export this session's hard-won knowledge into Understandings under .context/understandings/<subject>/<slug>/ (one folder per unit, grouped by subject), import matching ones back at task start, and publish/consume them across repos. Trigger on "export the understandings", "make an Understanding of this", "encode this", "what did we learn", "/ai-understanding", or when a session resolved something that cost real effort and would cost the same again. Not a session log and not code documentation.
 allowed-tools:
   - Bash(python3 .agents/skills/ai-understanding/scripts/understanding_index.py:*)
   - Read
@@ -24,7 +24,7 @@ The working store is **local and disposable** (`.context/` is gitignored). That 
 
 ## TL;DR
 
-1. Working store: `.context/understandings/<slug>/UNDERSTANDING.md` — **one folder per Understanding**, so supporting artifacts never collide across slugs.
+1. Working store: `.context/understandings/<subject>/<slug>/UNDERSTANDING.md` — a subject folder groups a session's lessons; **one folder per Understanding** inside it, so supporting artifacts never collide.
 2. `.context/understandings/INDEX.md` is a generated table of **folder + description + trigger** — the only file an agent reads to decide what to load.
 3. One session may yield **several** Understandings; each is its own slug folder, each stands alone, and they share a `provenance.session` value.
 4. Never overwrite an existing slug. Same trigger → merge. Different trigger → distinct slug.
@@ -34,13 +34,19 @@ The working store is **local and disposable** (`.context/` is gitignored). That 
 
 ```
 .context/understandings/
-  INDEX.md                  # generated — folder + description + trigger reference
-  <slug>/
-    UNDERSTANDING.md        # the unit (frontmatter + body)
-    <supporting files>      # repro snippet, log excerpt, diagram — optional, slug-scoped
+  INDEX.md                  # generated — grouped by subject, one row per Understanding
+  <subject>/                # the topic or session the lessons came out of
+    <slug>/
+      UNDERSTANDING.md      # the unit (frontmatter + body)
+      <supporting files>    # repro snippet, log excerpt, diagram — optional, slug-scoped
 ```
 
-Why a folder per slug and not a flat `<slug>.md`: an Understanding often carries evidence (a failing command's output, a minimal repro, a diagram). Flat files force those artifacts into one shared directory where two Understandings will eventually claim the same filename. The folder is the namespace.
+Two levels, each earning its place:
+
+- **Subject** keeps a session's lessons browsable as a unit, so the work that produced them stays legible months later. Use `_unfiled/` when an Understanding belongs to no particular topic.
+- **Slug** is one Understanding. It gets its own folder because an Understanding often carries evidence (a failing command's output, a minimal repro, a diagram); sharing a directory means two units eventually claim the same filename.
+
+The subject is **not** how knowledge is found. Retrieval is by trigger — a future agent hitting a tooling quirk has no reason to look in the subject folder that happens to have produced it, so the index lists every leaf regardless of subject.
 
 ## Switches
 
@@ -48,7 +54,7 @@ Export and import are about **this session's memory**: export writes what the se
 
 | Switch | Effect |
 |--------|--------|
-| `--export` _(default)_ | **Analyse this session** and write each durable lesson to `.context/understandings/<slug>/`. Proposes the split first |
+| `--export` _(default)_ | **Analyse this session** and write each durable lesson to `.context/understandings/<subject>/<slug>/`. Proposes the split first |
 | `--export --all` | Same, but write every qualifying candidate without pausing for the user to cut the list |
 | `--import` | Load Understandings whose trigger matches the task back into the session |
 | `--publish [--all]` | Copy `scope: portable` units to a tracked destination (default `.agents/understandings/`); `--all` includes `repo-specific` units |
@@ -57,6 +63,10 @@ Export and import are about **this session's memory**: export writes what the se
 | `--index` | Regenerate `INDEX.md` from the slug folders |
 
 `--all` is scoped to the mode it accompanies: with `--export` it means "skip the cut", with `--publish` it means "include repo-specific units".
+
+Single-dash spellings of the long switches (`-all`, `-export`) are accepted as typed — they are
+unambiguous here, and rejecting them would fail a run for a keystroke. An unrecognised switch is not
+guessed at: say what was passed and ask.
 
 ## Export (default mode)
 
@@ -84,7 +94,9 @@ When proposing a split, list the candidate slugs with their triggers and let the
 
 ### Writing one
 
-Copy `assets/UNDERSTANDING.template.md` to `.context/understandings/<slug>/UNDERSTANDING.md` and fill it.
+Copy `assets/UNDERSTANDING.template.md` to `.context/understandings/<subject>/<slug>/UNDERSTANDING.md` and fill it.
+
+Subject: kebab-case, names the topic or piece of work the session was about — reuse an existing subject folder when the knowledge came out of the same work. `_unfiled` is the home for a one-off that belongs to no topic. The subject is derived from the parent folder, so it is never written into frontmatter and cannot drift.
 
 Slug: kebab-case, names the **knowledge**, not the incident. `npgsql-enum-mapping-needs-datasource` — not `tuesday-db-bug`.
 
@@ -92,7 +104,7 @@ Frontmatter fields:
 
 | Field | Meaning |
 |-------|---------|
-| `slug` | Must equal the folder name |
+| `slug` | Must equal the leaf folder name. Unique across the whole store, since `[[slug]]` links and merges address it from any subject |
 | `description` | One line — what this knowledge is. Appears in `INDEX.md` |
 | `trigger` | One line — the situation in which it applies, so a future agent recognizes it. Appears in `INDEX.md` |
 | `scope` | `portable` (true of the stack/tooling anywhere) or `repo-specific` (true only here). Governs export |
@@ -102,9 +114,14 @@ Frontmatter fields:
 | `provenance.learned` | Date, absolute |
 | `provenance.session` | Shared by all slugs encoded from one session |
 | `provenance.source` | What produced it — a failure, a doc, an experiment |
+| `provenance.inherited` | `[[slug]]` list of the Understandings this session loaded **and acted on**. Omit when none |
 | `updated` | Date of last change |
 
 Body sections: **Knowledge** (direct operational guidance), **Why** (1–3 lines — enough to judge edge cases, not a narrative), **Boundaries** (where it stops applying). The trigger lives in frontmatter only, so `INDEX.md` never drifts from the unit.
+
+Record the lineage: list under `provenance.inherited` the Understandings this session imported and acted on. That is the store's only evidence of which knowledge is earning its place — a unit nothing ever inherits is either badly triggered or dead weight, and without the record you cannot tell those apart from knowledge that simply has not come up yet. It also gives the blast radius when a unit later turns out to be wrong.
+
+A bracketed `[[slug]]` must resolve. When an ancestor is pruned or promoted away, drop the brackets rather than deleting the entry — the lineage is a historical fact and stays readable, without pinning the store to knowledge it no longer holds.
 
 ### Language
 
@@ -118,9 +135,9 @@ The store must never lose knowledge to a name clash.
 
 | Situation | Action |
 |-----------|--------|
-| Folder absent | Create it |
-| Folder exists, **same trigger** | Merge into the existing unit: reconcile the Knowledge section, union `links`, raise `confidence` if now reproduced, bump `updated`, add a changelog row |
-| Folder exists, **different trigger** | Write a new slug, disambiguated by what distinguishes it (`…-on-linux`, `…-under-aspire`) — never a numeric suffix |
+| Leaf folder absent | Create it under the relevant subject |
+| Leaf exists, **same trigger** | Merge into the existing unit, wherever its subject: reconcile the Knowledge section, union `links`, raise `confidence` if now reproduced, bump `updated`, add a changelog row |
+| Leaf exists, **different trigger** | Write a new slug, disambiguated by what distinguishes it (`…-on-linux`, `…-under-aspire`) — never a numeric suffix. Moving it to a different subject does not make the slug reusable |
 
 Overwriting an existing `UNDERSTANDING.md` wholesale is not an available outcome. When a merge would drop something, ask.
 
@@ -139,6 +156,8 @@ Read `.context/understandings/INDEX.md` and load every Understanding whose **tri
 
 Treat loaded Understandings as prior knowledge. If one contradicts what the code actually does, say so: they go stale, and a stale one is worse than none. Lower its `confidence` to `contested` and tell the user.
 
+**Keep track of what you actually used.** Anything loaded here that goes on to shape the work is recorded as `provenance.inherited` on whatever the session exports later. Loading an Understanding and then ignoring it is not inheritance — only record the ones that changed what you did.
+
 Rules always win a conflict with an Understanding. Flag the conflict rather than resolving it silently.
 
 ## Publish (`--publish`)
@@ -147,8 +166,8 @@ Export puts knowledge on disk; publishing carries it **out of this workspace ent
 gitignored, so a published copy is the only form that survives the workspace being destroyed.
 
 - Default destination `.agents/understandings/` — tracked, shared across Claude/Copilot/Codex via the `.agents` symlinks, and a valid `ai-asset-sync` source path. Created on first publish; nothing is seeded before then.
-- Only `scope: portable` units are published unless `--all` is passed. A `repo-specific` Understanding shipped elsewhere is a local quirk sold as a universal truth.
-- The destination keeps the same `<slug>/` layout and gets its own generated `INDEX.md`.
+- Publishing filters **per Understanding, not per subject** — a subject folder routinely mixes scopes, and only `scope: portable` units are published unless `--all` is passed. A `repo-specific` Understanding shipped elsewhere is a local quirk sold as a universal truth.
+- The destination keeps the same `<subject>/<slug>/` layout and gets its own generated `INDEX.md`.
 - Each published unit records where it came from; the working copy is left in place.
 - Publishing into a tracked path changes the repository — show the user the list of slugs and the destination, and get approval before writing.
 
@@ -183,7 +202,8 @@ Propose the promotion; the user decides. Once promoted, the Understanding record
 
 ## Guardrails
 
-- Ask before writing, merging, publishing, or promoting. This skill edits the user's memory. `--all` waives the pre-write cut on export only; it never waives approval for writing to a tracked path.
+- Ask before merging, publishing, or promoting — every time. These change durable state.
+- On `--export`, propose the split and let the user cut it before writing. `--all` is the user's own instruction to skip that step, and waives it for the local store only; it never waives approval for writing to a tracked path.
 - Never delete a slug folder to resolve a conflict.
 - Never write an Understanding in must/never language.
 - Never let an Understanding contradict a rule without flagging it.
@@ -195,3 +215,4 @@ Propose the promotion; the user decides. Once promoted, the Understanding record
 |:-----|:-------|:----|
 | 2026-09-19 | Initial version. | |
 | 2026-09-19 | `--export`/`--import` are session↔disk; cross-repo moves became `--publish`/`--consume`. | |
+| 2026-09-19 | Store gained a subject tier: `<subject>/<slug>/`. Index groups by subject but still lists every leaf. | |

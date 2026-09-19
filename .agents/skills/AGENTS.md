@@ -23,7 +23,7 @@ First-party AI agent skills. They legitimately run shell, `gh`/`git`, and templa
 
 - The gate decision is computed by `.github/scripts/skillspector-report.py`, not by SkillSpector's raw `risk > 50` exit code (which is pinned at 100 for first-party skills by design). The script subtracts baselined findings and fails only on active ones; a scan error still hard-fails.
 - The job summary lists **Active** findings (gate-failing) separately from **Accepted (baselined)** findings, and flags stale baseline entries after a fix removes a finding.
-- **`ai-understanding` writes outside the tracked tree by default.** Its working store is `.context/understandings/<slug>/` (gitignored), and reaching a tracked path requires an explicit, human-approved `--publish`. A change that makes this skill write to `.agents/understandings/` implicitly turns unreviewed session observations into shared repository memory — see that skill's LADR-001.
+- **`ai-understanding` writes outside the tracked tree by default.** Its working store is `.context/understandings/<subject>/<slug>/` (gitignored), and reaching a tracked path requires an explicit, human-approved `--publish`. A change that makes this skill write to `.agents/understandings/` implicitly turns unreviewed session observations into shared repository memory — see that skill's LADR-001.
 - Two scans run per CI invocation (policy A, LADR-001): a **gating static scan** (`--no-llm`, drives the decision + SARIF) and, when a key is configured, a **non-gating LLM advisory scan** rendered as a separate, clearly-labeled summary section. The baseline (`skillspector-baseline.yml`) covers only the static scan.
 
 ## Changelog
@@ -35,5 +35,5 @@ First-party AI agent skills. They legitimately run shell, `gh`/`git`, and templa
 | 2026-06-21 | Initial version — documents the SkillSpector baseline gate contract and the secret-handling guardrail for skills. | #52 |
 | 2026-06-21 | LADR-001: gate on the deterministic static scan; LLM semantic stage runs as a non-blocking advisory (policy A). Resolves the static-vs-LLM baseline mismatch that failed the gate on run 27907080342. | #52 |
 | 2026-09-13 | `ai-asset-sync` becomes the first skill consuming secrets (env-only: provider API key + `GITHUB_TOKEN`); status text updated from "no skill handles a real secret". | #66 |
-| 2026-09-19 | `ai-understanding` added — encodes discovered knowledge into the gitignored `.context/understandings/` store; export to a tracked path is a separate approved step. | |
+| 2026-09-19 | `ai-understanding` added — `--export` writes a session's discovered knowledge to the gitignored `.context/understandings/` store; `--publish` to a tracked path is a separate approved step. | |
 | 2026-07-31 | SARIF now **omits** baselined findings instead of marking them `suppressions`; the code-scanning check was red because the back end did not honor SARIF suppressions. Summary "Accepted (baselined)" section is unchanged (reads the scan output). | |

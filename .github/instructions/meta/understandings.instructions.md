@@ -16,7 +16,7 @@ Updated: 2026-09-19
 |------|-------|--------|-----------|
 | **Rules** | `.agents/rules/` (→ `.github/instructions/`) | The user's decisions | Follow always |
 | **AGENTS.md** | Nearest `*AGENTS.md` to the code | Functional intent, layered domain → sub-domain → feature → technology | Authoritative for that code |
-| **Understandings** | `.context/understandings/<slug>/` | Discovered knowledge about how the system actually behaves | Apply when the trigger matches |
+| **Understandings** | `.context/understandings/<subject>/<slug>/` | Discovered knowledge about how the system actually behaves | Apply when the trigger matches |
 
 **Rules are not up for reinterpretation** based on what you observe. If a rule appears to be causing
 problems, say so — do not work around it.
@@ -28,16 +28,23 @@ none at all.
 **If a rule and an Understanding conflict, the rule wins** — and flag the conflict rather than
 resolving it silently.
 
-## Inheriting
+## Importing
 
 At the start of a task, read `.context/understandings/INDEX.md` and load any Understanding whose
 **trigger** matches the work at hand. Match first, read second: the index exists so that finding one
 applicable Understanding does not cost the tokens of reading all of them.
 
+The index groups Understandings by the subject they came out of, but match on **triggers** — the work
+that produced a piece of knowledge usually has nothing to do with the work it applies to.
+
 Treat what you load as your own prior knowledge. The store is gitignored and per-workspace, so it may
 be empty or absent — that is a normal state, not an error.
 
-## Never encode a rule as an Understanding
+Keep track of which loaded Understandings actually shaped the work. When the session exports anything,
+those go in its `provenance.inherited` — the store's only signal for which knowledge is earning its
+keep, and the only way to find what depended on a unit that later turns out to be wrong.
+
+## Never export a rule as an Understanding
 
 A preference, convention, or instruction from the user is a **rule**. Discovered behavior of the system
 is an **Understanding**. The tell is the language: an Understanding written in must/never terms is a
@@ -53,8 +60,13 @@ If knowledge needs must/never language, propose it as a rule under `.agents/rule
   a rule.
 - An Understanding about a specific code area belongs in the nearest `*AGENTS.md`.
 
-Propose the promotion; the user decides. Encoding, merging, exporting, and promoting all change the
-user's memory — ask first. The `ai-understanding` skill owns the mechanics.
+Propose the promotion; the user decides.
+
+**Ask before writing, with one carve-out.** Merging into an existing Understanding, publishing to a
+tracked path, and promoting all change durable state — ask first, every time. Exporting to the local
+disposable store is the exception: propose the split and let the user cut it, unless they asked for
+`--all`, which is itself the instruction to skip that step. The `ai-understanding` skill owns the
+mechanics.
 
 ## Changelog
 
@@ -63,3 +75,6 @@ user's memory — ask first. The `ai-understanding` skill owns the mechanics.
 | Date | Change |
 |:-----|:-------|
 | 2026-09-19 | Initial version. |
+| 2026-09-19 | Store path gained a subject tier: `<subject>/<slug>/`. |
+| 2026-09-19 | `provenance.inherited` records which Understandings a session loaded and acted on. |
+| 2026-09-19 | Vocabulary aligned to the export/import vs publish/consume split; `--all` named as the explicit waiver of the pre-write cut, resolving a rule/skill contradiction. |

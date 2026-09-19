@@ -33,7 +33,7 @@ behind is one rediscovery. The cost of shipping a false universal is every consu
 
 1. Read the working store's index; select `portable` units (or all, with `--all`).
 2. Show the user the slug list and the destination. Wait for approval — this writes to a tracked path.
-3. Copy each `<slug>/` folder whole, including supporting artifacts.
+3. Copy each `<subject>/<slug>/` folder whole, including supporting artifacts. Filter per Understanding, never per subject — one subject routinely mixes scopes.
 4. On each published copy, record the origin under `provenance` and leave the working copy untouched.
 5. Regenerate the destination's `INDEX.md` with the index script, pointed at the destination:
 
@@ -52,7 +52,7 @@ internal hostname. Record the shape of the problem, not the value. See
 
 ## Consume
 
-Sources are a local export directory or a repository path in `owner/repo@ref:path` form.
+Sources are a local published directory or a repository path in `owner/repo@ref:path` form.
 
 **This skill does not fetch remote content.** For a remote source, add an entry to the `ai-asset-sync`
 manifest and let that skill perform the fetch — it already owns cloning, lockfile provenance, AI-merge,
@@ -85,12 +85,12 @@ After reconciling, regenerate the working index.
 ## Cross-repo lifecycle
 
 ```
-session → .context/understandings/<slug>/      (--export, local, disposable)
-        → .agents/understandings/<slug>/       (--publish, tracked, reviewed)
-        → ai-asset-sync manifest entry         (transport to another repo)
-        → .context/understandings/<slug>/      (--consume, into that repo's working memory)
-        → session                              (--import, matched by trigger)
-        → *AGENTS.md  or  .github/instructions/  (--promote, when it stops being an observation)
+session → .context/understandings/<subject>/<slug>/   (--export, local, disposable)
+        → .agents/understandings/<subject>/<slug>/    (--publish, tracked, reviewed, per-unit scope filter)
+        → ai-asset-sync manifest entry                (transport to another repo)
+        → .context/understandings/<subject>/<slug>/   (--consume, into that repo's working memory)
+        → session                                     (--import, matched by trigger)
+        → *AGENTS.md  or  .github/instructions/       (--promote, when it stops being an observation)
 ```
 
 Promotion is the exit from this loop. An Understanding that has been consumed, confirmed, and applied

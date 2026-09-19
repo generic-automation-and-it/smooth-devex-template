@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""Regenerate the Understandings INDEX.md from the slug folders.
+"""Regenerate the Understandings INDEX.md from the subject/slug folders.
 
-The index is a reference table (folder + description + trigger), never a copy of the
-knowledge itself: an agent reads the index to decide which Understandings to load, then
-reads only those folders.
+The store is two levels deep — `<subject>/<slug>/UNDERSTANDING.md` — so a session's
+lessons stay browsable together while each one remains individually addressable by its
+trigger. The index groups by subject but lists every leaf, because knowledge is retrieved
+by trigger rather than by the subject that happened to produce it.
+
+The index is a reference table, never a copy of the knowledge: an agent reads it to decide
+which Understandings to load, then reads only those folders.
 
 Usage:
     python3 .agents/skills/ai-understanding/scripts/understanding_index.py [store-dir]
@@ -22,48 +26,70 @@ UNIT_FILENAME = "UNDERSTANDING.md"
 REQUIRED_FIELDS = ("slug", "description", "trigger", "scope", "confidence")
 VALID_SCOPES = ("portable", "repo-specific")
 VALID_CONFIDENCE = ("observed", "verified", "contested")
+UNFILED = "_unfiled"
 
 
 def parse_frontmatter(text: str) -> dict:
-    """Parse the flat scalars, one level of nesting, and list values this format uses."""
+    """Parse this format: flat scalars, lists, a nested map, and a list inside that map.
+
+    Deep enough for `provenance.inherited`; anything deeper needs extending here, not just
+    the template.
+    """
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
         return {}
 
     data: dict = {}
-    parent: str | None = None
+    parent: str | None = None   # top-level key holding a map or list
+    child: str | None = None    # key inside that map holding a list
+
     for line in lines[1:]:
         if line.strip() == "---":
             break
-        if not line.strip() or line.lstrip().startswith("#"):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
             continue
 
-        indented = line[:1].isspace()
-        stripped = line.strip()
+        if not line[:1].isspace():
+            key, _, value = stripped.partition(":")
+            if not _:
+                continue
+            key, value = key.strip(), value.strip()
+            child = None
+            if value:
+                data[key] = value
+                parent = None
+            else:
+                data[key] = {}
+                parent = key
+            continue
 
-        if indented and parent:
-            if stripped.startswith("- "):
+        if parent is None:
+            continue
+
+        if stripped.startswith("- "):
+            item = stripped[2:].strip()
+            if child is not None:
+                data[parent].setdefault(child, []).append(item)
+            else:
                 if not isinstance(data.get(parent), list):
                     data[parent] = []
-                data[parent].append(stripped[2:].strip())
-            elif ":" in stripped:
-                key, _, value = stripped.partition(":")
-                if not isinstance(data.get(parent), dict):
-                    data[parent] = {}
-                data[parent][key.strip()] = value.strip()
+                data[parent].append(item)
             continue
 
-        if ":" not in stripped:
-            continue
         key, _, value = stripped.partition(":")
-        key = key.strip()
-        value = value.strip()
+        if not _:
+            continue
+        key, value = key.strip(), value.strip()
+        if not isinstance(data.get(parent), dict):
+            data[parent] = {}
         if value:
-            data[key] = value
-            parent = None
+            data[parent][key] = value
+            child = None
         else:
-            data[key] = {}
-            parent = key
+            data[parent][key] = []
+            child = key
+
     return data
 
 
@@ -71,40 +97,95 @@ def placeholder(value: str) -> bool:
     return value.startswith("<") and value.endswith(">")
 
 
+def read_unit(unit_dir: Path, subject: str) -> tuple[dict | None, list[str]]:
+    """Load and validate one `<subject>/<slug>/UNDERSTANDING.md`."""
+    where = f"{subject}/{unit_dir.name}"
+    unit_file = unit_dir / UNIT_FILENAME
+
+    if not unit_file.is_file():
+        return None, [f"{where}/ has no {UNIT_FILENAME}"]
+
+    fields = parse_frontmatter(unit_file.read_text(encoding="utf-8"))
+    if not fields:
+        return None, [f"{where}/{UNIT_FILENAME} has no frontmatter"]
+
+    problems = []
+    for field in REQUIRED_FIELDS:
+        value = fields.get(field)
+        if not isinstance(value, str) or not value or placeholder(value):
+            problems.append(f"{where}: '{field}' is missing or still a placeholder")
+
+    updated = fields.get("updated")
+    if not isinstance(updated, str) or not updated or placeholder(updated):
+        problems.append(f"{where}: 'updated' is missing or still a placeholder")
+
+    provenance = fields.get("provenance")
+    if not isinstance(provenance, dict) or not provenance:
+        problems.append(f"{where}: 'provenance' is missing")
+    else:
+        for key in ("learned", "session", "source"):
+            value = provenance.get(key)
+            if not value or placeholder(value):
+                problems.append(f"{where}: 'provenance.{key}' is missing or still a placeholder")
+
+    context = fields.get("agents_context")
+    if isinstance(context, str) and context and not placeholder(context):
+        if not Path(context).exists():
+            problems.append(f"{where}: agents_context '{context}' does not exist")
+
+    if fields.get("slug") not in (unit_dir.name, None):
+        problems.append(f"{where}: slug '{fields['slug']}' does not match the folder name")
+    if isinstance(fields.get("scope"), str) and fields["scope"] not in VALID_SCOPES:
+        problems.append(f"{where}: scope '{fields['scope']}' is not one of {VALID_SCOPES}")
+    if isinstance(fields.get("confidence"), str) and fields["confidence"] not in VALID_CONFIDENCE:
+        problems.append(f"{where}: confidence '{fields['confidence']}' is not one of {VALID_CONFIDENCE}")
+
+    fields["folder"] = unit_dir.name
+    fields["subject"] = subject
+    fields["path"] = f"{subject}/{unit_dir.name}"
+    return fields, problems
+
+
 def load_units(store: Path) -> tuple[list[dict], list[str]]:
     units: list[dict] = []
     problems: list[str] = []
 
-    for folder in sorted(p for p in store.iterdir() if p.is_dir()):
-        unit_file = folder / UNIT_FILENAME
-        if not unit_file.is_file():
-            problems.append(f"{folder.name}/ has no {UNIT_FILENAME}")
-            continue
-
-        fields = parse_frontmatter(unit_file.read_text(encoding="utf-8"))
-        if not fields:
-            problems.append(f"{folder.name}/{UNIT_FILENAME} has no frontmatter")
-            continue
-
-        for field in REQUIRED_FIELDS:
-            value = fields.get(field)
-            if not isinstance(value, str) or not value or placeholder(value):
-                problems.append(f"{folder.name}: '{field}' is missing or still a placeholder")
-
-        if fields.get("slug") not in (folder.name, None):
-            problems.append(f"{folder.name}: slug '{fields['slug']}' does not match the folder name")
-        if isinstance(fields.get("scope"), str) and fields["scope"] not in VALID_SCOPES:
-            problems.append(f"{folder.name}: scope '{fields['scope']}' is not one of {VALID_SCOPES}")
-        if isinstance(fields.get("confidence"), str) and fields["confidence"] not in VALID_CONFIDENCE:
+    for subject_dir in sorted(p for p in store.iterdir() if p.is_dir()):
+        if (subject_dir / UNIT_FILENAME).is_file():
             problems.append(
-                f"{folder.name}: confidence '{fields['confidence']}' is not one of {VALID_CONFIDENCE}"
+                f"{subject_dir.name}/ holds a unit directly — move it to "
+                f"<subject>/{subject_dir.name}/ (use '{UNFILED}' when it belongs to no subject)"
             )
+            continue
 
-        fields["folder"] = folder.name
-        units.append(fields)
+        unit_dirs = sorted(p for p in subject_dir.iterdir() if p.is_dir())
+        if not unit_dirs:
+            problems.append(f"{subject_dir.name}/ contains no Understanding folders")
+            continue
 
+        for unit_dir in unit_dirs:
+            unit, unit_problems = read_unit(unit_dir, subject_dir.name)
+            problems.extend(unit_problems)
+            if unit:
+                units.append(unit)
+
+    problems.extend(duplicate_slugs(units))
     problems.extend(dangling_links(units))
+    problems.extend(dangling_inherited(units))
     return units, problems
+
+
+def duplicate_slugs(units: list[dict]) -> list[str]:
+    """Leaf slugs address an Understanding from anywhere, so they must be unique store-wide."""
+    seen: dict[str, str] = {}
+    duplicates = []
+    for unit in units:
+        slug = unit["folder"]
+        if slug in seen:
+            duplicates.append(f"slug '{slug}' appears in both {seen[slug]}/ and {unit['subject']}/")
+        else:
+            seen[slug] = unit["subject"]
+    return duplicates
 
 
 def dangling_links(units: list[dict]) -> list[str]:
@@ -117,7 +198,33 @@ def dangling_links(units: list[dict]) -> list[str]:
         for link in links:
             target = link.strip().strip("[]")
             if target and not placeholder(target) and target not in known:
-                dangling.append(f"{unit['folder']}: link [[{target}]] has no matching folder")
+                dangling.append(f"{unit['path']}: link [[{target}]] has no matching folder")
+    return dangling
+
+
+def dangling_inherited(units: list[dict]) -> list[str]:
+    """`provenance.inherited` records the lineage a session actually acted on.
+
+    A bracketed entry is a live reference and must resolve. Drop the brackets to record an
+    ancestor that has since been pruned or promoted away — the lineage stays readable
+    without pinning the store to knowledge it no longer holds.
+    """
+    known = {unit["folder"] for unit in units}
+    dangling = []
+    for unit in units:
+        provenance = unit.get("provenance")
+        if not isinstance(provenance, dict):
+            continue
+        for entry in provenance.get("inherited") or []:
+            entry = entry.strip()
+            if not entry.startswith("[[") or placeholder(entry):
+                continue
+            target = entry.strip("[]")
+            if target and target not in known:
+                dangling.append(
+                    f"{unit['path']}: inherited [[{target}]] is no longer in the store — "
+                    f"restore it, point at what superseded it, or unbracket it to keep the lineage"
+                )
     return dangling
 
 
@@ -133,8 +240,9 @@ def render(units: list[dict]) -> str:
         "",
         "Generated by `.agents/skills/ai-understanding/scripts/understanding_index.py`. Do not hand-edit.",
         "",
-        "Each row references a folder; the knowledge lives in that folder's `UNDERSTANDING.md`.",
-        "Match a **trigger** against the task at hand, then read only the folders that matched.",
+        "Grouped by subject for browsing; every Understanding is listed individually because knowledge is",
+        "retrieved by **trigger**, not by the subject that produced it. Match a trigger against the task at",
+        "hand, then read only the folders that matched.",
         "",
     ]
 
@@ -142,30 +250,61 @@ def render(units: list[dict]) -> str:
         lines += ["_No Understandings encoded yet._", ""]
         return "\n".join(lines)
 
-    lines += [
-        "| Folder | Description | Trigger | Scope | Confidence | Updated |",
-        "|--------|-------------|---------|-------|------------|---------|",
-    ]
+    subjects: dict[str, list[dict]] = {}
     for unit in units:
-        folder = unit["folder"]
-        lines.append(
-            f"| [`{folder}/`](./{folder}/) | {cell(unit.get('description'))} "
-            f"| {cell(unit.get('trigger'))} | {cell(unit.get('scope'))} "
-            f"| {cell(unit.get('confidence'))} | {cell(unit.get('updated'))} |"
-        )
-    lines.append("")
+        subjects.setdefault(unit["subject"], []).append(unit)
+
+    for subject in sorted(subjects):
+        lines += [
+            f"## {subject}",
+            "",
+            "| Folder | Description | Trigger | Scope | Confidence | Updated |",
+            "|--------|-------------|---------|-------|------------|---------|",
+        ]
+        for unit in subjects[subject]:
+            path = unit["path"]
+            lines.append(
+                f"| [`{unit['folder']}/`](./{path}/) | {cell(unit.get('description'))} "
+                f"| {cell(unit.get('trigger'))} | {cell(unit.get('scope'))} "
+                f"| {cell(unit.get('confidence'))} | {cell(unit.get('updated'))} |"
+            )
+        lines.append("")
     return "\n".join(lines)
 
 
+USAGE = f"""usage: understanding_index.py [store-dir]
+
+Regenerate INDEX.md from the <subject>/<slug>/{UNIT_FILENAME} folders.
+Defaults to {DEFAULT_STORE}.
+
+Exit codes: 0 clean · 1 validation problems (index still written) · 2 store not found."""
+
+
 def main(argv: list[str]) -> int:
-    store = Path(argv[1]) if len(argv) > 1 else DEFAULT_STORE
+    args = argv[1:]
+    if any(a in ("-h", "--help") for a in args):
+        print(USAGE)
+        return 0
+    unknown = [a for a in args if a.startswith("-")]
+    if unknown:
+        print(f"unknown option: {unknown[0]}\n\n{USAGE}", file=sys.stderr)
+        return 2
+    if len(args) > 1:
+        print(f"expected at most one store-dir, got {len(args)}\n\n{USAGE}", file=sys.stderr)
+        return 2
+
+    store = Path(args[0]) if args else DEFAULT_STORE
     if not store.is_dir():
         print(f"store not found: {store}", file=sys.stderr)
         return 2
 
     units, problems = load_units(store)
     (store / "INDEX.md").write_text(render(units), encoding="utf-8")
-    print(f"indexed {len(units)} understanding(s) -> {store / 'INDEX.md'}")
+    subject_count = len({unit["subject"] for unit in units})
+    print(
+        f"indexed {len(units)} understanding(s) across {subject_count} subject(s) "
+        f"-> {store / 'INDEX.md'}"
+    )
 
     for problem in problems:
         print(f"  problem: {problem}", file=sys.stderr)
