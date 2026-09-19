@@ -1,0 +1,5 @@
+interface:
+  display_name: "Understanding"
+  short_description: "Encode, inherit, export and import Understandings — distilled session knowledge"
+  default_prompt: "Propose Understandings from this session: one slug folder per trigger under .context/understandings/<slug>/, each self-contained. List the candidate slugs and their triggers, and write nothing until I approve."
+  model: gpt-5.5

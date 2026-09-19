@@ -14,6 +14,7 @@ Skills live **flat**, one directory per skill directly under `.agents/skills/`. 
 | **ai-terse** | Reformat this turn's reply into terse, high-density output with a TL;DR | `/ai-terse` |
 | **ai-template-sync** | UPSERT smooth-devex-template scaffold into an existing repo | `/ai-template-sync` |
 | **ai-asset-sync** | Dependabot-style OpenCode sync of skills/rules from `owner/repo@ref:path` | `/ai-asset-sync` |
+| **ai-understanding** | Encode session knowledge as Understandings; inherit, export, import | `/ai-understanding [--inherit] [--export] [--import <src>] [--promote <slug>] [--index]` |
 | **context-load-agents-context** | Load ancestor AGENTS.md context for a file | `/context-load-agents-context` |
 | **context-load-context** | Load domain context before implementation | `/context-load-context auth` |
 | **create-hld** | Author a design-only High-Level Design under `.docs/hlds/NNN-<slug>/` | `/create-hld <kebab-slug>` |
@@ -39,6 +40,26 @@ Opt-in switches relax that, at different token costs (see `ai-brain-dump/README.
 
 The tool switches (`--oktoreaddocs`, `--oktowebsearch`) re-enable the file/web payload bloat the
 listen-first default avoids — use deliberately.
+
+### ai-understanding switches
+
+Default (no switch) proposes Understandings from the current session and writes nothing without approval.
+Understandings live in `.context/understandings/<slug>/` — gitignored working memory, one folder per
+Understanding so evidence files never collide across slugs.
+
+| Switch | Effect |
+|--------|--------|
+| _(none)_ | Encode — propose one slug per trigger; a session may yield several |
+| `--inherit` | Read `INDEX.md`, load only the Understandings whose trigger matches the task |
+| `--export` | Promote `scope: portable` units to a tracked destination (default `.agents/understandings/`) |
+| `--import <src>` | Hydrate from an export directory or `owner/repo@ref:path` (remote fetch via `ai-asset-sync`) |
+| `--promote <slug>` | Escalate to a `*AGENTS.md` context file or a rule |
+| `--index` | Regenerate `INDEX.md` from the slug folders |
+| `--all` | With `--export`, include `repo-specific` units too |
+
+Governance — Rules vs Understandings, and inheriting at session start — is a rule
+(`.github/instructions/meta/understandings.instructions.md`), not skill text, so it loads without
+invoking the skill.
 
 ### git-commit / git-commit-push / git-commit-push-pr switches
 
@@ -78,6 +99,7 @@ Skills are classified by complexity tier. Each SKILL.md carries a `models` front
 | **ai-brain-dump** | high | Multi-turn synthesis + deep requirement reasoning |
 | **ai-template-sync** | high | Interactive multi-turn Q&A + conditional file sync across tools |
 | **ai-asset-sync** | high | AI-merge of local vs upstream skills/rules + chore PR |
+| **ai-understanding** | high | Judging what qualifies as transferable knowledge + merge/promotion decisions |
 | **create-hld** | high | Multi-turn clarification gates + architectural judgment (LADRs, NFRs, diagrams) |
 
 ### Sub-skill invocation model guidance
@@ -94,7 +116,7 @@ Skills are flat under `.agents/skills/`; the category lives in the folder-name p
 | Prefix | Skills |
 |--------|--------|
 | `agile-` | `agile-github-breakdown`, `agile-github-task-from-diff` |
-| `ai-` | `ai-brain-dump`, `ai-terse`, `ai-template-sync`, `ai-asset-sync` |
+| `ai-` | `ai-brain-dump`, `ai-terse`, `ai-template-sync`, `ai-asset-sync`, `ai-understanding` |
 | `context-` | `context-load-agents-context`, `context-load-context` |
 | `git-` | `git-commit`, `git-commit-push`, `git-commit-push-pr`, `git-sync` |
 | _(none)_ | `create-hld`, `manage-rule-system` |
@@ -109,5 +131,6 @@ Each skill is a directory containing:
 - **agents/openai.yaml** — OpenAI Codex agent registration with model specification
 - **scripts/** — Helper scripts (if applicable)
 - **references/** — Reference documentation (if applicable)
+- **assets/** — Templates the skill copies into a target location (if applicable)
 
 Skills are tool-agnostic and work across Claude Code, GitHub Copilot, and OpenAI Codex.

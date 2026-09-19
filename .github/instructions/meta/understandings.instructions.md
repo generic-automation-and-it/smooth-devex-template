@@ -1,0 +1,65 @@
+---
+description: 'Rules vs Understandings — discovered knowledge is evidence, not orders; how to inherit it at task start and when to promote it'
+globs: "**"
+paths:
+  - "**"
+applyTo: '**'
+alwaysApply: true
+---
+
+# Rules vs Understandings
+
+This repository holds three kinds of knowledge. Confusing them is the failure this rule prevents.
+Updated: 2026-09-19
+
+| Kind | Where | Nature | Authority |
+|------|-------|--------|-----------|
+| **Rules** | `.agents/rules/` (→ `.github/instructions/`) | The user's decisions | Follow always |
+| **AGENTS.md** | Nearest `*AGENTS.md` to the code | Functional intent, layered domain → sub-domain → feature → technology | Authoritative for that code |
+| **Understandings** | `.context/understandings/<slug>/` | Discovered knowledge about how the system actually behaves | Apply when the trigger matches |
+
+**Rules are not up for reinterpretation** based on what you observe. If a rule appears to be causing
+problems, say so — do not work around it.
+
+**Understandings are evidence, not orders.** Apply one when its trigger matches, and say so when what
+you observe contradicts it. They go stale, and a stale Understanding applied confidently is worse than
+none at all.
+
+**If a rule and an Understanding conflict, the rule wins** — and flag the conflict rather than
+resolving it silently.
+
+## Inheriting
+
+At the start of a task, read `.context/understandings/INDEX.md` and load any Understanding whose
+**trigger** matches the work at hand. Match first, read second: the index exists so that finding one
+applicable Understanding does not cost the tokens of reading all of them.
+
+Treat what you load as your own prior knowledge. The store is gitignored and per-workspace, so it may
+be empty or absent — that is a normal state, not an error.
+
+## Never encode a rule as an Understanding
+
+A preference, convention, or instruction from the user is a **rule**. Discovered behavior of the system
+is an **Understanding**. The tell is the language: an Understanding written in must/never terms is a
+rule wearing the wrong label, and it will be applied as evidence that can be overridden rather than as
+a decision that cannot.
+
+If knowledge needs must/never language, propose it as a rule under `.agents/rules/` instead
+(see `manage-rule-system`).
+
+## Promotion
+
+- An Understanding that applies to nearly every task has outgrown the store — propose promoting it to
+  a rule.
+- An Understanding about a specific code area belongs in the nearest `*AGENTS.md`.
+
+Propose the promotion; the user decides. Encoding, merging, exporting, and promoting all change the
+user's memory — ask first. The `ai-understanding` skill owns the mechanics.
+
+## Changelog
+
+> AI loading note: Skip this section during routine task execution. Use it only when updating this rule file.
+
+| Date | Change |
+|:-----|:-------|
+| 2026-09-19 | Initial version. |
