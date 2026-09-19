@@ -47,7 +47,7 @@ Keep `*AGENTS.md` files synchronised with code and documentation changes. Functi
 
 ## Understandings
 
-Alongside rules (decisions) and `*AGENTS.md` (functional intent) there is a third kind of knowledge: **Understandings** — discovered knowledge about how the system actually behaves, stored one folder per unit under `.context/understandings/<slug>/` (gitignored, per-workspace). They are evidence, not orders: apply one when its trigger matches, flag it when the code contradicts it, and let the rule win any conflict. Read `.context/understandings/INDEX.md` at task start to find the ones whose trigger applies. Because the store is disposable, knowledge survives a workspace only via an approved export. Governance: `.agents/rules/meta/understandings.instructions.md`; mechanics: the `ai-understanding` skill.
+Alongside rules (decisions) and `*AGENTS.md` (functional intent) there is a third kind of knowledge: **Understandings** — discovered knowledge about how the system actually behaves, stored one folder per unit under `.context/understandings/<slug>/` (gitignored, per-workspace). They are evidence, not orders: apply one when its trigger matches, flag it when the code contradicts it, and let the rule win any conflict. Read `.context/understandings/INDEX.md` at task start to find the ones whose trigger applies. Because the store is disposable, knowledge survives a workspace only via an approved publish. Governance: `.agents/rules/meta/understandings.instructions.md`; mechanics: the `ai-understanding` skill.
 
 ## Implementation Docs
 

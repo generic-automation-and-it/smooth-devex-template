@@ -51,7 +51,7 @@ Scheduled OpenCode reconciler for skills/rules. Consumer manifest `.github/asset
 
 Agent memory as a reviewable artifact. An *Understanding* is a distilled unit of discovered knowledge — a non-obvious root cause, an environment quirk, a convention invisible in the code — written so a future agent with none of the originating context can act on it.
 
-They accrue locally in `.context/understandings/<slug>/` (gitignored, one folder per unit so evidence files never collide), and reach the repository only through an approved export of the units marked `scope: portable`. That split is the point: encoding stays cheap enough that agents propose freely, while shared memory stays small because review happens once, later, when it is clear which knowledge held up. Exported Understandings travel between repositories over the same `ai-asset-sync` transport as skills and rules.
+They accrue locally in `.context/understandings/<slug>/` (gitignored, one folder per unit so evidence files never collide), and reach the repository only through an approved publish of the units marked `scope: portable`. That split is the point: encoding stays cheap enough that agents propose freely, while shared memory stays small because review happens once, later, when it is clear which knowledge held up. Published Understandings travel between repositories over the same `ai-asset-sync` transport as skills and rules.
 
 Understandings are evidence, not orders — a rule always wins a conflict, and an Understanding contradicted by the code is flagged rather than applied. Skill: `.agents/skills/ai-understanding/`; governance: `.agents/rules/meta/understandings.instructions.md`.
 

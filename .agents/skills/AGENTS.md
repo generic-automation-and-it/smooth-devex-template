@@ -23,7 +23,7 @@ First-party AI agent skills. They legitimately run shell, `gh`/`git`, and templa
 
 - The gate decision is computed by `.github/scripts/skillspector-report.py`, not by SkillSpector's raw `risk > 50` exit code (which is pinned at 100 for first-party skills by design). The script subtracts baselined findings and fails only on active ones; a scan error still hard-fails.
 - The job summary lists **Active** findings (gate-failing) separately from **Accepted (baselined)** findings, and flags stale baseline entries after a fix removes a finding.
-- **`ai-understanding` writes outside the tracked tree by default.** Its working store is `.context/understandings/<slug>/` (gitignored), and reaching a tracked path requires an explicit, human-approved `--export`. A change that makes this skill write to `.agents/understandings/` implicitly turns unreviewed session observations into shared repository memory — see that skill's LADR-001.
+- **`ai-understanding` writes outside the tracked tree by default.** Its working store is `.context/understandings/<slug>/` (gitignored), and reaching a tracked path requires an explicit, human-approved `--publish`. A change that makes this skill write to `.agents/understandings/` implicitly turns unreviewed session observations into shared repository memory — see that skill's LADR-001.
 - Two scans run per CI invocation (policy A, LADR-001): a **gating static scan** (`--no-llm`, drives the decision + SARIF) and, when a key is configured, a **non-gating LLM advisory scan** rendered as a separate, clearly-labeled summary section. The baseline (`skillspector-baseline.yml`) covers only the static scan.
 
 ## Changelog

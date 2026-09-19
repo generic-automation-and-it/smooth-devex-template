@@ -1,6 +1,6 @@
 ---
 name: ai-understanding
-description: Encode hard-won session knowledge as portable Understandings under .context/understandings/<slug>/, inherit matching ones at task start, and export/import them between workspaces. Trigger on "make an Understanding of this", "encode this", "what did we learn", "/ai-understanding", or when a session resolved something that cost real effort and would cost the same again. Not a session log and not code documentation.
+description: Export this session's hard-won knowledge into Understandings under .context/understandings/<slug>/ (one folder per unit), import matching ones back at task start, and publish/consume them across repos. Trigger on "export the understandings", "make an Understanding of this", "encode this", "what did we learn", "/ai-understanding", or when a session resolved something that cost real effort and would cost the same again. Not a session log and not code documentation.
 allowed-tools:
   - Bash(python3 .agents/skills/ai-understanding/scripts/understanding_index.py:*)
   - Read
@@ -20,7 +20,7 @@ An **Understanding** is a distilled, self-contained unit of hard-won knowledge, 
 
 An Understanding is **not** a session log, not a summary of what we did, and not documentation of the code. It is the transferable skill that remains after the experience is discarded.
 
-The working store is **local and disposable** (`.context/` is gitignored). That is deliberate: memory accrues cheaply per workspace, and only what earns it gets exported. Anything you want to survive this workspace must be exported.
+The working store is **local and disposable** (`.context/` is gitignored). That is deliberate: memory accrues cheaply per workspace, and only what earns it gets published. Anything you want to survive this workspace must be published.
 
 ## TL;DR
 
@@ -28,7 +28,7 @@ The working store is **local and disposable** (`.context/` is gitignored). That 
 2. `.context/understandings/INDEX.md` is a generated table of **folder + description + trigger** — the only file an agent reads to decide what to load.
 3. One session may yield **several** Understandings; each is its own slug folder, each stands alone, and they share a `provenance.session` value.
 4. Never overwrite an existing slug. Same trigger → merge. Different trigger → distinct slug.
-5. Export promotes `scope: portable` units out of the disposable store; import hydrates a fresh workspace.
+5. Export writes the session's knowledge to disk; import reads it back. Publish/consume move it between repositories.
 
 ## Store layout
 
@@ -44,17 +44,27 @@ Why a folder per slug and not a flat `<slug>.md`: an Understanding often carries
 
 ## Switches
 
+Export and import are about **this session's memory**: export writes what the session learned to disk, import loads it back. Publish and consume are the separate, rarer cross-repository operations.
+
 | Switch | Effect |
 |--------|--------|
-| _(none)_ | **Encode** — propose Understandings from this session, write only what the user approves |
-| `--inherit` | **Load** — read `INDEX.md`, load every Understanding whose trigger matches the task at hand |
-| `--export` | Promote `scope: portable` Understandings to a tracked destination (default `.agents/understandings/`) |
-| `--import <source>` | Hydrate the working store from an export bundle or another repo |
+| `--export` _(default)_ | **Analyse this session** and write each durable lesson to `.context/understandings/<slug>/`. Proposes the split first |
+| `--export --all` | Same, but write every qualifying candidate without pausing for the user to cut the list |
+| `--import` | Load Understandings whose trigger matches the task back into the session |
+| `--publish [--all]` | Copy `scope: portable` units to a tracked destination (default `.agents/understandings/`); `--all` includes `repo-specific` units |
+| `--consume <source>` | Hydrate the working store from a published set or another repo |
 | `--promote <slug>` | Escalate an Understanding to a `*AGENTS.md` context file or a rule |
 | `--index` | Regenerate `INDEX.md` from the slug folders |
-| `--all` | With `--export`, include `repo-specific` Understandings too |
 
-## Encode (default mode)
+`--all` is scoped to the mode it accompanies: with `--export` it means "skip the cut", with `--publish` it means "include repo-specific units".
+
+## Export (default mode)
+
+Exporting is the act of getting knowledge **out of the session and onto disk**, where it outlives the
+conversation. Invoked bare, or with `--export`, this is what the skill does.
+
+Read the whole session before writing anything. What qualifies is not "what we did" — it is what a
+future agent would otherwise have to rediscover.
 
 ### When to propose one unprompted
 
@@ -70,7 +80,7 @@ A single session frequently contains more than one durable lesson. Split it — 
 - Each must stand alone. No "as established above", no reference to the conversation that produced it.
 - Related slugs from the same session cross-link with `[[other-slug]]` and share one `provenance.session`.
 
-When proposing a split, list the candidate slugs with their triggers and let the user cut or merge before anything is written.
+When proposing a split, list the candidate slugs with their triggers and let the user cut or merge before anything is written. **With `--all`, skip the cut** — write every candidate that qualifies and report what was written, so the user prunes afterwards instead of beforehand.
 
 ### Writing one
 
@@ -120,29 +130,35 @@ After any write, regenerate the index:
 python3 .agents/skills/ai-understanding/scripts/understanding_index.py
 ```
 
-## Inherit (`--inherit`)
+## Import (`--import`)
 
-At the start of a task, read `.context/understandings/INDEX.md` and load every Understanding whose **trigger** matches. Read the index first and the units second — that is what the index is for.
+The reverse of export: knowledge comes **off disk and back into the session**. This is also what the
+always-loaded rule asks for at the start of a task, with or without the switch.
+
+Read `.context/understandings/INDEX.md` and load every Understanding whose **trigger** matches. Read the index first and the units second — that is what the index is for.
 
 Treat loaded Understandings as prior knowledge. If one contradicts what the code actually does, say so: they go stale, and a stale one is worse than none. Lower its `confidence` to `contested` and tell the user.
 
 Rules always win a conflict with an Understanding. Flag the conflict rather than resolving it silently.
 
-## Export (`--export`)
+## Publish (`--publish`)
 
-`.context/` is gitignored, so export is the only way knowledge leaves this workspace.
+Export puts knowledge on disk; publishing carries it **out of this workspace entirely**. `.context/` is
+gitignored, so a published copy is the only form that survives the workspace being destroyed.
 
-- Default destination `.agents/understandings/` — tracked, shared across Claude/Copilot/Codex via the `.agents` symlinks, and a valid `ai-asset-sync` source path. Created on first export; nothing is seeded before then.
-- Only `scope: portable` units are exported unless `--all` is passed. A `repo-specific` Understanding shipped elsewhere is a local quirk sold as a universal truth.
+- Default destination `.agents/understandings/` — tracked, shared across Claude/Copilot/Codex via the `.agents` symlinks, and a valid `ai-asset-sync` source path. Created on first publish; nothing is seeded before then.
+- Only `scope: portable` units are published unless `--all` is passed. A `repo-specific` Understanding shipped elsewhere is a local quirk sold as a universal truth.
 - The destination keeps the same `<slug>/` layout and gets its own generated `INDEX.md`.
-- Each exported unit records where it came from; the working copy is left in place.
-- Exporting into a tracked path changes the repository — show the user the list of slugs and the destination, and get approval before writing.
+- Each published unit records where it came from; the working copy is left in place.
+- Publishing into a tracked path changes the repository — show the user the list of slugs and the destination, and get approval before writing.
 
-Full contract, including the `ai-asset-sync` manifest recipe for consuming repos: `references/export-import.md`.
+Full contract, including the `ai-asset-sync` manifest recipe for consuming repos: `references/publish-consume.md`.
 
-## Import (`--import <source>`)
+## Consume (`--consume <source>`)
 
-Sources: a local export directory, or a repo path in `owner/repo@ref:path` form.
+The reverse of publish: another workspace's published knowledge becomes available here.
+
+Sources: a local published directory, or a repo path in `owner/repo@ref:path` form.
 
 For a remote source, add it to the `ai-asset-sync` manifest (`.github/assets/ai-sync.yml`) and let that skill perform the fetch — it already owns transport, provenance, and the merge PR. This skill does not fetch remote content itself.
 
@@ -150,11 +166,11 @@ Reconciliation, per incoming slug:
 
 | Situation | Action |
 |-----------|--------|
-| Slug absent locally | Copy it in, set `provenance.imported_from`, set `confidence: observed` |
+| Slug absent locally | Copy it in, set `provenance.consumed_from`, set `confidence: observed` |
 | Slug present, same trigger | Merge as a normal collision; **the local unit wins on any conflict** and the difference is reported |
-| Slug present, different trigger | Import under a disambiguated slug |
+| Slug present, different trigger | Bring it in under a disambiguated slug |
 
-An import never silently changes what this workspace already believes. Imported knowledge was verified somewhere else, so it arrives as `observed` until something here confirms it.
+Consuming never silently changes what this workspace already believes. Incoming knowledge was verified somewhere else, against a setup that may differ, so it arrives as `observed` until something here confirms it.
 
 ## Promote (`--promote <slug>`)
 
@@ -167,7 +183,7 @@ Propose the promotion; the user decides. Once promoted, the Understanding record
 
 ## Guardrails
 
-- Ask before writing, merging, exporting, or promoting. This skill edits the user's memory.
+- Ask before writing, merging, publishing, or promoting. This skill edits the user's memory. `--all` waives the pre-write cut on export only; it never waives approval for writing to a tracked path.
 - Never delete a slug folder to resolve a conflict.
 - Never write an Understanding in must/never language.
 - Never let an Understanding contradict a rule without flagging it.
@@ -178,3 +194,4 @@ Propose the promotion; the user decides. Once promoted, the Understanding record
 | Date | Change | Ref |
 |:-----|:-------|:----|
 | 2026-09-19 | Initial version. | |
+| 2026-09-19 | `--export`/`--import` are session↔disk; cross-repo moves became `--publish`/`--consume`. | |
