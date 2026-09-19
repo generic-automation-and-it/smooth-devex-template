@@ -112,6 +112,7 @@
   </Folder>
   <Folder Name="/.agents/skills/ai-understanding/">
     <File Path=".agents/skills/ai-understanding/SKILL.md" />
+    <File Path=".agents/skills/ai-understanding/README.md" />
     <File Path=".agents/skills/ai-understanding/AGENTS.md" />
     <File Path=".agents/skills/ai-understanding/agents/openai.yaml" />
     <File Path=".agents/skills/ai-understanding/assets/UNDERSTANDING.template.md" />
