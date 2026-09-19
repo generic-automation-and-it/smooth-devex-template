@@ -55,6 +55,39 @@ They accrue locally in `.context/understandings/<subject>-<yyyyMMdd-HHmm>/<slug>
 
 Understandings are evidence, not orders — a rule always wins a conflict, and an Understanding contradicted by the code is flagged rather than applied. Skill: `.agents/skills/ai-understanding/`; governance: `.agents/rules/meta/understandings.instructions.md`.
 
+## Registering agentic files in `Project.slnx`
+
+`Project.slnx` lists every tracked agentic file **individually** — rules, skill files, scripts, assets,
+references and wiki pages each get their own `<File Path="…" />` line inside a matching `<Folder>` block.
+The solution format has no glob, so a file you add is invisible in the solution tree until you add the
+line. Nothing enforces this: no build step, no CI check, and no test fails when a file is missing. It
+surfaces as a review comment, or not at all.
+
+Two things to get right:
+
+- **Use the `.agents/rules/…` alias for rules**, not `.github/instructions/…`. `.agents/rules` is a
+  symlink to the real directory, and the manifest is written against the alias.
+- **Put the entry in the `<Folder>` block that matches its directory.** The folder blocks mirror the
+  on-disk tree; a `<File>` in the wrong block shows up in the wrong place in the IDE.
+
+**The manifest is not exhaustive today, so do not treat it as authoritative.** As of this writing 78 of
+the 107 agentic files are registered. The 29 that are not are mostly per-skill `AGENTS.md` files (14 of
+them), plus assorted `references/`, `assets/` and `scripts/` entries — pre-existing drift, not a
+deliberate exclusion. Every registered path does resolve, so there are no dead entries.
+
+The practical rule is **register what you add** rather than reconciling the whole tree. To check the
+folder you are working in:
+
+```bash
+# Files on disk vs files registered, for one subtree
+diff <(find -L .agents/skills/<skill-name> -type f -not -path '*__pycache__*' | sort) \
+     <(grep -o 'Path="[^"]*"' Project.slnx | sed 's/Path="//;s/"//' \
+       | grep '^\.agents/skills/<skill-name>/' | sort)
+```
+
+A `<` line is a file you still need to register; a `>` line is an entry pointing at something that no
+longer exists.
+
 ## Further Reading
 
 - [Architecture](architecture.md) — solution structure and design decisions
