@@ -51,6 +51,10 @@ SUBJECT_STAMP_RE = re.compile(r"^.+-\d{8}-\d{4}$")
 # in front of it. Each gets a remedy that names the actual fix instead of suggesting a second stamp.
 MALFORMED_STAMP_RE = re.compile(r"^(.+)-\d+-\d+$")
 STAMP_ONLY_RE = re.compile(r"^-\d+-\d+$")
+# A YAML block-scalar header (`>-`, `|`, `|2-`): this parser keeps the header as the value and drops
+# the indented text under it. Every field that could tempt one is specified as a single line, so the
+# shape is named as a problem rather than parsed.
+BLOCK_SCALAR_RE = re.compile(r"^[|>][0-9+-]{0,2}$")
 # A unit past this many days without an update is worth re-reading. Outcome units — the ones
 # carrying no `question`, which record what a piece of work produced — decay faster than knowledge.
 STALE_AFTER_DAYS = 90
@@ -184,6 +188,7 @@ def read_unit(unit_file: Path, subject: str) -> tuple[dict | None, list[str]]:
         problems.append(f"{where}: confidence '{fields['confidence']}' is not one of {VALID_CONFIDENCE}")
 
     problems.extend(inline_sequences(fields, where))
+    problems.extend(block_scalars(fields, where))
 
     fields["folder"] = slug
     fields["subject"] = subject
@@ -201,6 +206,39 @@ def looks_like_flow_sequence(value) -> bool:
     return isinstance(value, str) and value.startswith("[") and value.endswith("]")
 
 
+def iter_scalar_fields(fields: dict):
+    """Yield every (field-path, string value) the parser produced, at both levels it supports.
+
+    Shared by the two shape checks below. Both walk identically and both exist because this parser
+    stores a value it could not really read as a plain string — so a new misread shape is a new
+    predicate here, not a new traversal.
+    """
+    for key, value in fields.items():
+        if key in ("folder", "subject", "path"):
+            continue
+        if isinstance(value, str):
+            yield key, value
+        elif isinstance(value, dict):
+            for sub_key, sub_value in value.items():
+                if isinstance(sub_value, str):
+                    yield f"{key}.{sub_key}", sub_value
+
+
+def block_scalars(fields: dict, where: str) -> list[str]:
+    """Catch a value written as a YAML block scalar, which this parser reads as its header.
+
+    `description: >-` followed by an indented paragraph stores the two characters `>-` and silently
+    discards the text — the index then shows `>-` and exits 0. It is the natural way to write a long
+    description, so it is named rather than left to be discovered in the rendered index.
+    """
+    return [
+        f"{where}: '{field}' is written as a YAML block scalar — this parser keeps the '{value}' header "
+        f"and drops the indented text below it; put the value on one line after the colon"
+        for field, value in iter_scalar_fields(fields)
+        if BLOCK_SCALAR_RE.match(value)
+    ]
+
+
 def inline_sequences(fields: dict, where: str) -> list[str]:
     """Catch a list written in YAML flow style, which this parser reads as a plain scalar.
 
@@ -212,19 +250,11 @@ def inline_sequences(fields: dict, where: str) -> list[str]:
     Checks both levels the parser supports. A flow sequence nested in a map — `provenance.inherited`
     being the one that exists — is the same defect and was missed when only the top level was walked.
     """
-    problems = []
-    for key, value in fields.items():
-        if key in ("folder", "subject", "path"):
-            continue
-        if looks_like_flow_sequence(value):
-            problems.append(_flow_problem(where, key))
-        elif isinstance(value, dict):
-            problems.extend(
-                _flow_problem(where, f"{key}.{sub_key}")
-                for sub_key, sub_value in value.items()
-                if looks_like_flow_sequence(sub_value)
-            )
-    return problems
+    return [
+        _flow_problem(where, field)
+        for field, value in iter_scalar_fields(fields)
+        if looks_like_flow_sequence(value)
+    ]
 
 
 def _flow_problem(where: str, field: str) -> str:
@@ -405,13 +435,25 @@ def dangling_references(units: list[dict], known: set[str]) -> list[str]:
 
 
 def inherited_targets(units: list[dict]) -> set[str]:
-    """Every slug any unit records having acted on. The store's only usage signal."""
+    """Every slug any unit records having acted on. The store's only usage signal.
+
+    The list guard is load-bearing. A flow-style or bare scalar (`inherited: [[beta]]`) parses as a
+    string, and iterating it yields characters: the real target is lost *and* the garbage entries make
+    `lineage_recorded` true, so every unit reports as never inherited. A current unit carrying that
+    shape is caught by `inline_sequences`, but a superseded copy is exempt from validation while still
+    feeding this function — so without the guard an old copy corrupts the report with nothing printed
+    and exit 0.
+    """
     targets = set()
     for unit in units:
         provenance = unit.get("provenance")
-        if isinstance(provenance, dict):
-            for entry in provenance.get("inherited") or []:
-                targets.add(str(entry).strip().strip("[]"))
+        if not isinstance(provenance, dict):
+            continue
+        inherited = provenance.get("inherited")
+        if not isinstance(inherited, list):
+            continue
+        for entry in inherited:
+            targets.add(str(entry).strip().strip("[]"))
     return targets
 
 

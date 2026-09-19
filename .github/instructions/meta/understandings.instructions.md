@@ -95,9 +95,12 @@ If knowledge needs must/never language, propose it as a rule under `.agents/rule
 
 Propose the promotion; the user decides.
 
-**Ask before merging or promoting; a write to a chosen destination does not ask.** Merging into an existing Understanding and promoting both
-change durable state — ask first, every time, because both act on knowledge someone already chose to
-keep. Writing to a mode's default location, or to an explicit `--path`, needs no approval: the
+**Ask before promoting, and before a consume makes an incoming copy the current version of a slug this
+workspace already holds; a write to a chosen destination does not ask.** Both change durable state
+someone already chose to keep or rely on, so both ask first, every time. Merging into an existing
+Understanding is no longer one of them — it is not an available operation: an improvement is written in
+full as a new version under the same slug, which adds a copy and destroys nothing, so a local export
+reports its outcomes rather than asking. Writing to a mode's default location, or to an explicit `--path`, needs no approval: the
 destination was already chosen, and every write is reported. Exporting to the local disposable store
 proposes the split first — via `AskUserQuestion`, recommending "write everything" — unless `--all` was
 passed, which is itself the instruction to skip it. The `ai-understanding` skill owns the mechanics.
@@ -120,3 +123,4 @@ passed, which is itself the instruction to skip it. The `ai-understanding` skill
 | 2026-09-19 | Vocabulary aligned to the export/import vs publish/consume split; `--all` named as the explicit waiver of the pre-write cut, resolving a rule/skill contradiction. |
 | 2026-09-19 | Ask-before-writing carve-out narrowed to merge and promote; a named destination (default or `--path`) is now the approval for every write mode. |
 | 2026-09-19 | LADR-010: a slug is a version key, not a unique name — an export run writes its own stamped folder, an improved unit is re-written in full, and the index shows the newest version of each slug. Importing gained the recency precedence rule (newer wins, analyse briefly, ask when unsure, the system outranks both). |
+| 2026-09-19 | Ask-before list corrected for LADR-010: merging is no longer an operation, so the carve-out is promote plus a consume that would make an incoming copy current. |

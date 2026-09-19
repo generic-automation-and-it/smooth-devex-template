@@ -142,22 +142,26 @@ accepted:
       "Autonomous Decision Making" on LADR-009's "no approval needed to write" language. This is the
       documented, human-approved design: writing to a mode's default location or an explicit --path is
       the consent (the destination itself, chosen by default or typed by the user), and every write is
-      reported afterwards. Approval is still required for the two actions that can destroy existing
-      knowledge — merging into an existing unit and promoting — so nothing irreversible runs unprompted.
+      reported afterwards. Approval is still required for the two actions that can change knowledge the
+      user already relies on — promoting, and a consume that would make an incoming copy the current
+      version of a slug held locally — so nothing irreversible runs unprompted. Under LADR-010 a local
+      improvement is an additional versioned copy, never an edit, so it cannot destroy anything.
   - id: EA2
     file: ai-understanding/SKILL.md
     reason: >-
       "Autonomous Decision Making" on the Guardrails/Publish/Consume "no approval needed" language
       (LADR-009). Same design as the AGENTS.md entry above: a named or default destination is the
-      consent for a write, reported after the fact; merge and promote — the two actions that can
-      overwrite or escalate existing knowledge — still ask every time.
+      consent for a write, reported after the fact; promote, and a consume that would make an incoming
+      copy current over a local one — the two actions that can escalate or displace existing knowledge —
+      still ask every time.
   - id: EA2
     file: ai-understanding/references/publish-consume.md
     reason: >-
       "Autonomous Decision Making" on the publish/consume "no approval prompt" language (LADR-009).
       Publishing writes a new zip file (never overwrites existing knowledge) and consuming reports
-      every reconciled slug; the destructive case — an incoming slug colliding with a local one — still
-      goes through the local-wins merge rule, not a silent overwrite.
+      every reconciled slug; the one case that could displace local belief — an incoming copy of a slug
+      held locally, carrying a newer stamp — asks before it becomes current, and every other collision
+      lands as an additional version. Nothing is overwritten in place.
 
   # --- MEDIUM: session-scoped /tmp dedup tracker (doc-only) ---
   - id: RA2
