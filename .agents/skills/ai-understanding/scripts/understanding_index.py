@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Regenerate the Understandings INDEX.md from the subject/slug folders.
 
-The store is two levels deep — `<subject>/<slug>/UNDERSTANDING.md` — so a session's
-lessons stay browsable together while each one remains individually addressable by its
-trigger. The index groups by subject but lists every leaf, because knowledge is retrieved
-by trigger rather than by the subject that happened to produce it.
+The store is `<subject>/<slug>.md` — a subject folder groups a session's lessons while each
+file stays individually addressable by its trigger. The index groups by subject but lists
+every unit, because knowledge is retrieved by trigger rather than by the subject that
+happened to produce it.
+
+A unit needing evidence artifacts (a repro, a log excerpt, a diagram) puts them in a
+sibling `<slug>.assets/` directory, which is named after the slug and so cannot collide.
 
 The index is a reference table, never a copy of the knowledge: an agent reads it to decide
 which Understandings to load, then reads only those folders.
@@ -22,7 +25,8 @@ import sys
 from pathlib import Path
 
 DEFAULT_STORE = Path(".context/understandings")
-UNIT_FILENAME = "UNDERSTANDING.md"
+ASSETS_SUFFIX = ".assets"
+LEGACY_UNIT_FILENAME = "UNDERSTANDING.md"
 REQUIRED_FIELDS = ("slug", "description", "trigger", "scope", "confidence")
 VALID_SCOPES = ("portable", "repo-specific")
 VALID_CONFIDENCE = ("observed", "verified", "contested")
@@ -97,17 +101,14 @@ def placeholder(value: str) -> bool:
     return value.startswith("<") and value.endswith(">")
 
 
-def read_unit(unit_dir: Path, subject: str) -> tuple[dict | None, list[str]]:
-    """Load and validate one `<subject>/<slug>/UNDERSTANDING.md`."""
-    where = f"{subject}/{unit_dir.name}"
-    unit_file = unit_dir / UNIT_FILENAME
-
-    if not unit_file.is_file():
-        return None, [f"{where}/ has no {UNIT_FILENAME}"]
+def read_unit(unit_file: Path, subject: str) -> tuple[dict | None, list[str]]:
+    """Load and validate one `<subject>/<slug>.md`."""
+    slug = unit_file.stem
+    where = f"{subject}/{unit_file.name}"
 
     fields = parse_frontmatter(unit_file.read_text(encoding="utf-8"))
     if not fields:
-        return None, [f"{where}/{UNIT_FILENAME} has no frontmatter"]
+        return None, [f"{where} has no frontmatter"]
 
     problems = []
     for field in REQUIRED_FIELDS:
@@ -133,16 +134,16 @@ def read_unit(unit_dir: Path, subject: str) -> tuple[dict | None, list[str]]:
         if not Path(context).exists():
             problems.append(f"{where}: agents_context '{context}' does not exist")
 
-    if fields.get("slug") not in (unit_dir.name, None):
-        problems.append(f"{where}: slug '{fields['slug']}' does not match the folder name")
+    if fields.get("slug") not in (slug, None):
+        problems.append(f"{where}: slug '{fields['slug']}' does not match the file name")
     if isinstance(fields.get("scope"), str) and fields["scope"] not in VALID_SCOPES:
         problems.append(f"{where}: scope '{fields['scope']}' is not one of {VALID_SCOPES}")
     if isinstance(fields.get("confidence"), str) and fields["confidence"] not in VALID_CONFIDENCE:
         problems.append(f"{where}: confidence '{fields['confidence']}' is not one of {VALID_CONFIDENCE}")
 
-    fields["folder"] = unit_dir.name
+    fields["folder"] = slug
     fields["subject"] = subject
-    fields["path"] = f"{subject}/{unit_dir.name}"
+    fields["path"] = f"{subject}/{unit_file.name}"
     return fields, problems
 
 
@@ -150,21 +151,30 @@ def load_units(store: Path) -> tuple[list[dict], list[str]]:
     units: list[dict] = []
     problems: list[str] = []
 
-    for subject_dir in sorted(p for p in store.iterdir() if p.is_dir()):
-        if (subject_dir / UNIT_FILENAME).is_file():
+    for stray in sorted(store.glob("*.md")):
+        if stray.name != "INDEX.md":
             problems.append(
-                f"{subject_dir.name}/ holds a unit directly — move it to "
-                f"<subject>/{subject_dir.name}/ (use '{UNFILED}' when it belongs to no subject)"
+                f"{stray.name} sits at the store root — move it to <subject>/{stray.name} "
+                f"(use '{UNFILED}' when it belongs to no subject)"
             )
+
+    for subject_dir in sorted(p for p in store.iterdir() if p.is_dir()):
+        subject = subject_dir.name
+
+        for legacy in sorted(subject_dir.glob(f"*/{LEGACY_UNIT_FILENAME}")):
+            problems.append(
+                f"{subject}/{legacy.parent.name}/ uses the old folder shape — move it to "
+                f"{subject}/{legacy.parent.name}.md (artifacts go in "
+                f"{legacy.parent.name}{ASSETS_SUFFIX}/)"
+            )
+
+        unit_files = sorted(subject_dir.glob("*.md"))
+        if not unit_files:
+            problems.append(f"{subject}/ contains no Understandings")
             continue
 
-        unit_dirs = sorted(p for p in subject_dir.iterdir() if p.is_dir())
-        if not unit_dirs:
-            problems.append(f"{subject_dir.name}/ contains no Understanding folders")
-            continue
-
-        for unit_dir in unit_dirs:
-            unit, unit_problems = read_unit(unit_dir, subject_dir.name)
+        for unit_file in unit_files:
+            unit, unit_problems = read_unit(unit_file, subject)
             problems.extend(unit_problems)
             if unit:
                 units.append(unit)
@@ -242,7 +252,7 @@ def render(units: list[dict]) -> str:
         "",
         "Grouped by subject for browsing; every Understanding is listed individually because knowledge is",
         "retrieved by **trigger**, not by the subject that produced it. Match a trigger against the task at",
-        "hand, then read only the folders that matched.",
+        "hand, then read only the units that matched.",
         "",
     ]
 
@@ -258,13 +268,13 @@ def render(units: list[dict]) -> str:
         lines += [
             f"## {subject}",
             "",
-            "| Folder | Description | Trigger | Scope | Confidence | Updated |",
-            "|--------|-------------|---------|-------|------------|---------|",
+            "| Understanding | Description | Trigger | Scope | Confidence | Updated |",
+            "|---------------|-------------|---------|-------|------------|---------|",
         ]
         for unit in subjects[subject]:
             path = unit["path"]
             lines.append(
-                f"| [`{unit['folder']}/`](./{path}/) | {cell(unit.get('description'))} "
+                f"| [`{unit['folder']}`](./{path}) | {cell(unit.get('description'))} "
                 f"| {cell(unit.get('trigger'))} | {cell(unit.get('scope'))} "
                 f"| {cell(unit.get('confidence'))} | {cell(unit.get('updated'))} |"
             )
@@ -274,7 +284,7 @@ def render(units: list[dict]) -> str:
 
 USAGE = f"""usage: understanding_index.py [store-dir]
 
-Regenerate INDEX.md from the <subject>/<slug>/{UNIT_FILENAME} folders.
+Regenerate INDEX.md from the <subject>/<slug>.md units.
 Defaults to {DEFAULT_STORE}.
 
 Exit codes: 0 clean · 1 validation problems (index still written) · 2 store not found."""

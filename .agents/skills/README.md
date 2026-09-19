@@ -44,9 +44,9 @@ listen-first default avoids — use deliberately.
 ### ai-understanding switches
 
 Default is `--export`: analyse the current session and write each durable lesson to
-`.context/understandings/<subject>/<slug>/` — gitignored working memory, where the subject folder groups a
-session's lessons and each Understanding keeps its own folder so evidence files never collide. The index
-groups by subject but lists every leaf, because retrieval is by trigger. Export/import move knowledge
+`.context/understandings/<subject>/<slug>.md` — gitignored working memory, where the subject folder groups a
+session's lessons and each Understanding is one file. The index groups by subject but lists every unit,
+because retrieval is by trigger. Export/import move knowledge
 between the session and disk; publish/consume move it between repositories.
 
 | Switch | Effect |

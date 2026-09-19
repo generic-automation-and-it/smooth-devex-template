@@ -16,7 +16,7 @@ Updated: 2026-09-19
 |------|-------|--------|-----------|
 | **Rules** | `.agents/rules/` (→ `.github/instructions/`) | The user's decisions | Follow always |
 | **AGENTS.md** | Nearest `*AGENTS.md` to the code | Functional intent, layered domain → sub-domain → feature → technology | Authoritative for that code |
-| **Understandings** | `.context/understandings/<subject>/<slug>/` | Discovered knowledge about how the system actually behaves | Apply when the trigger matches |
+| **Understandings** | `.context/understandings/<subject>/<slug>.md` | Discovered knowledge about how the system actually behaves | Apply when the trigger matches |
 
 **Rules are not up for reinterpretation** based on what you observe. If a rule appears to be causing
 problems, say so — do not work around it.

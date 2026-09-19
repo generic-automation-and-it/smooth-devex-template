@@ -1,5 +1,5 @@
 ---
-slug: <kebab-case-slug, equals the leaf folder name, unique store-wide, names the knowledge not the incident>
+slug: <kebab-case-slug, equals the file name without .md, unique store-wide, names the knowledge not the incident>
 description: <one line — what this knowledge is. Shown in INDEX.md>
 trigger: <one line — the situation in which this applies. Shown in INDEX.md>
 scope: <portable | repo-specific>

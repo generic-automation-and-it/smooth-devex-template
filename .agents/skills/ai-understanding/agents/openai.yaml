@@ -1,5 +1,5 @@
 interface:
   display_name: "Understanding"
   short_description: "Export a session's Understandings to disk; import, publish and consume them"
-  default_prompt: "Export this session: write one Understanding per trigger to .context/understandings/<subject>/<slug>/, each self-contained. List the candidate slugs and their triggers first, and write nothing until I approve — unless I passed --all."
+  default_prompt: "Export this session: write one Understanding per trigger to .context/understandings/<subject>/<slug>.md, each self-contained. List the candidate slugs and their triggers first, and write nothing until I approve — unless I passed --all."
   model: gpt-5.5

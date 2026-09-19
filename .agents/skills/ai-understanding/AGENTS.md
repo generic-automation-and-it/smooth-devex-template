@@ -2,11 +2,11 @@
 
 ## TL;DR
 
-`--export` analyses a session and writes its discovered knowledge to `<subject>/<slug>/` folders under the gitignored `.context/understandings/`; the store is disposable by design, so `--publish` is the only path by which knowledge leaves a workspace — never weaken the `scope` gate that governs it.
+`--export` analyses a session and writes its discovered knowledge to `<subject>/<slug>.md` files under the gitignored `.context/understandings/`; the store is disposable by design, so `--publish` is the only path by which knowledge leaves a workspace — never weaken the `scope` gate that governs it.
 
 ## Non-Negotiables
 
-- **Never flatten either tier.** `<subject>/<slug>/UNDERSTANDING.md`. Dropping the leaf folder puts evidence files (repro, log excerpt, diagram) from different units in one directory, where they eventually claim the same filename. Dropping the subject folder loses the session's coherence. Both tiers were explicit design corrections from the user — not incidental layout choices.
+- **Never drop the subject folder.** `<subject>/<slug>.md`. The subject is what keeps a session's lessons legible as a body of work months later, and it was an explicit design correction from the user — not an incidental layout choice. Equally, do not reintroduce a folder per unit: a unit is one file, and the rare unit carrying artifacts puts them in a sibling `<slug>.assets/`.
 - **Never make the index subject-first for retrieval.** The index groups by subject for browsing, but lists every leaf with its trigger, because an agent hitting a tooling quirk has no reason to open the subject folder that produced it. An edit that makes a reader open a subject before seeing triggers files knowledge under the one label nobody searches by.
 - **Never let a write overwrite an existing slug.** Merge on matching trigger, disambiguate otherwise. An edit that adds an "overwrite" or "force" path deletes knowledge the user chose to keep.
 - **Never default `--publish` to include `repo-specific` units.** That flag is the only thing preventing a local quirk from being shipped with provenance that makes it look universally verified.
@@ -35,12 +35,13 @@
 - **Decision:** `scripts/understanding_index.py` regenerates `INDEX.md` from frontmatter. Rows carry folder, description, trigger, scope, confidence, updated — reference data for matching, never the knowledge itself. `trigger` lives in frontmatter only, so the index cannot contradict the unit.
 - **Consequences:** Importing is a two-step read: match triggers in the index, then open only matching folders. The script validates as it goes (required fields, slug/folder agreement, enum values, store-wide slug uniqueness, dangling `[[links]]`, and units left at the old single-level depth) and exits `1` on problems while still writing the index, so drift surfaces without blocking the write. There is no INDEX template — the generator is the single source.
 
-### LADR-004 — Subject tier groups; the trigger still retrieves
+### LADR-004 — Subject folder groups; the trigger still retrieves
 
 - **Date:** 2026-09-19 · **Status:** Accepted
 - **Context:** A session usually has one main subject, and splitting its lessons into sibling top-level folders loses that — the work reads as five unrelated facts a month later. The obvious fix, making the subject the addressable unit with several Understandings inside it, breaks two things: retrieval (most of what a session teaches applies to work that has nothing to do with the session's subject) and publish granularity (one subject folder routinely mixes `portable` and `repo-specific` units, so it cannot be moved wholesale).
-- **Decision:** Two levels — `<subject>/<slug>/UNDERSTANDING.md`. The subject groups for browsing; the leaf stays the addressable unit for retrieval, merging, `[[links]]`, scope filtering, and confidence. The generated index groups by subject but lists every leaf with its trigger. Leaf slugs are unique store-wide, so a link or a merge never needs to name the subject.
-- **Consequences:** A session stays legible as a unit without knowledge becoming findable only through its origin. Cost: paths are deeper, every Understanding needs a subject (`_unfiled/` absorbs the ones with no topic), and the generator walks two levels. Units left at the old single-level depth are reported as a problem naming the fix rather than silently skipped.
+- **Decision:** `<subject>/<slug>.md`. The subject folder groups for browsing; the file stays the addressable unit for retrieval, merging, `[[links]]`, scope filtering, and confidence. The generated index groups by subject but lists every unit with its trigger. Slugs are unique store-wide, so a link or a merge never needs to name the subject.
+- **Consequences:** A session stays legible as a body of work without knowledge becoming findable only through its origin. Cost: every Understanding needs a subject (`_unfiled/` absorbs the ones with no topic). Units left in an older layout — at the store root, or in a per-unit folder — are reported as a problem naming the fix rather than silently skipped.
+- **Superseded sub-decision:** the unit was first a folder (`<slug>/UNDERSTANDING.md`) to namespace evidence artifacts. That cost a directory level on every unit to serve a case that had not occurred in any of the first five, all of which quote their evidence inline. The unit is now a file; artifacts, when a unit genuinely has them, go in a sibling `<slug>.assets/` whose name derives from the slug and so cannot collide. The rejected objection — that publishing would have to "reach inside" a subject folder — was wrong: the file is the unit, so per-unit publish is a file copy.
 
 ### LADR-005 — Record inherited lineage, not the session's reasoning
 
@@ -62,7 +63,7 @@
 
 ## Test References
 
-No automated tests. The generator's validation paths (missing/placeholder `description`/`trigger`/`scope`/`confidence`/`updated`/`provenance.*`, slug-vs-folder mismatch, invalid `scope`/`confidence`, a non-existent `agents_context` path, missing `UNDERSTANDING.md`, duplicate slugs across subjects, a unit left at the old single-level depth, an empty subject folder, dangling links, empty store, absent store) its lineage validation (resolving, dangling, and deliberately unbracketed `provenance.inherited` entries), and its argument handling (`--help`, unknown flag, surplus argument) were exercised manually against fixtures. `parse_frontmatter` additionally has direct assertions for the nested-list case, same-indent list items, a scalar following a list, and absent frontmatter. Re-run them after touching `parse_frontmatter` — the list-under-key branch in particular is easy to break in a way that silently drops `links` instead of erroring.
+No automated tests. The generator's validation paths (missing/placeholder `description`/`trigger`/`scope`/`confidence`/`updated`/`provenance.*`, slug-vs-folder mismatch, invalid `scope`/`confidence`, a non-existent `agents_context` path, a slug not matching its file name, duplicate slugs across subjects, a unit left in the old per-unit-folder shape, a unit stranded at the store root, an empty subject folder, dangling links and dangling `inherited` entries, empty store, absent store) its lineage validation (resolving, dangling, and deliberately unbracketed `provenance.inherited` entries), and its argument handling (`--help`, unknown flag, surplus argument) were exercised manually against fixtures. `parse_frontmatter` additionally has direct assertions for the nested-list case, same-indent list items, a scalar following a list, and absent frontmatter. Re-run them after touching `parse_frontmatter` — the list-under-key branch in particular is easy to break in a way that silently drops `links` instead of erroring.
 
 ## Changelog
 
@@ -70,6 +71,7 @@ No automated tests. The generator's validation paths (missing/placeholder `descr
 |:-----|:-------|:----|
 | 2026-09-19 | Initial version. Slug-folder store under `.context/`, generated reference index, `scope`-gated publish, consumption via `ai-asset-sync`. | |
 | 2026-09-19 | Recorded the _Children of Time_ provenance of the term, to stop the name being genericized into something that invites session logs. | |
+| 2026-09-19 | Unit flattened from `<slug>/UNDERSTANDING.md` to `<slug>.md`; the per-unit folder served an evidence case none of the first five units had. Artifacts move to `<slug>.assets/`. | |
 | 2026-09-19 | LADR-005: `provenance.inherited` added; parser extended to handle a list nested inside a map. | |
 | 2026-09-19 | Review sweep: corrected a false claim (an empty diff aborts task-from-diff rather than creating an empty issue) and a wrong mechanism (fixed layer precedence, not sort order); removed a store unit that duplicated an already-promoted Key Behavior; extended generator validation to `updated`, `provenance.*` and `agents_context`. | |
 | 2026-09-19 | LADR-004: added the subject tier (`<subject>/<slug>/`) after a single-subject session produced five sibling top-level folders and lost its coherence. | |

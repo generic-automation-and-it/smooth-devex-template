@@ -33,7 +33,7 @@ behind is one rediscovery. The cost of shipping a false universal is every consu
 
 1. Read the working store's index; select `portable` units (or all, with `--all`).
 2. Show the user the slug list and the destination. Wait for approval — this writes to a tracked path.
-3. Copy each `<subject>/<slug>/` folder whole, including supporting artifacts. Filter per Understanding, never per subject — one subject routinely mixes scopes.
+3. Copy each `<subject>/<slug>.md`, plus its `<slug>.assets/` when it has one. Filter per Understanding, never per subject — one subject routinely mixes scopes.
 4. On each published copy, record the origin under `provenance` and leave the working copy untouched.
 5. Regenerate the destination's `INDEX.md` with the index script, pointed at the destination:
 
@@ -69,7 +69,7 @@ Once the content is present locally, reconcile it into the working store:
 
 | Incoming slug | Action |
 |---------------|--------|
-| Absent locally | Copy the folder in; set `provenance.consumed_from`; set `confidence: observed` |
+| Absent locally | Copy the file in; set `provenance.consumed_from`; set `confidence: observed` |
 | Present, same trigger | Merge as a collision. **Local wins on any conflict**; report the difference to the user |
 | Present, different trigger | Bring it in under a slug disambiguated by what distinguishes it |
 
