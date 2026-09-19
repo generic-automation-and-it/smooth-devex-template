@@ -141,10 +141,28 @@ def read_unit(unit_file: Path, subject: str) -> tuple[dict | None, list[str]]:
     if isinstance(fields.get("confidence"), str) and fields["confidence"] not in VALID_CONFIDENCE:
         problems.append(f"{where}: confidence '{fields['confidence']}' is not one of {VALID_CONFIDENCE}")
 
+    problems.extend(inline_sequences(fields, where))
+
     fields["folder"] = slug
     fields["subject"] = subject
     fields["path"] = f"{subject}/{unit_file.name}"
     return fields, problems
+
+
+def inline_sequences(fields: dict, where: str) -> list[str]:
+    """Catch a list written in YAML flow style, which this parser reads as a plain scalar.
+
+    `links: [[a]]` is valid YAML and looks right, but it never becomes a list, so
+    `dangling_references` never walks it and an unresolvable entry exits 0. Making the parser
+    read flow sequences would have to guess where `[[a]]` is one reference and where it is a
+    nested sequence; naming the shape is unambiguous and the block form is what the template uses.
+    """
+    return [
+        f"{where}: '{key}' is written as an inline list — this parser reads block lists only, so "
+        f"its [[slug]] entries are never checked; rewrite it as a block list"
+        for key, value in fields.items()
+        if isinstance(value, str) and value.startswith("[")
+    ]
 
 
 def load_units(store: Path) -> tuple[list[dict], list[str]]:
