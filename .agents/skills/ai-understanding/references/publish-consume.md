@@ -1,19 +1,23 @@
 # Publish / Consume Contract
 
 Export writes a session's knowledge to the working store; **publish** carries it out of the workspace
-altogether, and **consume** brings another workspace's published set in. The working store
+altogether, and **consume** brings another workspace's archive in. The working store
 (`.context/understandings/`) is gitignored and dies with the workspace, so publishing is how knowledge
 survives and consuming is how a fresh workspace starts with knowledge it did not earn.
+
+The store is never shared through the repository (LADR-008). Nothing published reaches git; the
+durability boundary is the archive a human keeps.
 
 ## Two tiers
 
 | Tier | Path | Tracked | Lifetime | Purpose |
 |------|------|---------|----------|---------|
-| Working memory | `.context/understandings/` | No | This workspace | Where export lands; accrues cheaply, most of it is never worth keeping |
-| Published memory | `.agents/understandings/` (default publish destination) | Yes | The repository | Reviewed, portable knowledge that other workspaces and repos consume |
+| Working memory | `.context/understandings/<subject>-<yyyyMMdd-HHmm>/<slug>.md` | No | This workspace | Where export lands — one stamped folder per export run; a slug repeated across folders is a version chain, newest current |
+| Published archive | `.context/understandings-publish/understandings-<YYYYMMDD-HHMMSS>.zip` by default, or `--path` when given | No | Whoever keeps the file | A snapshot of the store, mailed, dropped in a channel, or copied to a stick |
 
-Nothing is published implicitly. An Understanding reaches the tracked tier only when a human
-approves the publish, which is the review step that keeps published memory small and true.
+Nothing is published implicitly — it takes the `--publish` invocation. No approval prompt gates the
+write itself: the invocation, and an explicit `--path` if given, is the consent, and the report after
+writing (step 7) is what a human reviews.
 
 ## What travels
 
@@ -35,65 +39,68 @@ acting on it.
 ## Publish
 
 1. Read the working store's index; select every unit, or only `portable` units with `--portable-only`.
-2. Show the user the slug list and the destination. Wait for approval — this writes to a tracked path.
-3. Copy each `<subject>/<slug>.md`, plus its `<slug>.assets/` when it has one. Filter per Understanding, never per subject — one subject routinely mixes scopes.
-4. On each published copy, record the origin under `provenance` and leave the working copy untouched.
-5. Regenerate the destination's `INDEX.md` with the index script, pointed at the destination:
-
-   ```bash
-   python3 .agents/skills/ai-understanding/scripts/understanding_index.py .agents/understandings
-   ```
-
-6. Leave the change uncommitted. Committing and opening a PR is the user's call, via the `git-*` skills.
+2. No approval needed — the default archive path, or an explicit `--path`, is the consent. Step 7 reports the slug list and the path after writing.
+3. Archive each `<subject>-<yyyyMMdd-HHmm>/<slug>.md`, plus its `<slug>.assets/` when it has one. Filter per Understanding, never per subject — one subject routinely mixes scopes. Subject folders keep their stamp verbatim: publishing never re-stamps, because the stamp records when the knowledge was learned and the archive name already records when it was sent.
+4. When `--portable-only` excludes a unit that an archived unit's `links` or `provenance.inherited` names, drop the brackets around that `[[slug]]` in the archived copy and keep the entry — the same convention the store uses for a pruned ancestor. Without `--portable-only` every unit is present and the case cannot arise.
+5. On each archived copy, set `provenance.published_from` and leave the working copy untouched.
+6. Regenerate an `INDEX.md` inside the archive covering only the archived units, using the index script against the staged tree.
+7. Write the zip to `.context/understandings-publish/`, or to `--path` when given — never inside `.context/understandings/`, where the index generator would read it as a subject folder — and print the count, the path, and the slugs.
 
 ### Pre-publish check
 
 Understandings are written during debugging, when a literal value is the fastest thing to type. Before
-anything reaches a tracked path, confirm no unit carries a credential, token, connection string, or
+anything leaves the workspace, confirm no unit carries a credential, token, connection string, or
 internal hostname. Record the shape of the problem, not the value. See
 `.github/instructions/skills/skill-secret-handling.instructions.md`.
 
 ## Consume
 
-Sources are a local published directory or a repository path in `owner/repo@ref:path` form.
+The source is a local path to a published archive — always positional; `--path` overrides only the
+target store it unpacks into (default `.context/understandings/`), never the source. How the archive
+arrived — mail, chat, a shared drive — is out of band. **This skill does not fetch remote content**, and
+`ai-asset-sync` does not transport Understandings. No approval prompt gates the unpack: the source path
+is the consent, and the reconciliation table below is reported per slug after writing.
 
-**This skill does not fetch remote content.** For a remote source, add an entry to the `ai-asset-sync`
-manifest and let that skill perform the fetch — it already owns cloning, lockfile provenance, AI-merge,
-and the resulting PR. One transport implementation, not two.
+A zip is untrusted input. Refuse any entry whose resolved path escapes the target store (`..` segments,
+absolute paths, symlinks), and reject the whole archive with a clear message rather than unpacking part
+of it.
 
-```yaml
-# .github/assets/ai-sync.yml
-version: 1
-entries:
-  - source: generic-automation-and-it/smooth-devex-template@main:.agents/understandings
-```
-
-Once the content is present locally, reconcile it into the working store:
+Reconcile per incoming slug. The key is the slug, and an incoming copy **keeps its own stamped folder**:
+under LADR-010 the same slug in two folders is a version chain, not an index failure, so there is nothing
+left to merge away:
 
 | Incoming slug | Action |
 |---------------|--------|
-| Absent locally | Copy the file in; set `provenance.consumed_from`; set `confidence: observed` |
-| Present, same question | Merge as a collision. **Local wins on any conflict**; report the difference to the user |
+| Absent locally | Copy it in under its incoming stamped folder; set `provenance.consumed_from` (the archive name); set `confidence: observed` |
+| Present, same question, **older** incoming stamp | Copy it in as an older version. It lands as history, unlisted; the local copy stays current. Report it |
+| Present, same question, **newer** incoming stamp | Copy it in, but **ask before letting it become current** — this is the one consume outcome that changes what this workspace believes. Show both claims and recommend nothing by default; the local copy was verified here, the incoming one was not |
 | Present, different question | Bring it in under a slug disambiguated by what distinguishes it |
 
 Two rules make consuming safe to run without reading every incoming file first:
 
-- **Local belief is never silently overwritten.** Consuming can add knowledge and can surface a
-  disagreement, but it cannot quietly replace what this workspace already observed.
+- **Local belief is never silently replaced.** Consuming adds copies and surfaces disagreements; the one
+  case that would flip which copy an agent reads is gated on an explicit ask. _(This rule was once
+  justified by "the same slug in two folders fails the index" — LADR-010 removed that failure, and the
+  rule did not outlive its reason. It survives on its own merit: the local copy was confirmed against
+  this setup, the incoming one was not.)_
 - **Incoming knowledge arrives unverified.** It was `verified` somewhere else, against a setup that may
   differ. It becomes `verified` here only when something here confirms it.
 
+Because folders are stamped, two workspaces that picked the same subject name almost never share a
+folder name, so the common outcome of a consume is *add*, and the version rows above fire on the slug
+alone.
+
 After reconciling, regenerate the working index.
 
-## Cross-repo lifecycle
+## Lifecycle
 
 ```
-session → .context/understandings/<subject>/<slug>/   (--export, local, disposable)
-        → .agents/understandings/<subject>/<slug>/    (--publish, tracked, reviewed, per-unit scope filter)
-        → ai-asset-sync manifest entry                (transport to another repo)
-        → .context/understandings/<subject>/<slug>/   (--consume, into that repo's working memory)
-        → session                                     (--import, matched by question)
-        → *AGENTS.md  or  .github/instructions/       (--promote, when it stops being an observation)
+session → .context/understandings/<subject>-<yyyyMMdd-HHmm>/<slug>.md   (--export, one folder per run; newest copy of a slug is current)
+        → .context/understandings-publish/understandings-<stamp>.zip     (--publish, per-unit scope filter)
+        → handed over out of band                                        (mail, chat, drive)
+        → .context/understandings/<subject>-<yyyyMMdd-HHmm>/<slug>.md   (--consume, into that workspace's store)
+        → session                                                        (--import, matched by question)
+        → *AGENTS.md  or  .github/instructions/                          (--promote, when it stops being an observation)
 ```
 
 Promotion is the exit from this loop. An Understanding that has been consumed, confirmed, and applied

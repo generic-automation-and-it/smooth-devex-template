@@ -14,7 +14,7 @@ Skills live **flat**, one directory per skill directly under `.agents/skills/`. 
 | **ai-terse** | Reformat this turn's reply into terse, high-density output with a TL;DR | `/ai-terse` |
 | **ai-template-sync** | UPSERT smooth-devex-template scaffold into an existing repo | `/ai-template-sync` |
 | **ai-asset-sync** | Dependabot-style OpenCode sync of skills/rules from `owner/repo@ref:path` | `/ai-asset-sync` |
-| **ai-understanding** | Export session knowledge as Understandings; import, publish, consume | `/ai-understanding [--export [--all]] [--import] [--publish [--portable-only]] [--consume <src>] [--promote <slug>] [--index]` |
+| **ai-understanding** | Export session knowledge as Understandings; import, publish, consume | `/ai-understanding [--export [--all]] [--import] [--publish [--portable-only]] [--consume <src>] [--path <target>] [--promote <slug>] [--index]` |
 | **context-load-agents-context** | Load ancestor AGENTS.md context for a file | `/context-load-agents-context` |
 | **context-load-context** | Load domain context before implementation | `/context-load-context auth` |
 | **create-hld** | Author a design-only High-Level Design under `.docs/hlds/NNN-<slug>/` | `/create-hld <kebab-slug>` |
@@ -43,24 +43,33 @@ listen-first default avoids — use deliberately.
 
 ### ai-understanding switches
 
-Default is `--export`: analyse the current session and write each durable lesson to
-`.context/understandings/<subject>/<slug>.md` — gitignored working memory, where the subject folder groups a
-session's lessons and each Understanding is one file. **A unit is a question and its answer**, and covers
+Default is `--export`: read `INDEX.md` first, then write each durable lesson to
+`.context/understandings/<subject>-<yyyyMMdd-HHmm>/<slug>.md` — gitignored working memory. **A stamped
+folder is one export run**, holding only what that run produced; an improved Understanding reuses its slug
+and is re-written in full into the new folder, so a slug repeated across folders is a **version chain**
+with the newest stamp current and the rest unlisted history. A run that produces nothing creates no folder.
+The subject *name* is reused for a body of work; `_unfiled/` stays unstamped. **A unit is a question and its answer**, and covers
 functional or non-functional knowledge about the system being built — not knowledge about the agent
 toolchain used to build it, which belongs in the nearest `*AGENTS.md`. The index groups by subject but
-lists every unit, because retrieval is by the question a unit answers. Export/import move knowledge
-between the session and disk; publish/consume move it between repositories.
+lists the current version of every slug, because retrieval is by the question a unit answers. When two
+Understandings conflict, the newer wins — but the system outranks both. Export/import move knowledge
+between the session and disk; publish/consume move it between workspaces as a zip archive.
 
 | Switch | Effect |
 |--------|--------|
-| `--export` _(default)_ | Analyse the session, write one slug per question; proposes the split first |
-| `--export --all` | Write every qualifying candidate without pausing for the user to cut the list |
+| `--export [--path <dir>]` _(default)_ | Reconcile against `INDEX.md` (`new` / `already known` / `improved` / `new (disambiguated)`), then write this run's output to a new stamped folder, asking via `AskUserQuestion` first (recommending "write everything") unless `--all` is passed |
+| `--export --all [--path <dir>]` | Write every qualifying candidate without asking the user to cut the list |
 | `--import` | Read `INDEX.md`, load only the Understandings whose question matches one the task will raise |
-| `--publish [--portable-only]` | Copy every unit to a tracked destination (default `.agents/understandings/`); `--portable-only` restricts to `scope: portable` |
-| `--consume <src>` | Hydrate from a published directory or `owner/repo@ref:path` (remote fetch via `ai-asset-sync`) |
+| `--publish [--portable-only] [--path <target>]` | Write every unit to a zip under `.context/understandings-publish/`, or to `--path` when given; `--portable-only` restricts the archive to `scope: portable` |
+| `--consume <zip> [--path <dir>]` | Unpack a published archive into the working store (default `.context/understandings/`, or `--path` when given) — local path only, no remote fetch |
 | `--promote <slug>` | Escalate to a `*AGENTS.md` context file or a rule |
-| `--index` | Regenerate `INDEX.md` from the slug folders |
+| `--index` | Regenerate `INDEX.md` from the store |
 | `--review` | Advisory decay report — contested, never-inherited, or overdue a re-check |
+
+`--path` overrides a mode's default write target — never `--consume`'s source, which stays positional.
+Writing to a default location or to `--path` needs no approval; promoting still asks, as does letting a
+`--consume` make an incoming copy current over a local one — both change durable state someone already
+relies on. A local `improved` export does not ask: it adds a copy and destroys nothing.
 
 Governance — Rules vs Understandings, and inheriting at session start — is a rule
 (`.github/instructions/meta/understandings.instructions.md`), not skill text, so it loads without

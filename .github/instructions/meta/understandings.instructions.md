@@ -16,7 +16,7 @@ Updated: 2026-09-19
 |------|-------|--------|-----------|
 | **Rules** | `.agents/rules/` (→ `.github/instructions/`) | The user's decisions | Follow always |
 | **AGENTS.md** | Nearest `*AGENTS.md` to the code | Functional intent, layered domain → sub-domain → feature → technology | Authoritative for that code |
-| **Understandings** | `.context/understandings/<subject>/<slug>.md` | The **input and outcome** of a session's memory — reusable, and holding only what no code file or knowledge document already holds | Apply when the question matches one you are asking |
+| **Understandings** | `.context/understandings/<subject>-<yyyyMMdd-HHmm>/<slug>.md` | The **input and outcome** of a session's memory — reusable, and holding only what no code file or knowledge document already holds. A stamped folder is one export run; a slug repeated across folders is a version chain, newest current | Apply when the question matches one you are asking; **the newer of two conflicting units wins** |
 
 **Rules are not up for reinterpretation** based on what you observe. If a rule appears to be causing
 problems, say so — do not work around it.
@@ -43,7 +43,16 @@ be empty or absent — that is a normal state, not an error.
 
 When nothing matches, say so — once, in a line. Silence is indistinguishable from not having looked.
 
-When one contradicts what you observe, the system wins: name the unit, say what you saw, and set its
+**When two Understandings conflict, the newer wins** — decided by the folder stamp, falling back to
+`updated`, whether they are versions of one slug or two slugs covering the same ground. `INDEX.md` already
+resolves the version case: it lists the current copy of each slug only. Analyse briefly, note what changed
+if it is material, and proceed with the newer; a conflict is not a blocker. **Ask when genuinely unsure** —
+when the older carries evidence or a boundary the newer dropped, or the two disagree on something that
+changes what you are about to do and recency alone does not settle it. Name both units, say what each
+claims, recommend the newer, and do not silently pick.
+
+When one contradicts what you observe, the system wins — recency decides between Understandings, not
+between an Understanding and reality. Name the unit, say what you saw, and set its
 `confidence: contested`. Do not delete it and do not quietly work around it.
 
 Keep track of which loaded Understandings actually shaped the work. Loading is not inheriting — only what
@@ -86,11 +95,12 @@ If knowledge needs must/never language, propose it as a rule under `.agents/rule
 
 Propose the promotion; the user decides.
 
-**Ask before writing, with one carve-out.** Merging into an existing Understanding, publishing to a
-tracked path, and promoting all change durable state — ask first, every time. Exporting to the local
-disposable store is the exception: propose the split and let the user cut it, unless they asked for
-`--all`, which is itself the instruction to skip that step. The `ai-understanding` skill owns the
-mechanics.
+**Ask before merging or promoting; a write to a chosen destination does not ask.** Merging into an existing Understanding and promoting both
+change durable state — ask first, every time, because both act on knowledge someone already chose to
+keep. Writing to a mode's default location, or to an explicit `--path`, needs no approval: the
+destination was already chosen, and every write is reported. Exporting to the local disposable store
+proposes the split first — via `AskUserQuestion`, recommending "write everything" — unless `--all` was
+passed, which is itself the instruction to skip it. The `ai-understanding` skill owns the mechanics.
 
 ## Changelog
 
@@ -105,4 +115,8 @@ mechanics.
 | 2026-09-19 | Definition restated: input and outcome of a session's memory, for another agent to act on; qualifying test is "no other home". |
 | 2026-09-19 | A unit is a question/answer pair; `trigger` renamed to `question`. |
 | 2026-09-19 | Scope narrowed: functional/non-functional knowledge about the system only; toolchain knowledge is filed in `*AGENTS.md` instead. |
+| 2026-09-19 | Subject folder gained a `-yyyyMMdd-HHmm` creation stamp; path example updated. |
+| 2026-09-19 | Publish is an archive under `.context/`, not a tracked path; wording of the ask-before-writing carve-out updated. |
 | 2026-09-19 | Vocabulary aligned to the export/import vs publish/consume split; `--all` named as the explicit waiver of the pre-write cut, resolving a rule/skill contradiction. |
+| 2026-09-19 | Ask-before-writing carve-out narrowed to merge and promote; a named destination (default or `--path`) is now the approval for every write mode. |
+| 2026-09-19 | LADR-010: a slug is a version key, not a unique name — an export run writes its own stamped folder, an improved unit is re-written in full, and the index shows the newest version of each slug. Importing gained the recency precedence rule (newer wins, analyse briefly, ask when unsure, the system outranks both). |
