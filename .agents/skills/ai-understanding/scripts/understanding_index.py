@@ -180,8 +180,7 @@ def load_units(store: Path) -> tuple[list[dict], list[str]]:
                 units.append(unit)
 
     problems.extend(duplicate_slugs(units))
-    problems.extend(dangling_links(units))
-    problems.extend(dangling_inherited(units))
+    problems.extend(dangling_references(units))
     return units, problems
 
 
@@ -198,43 +197,52 @@ def duplicate_slugs(units: list[dict]) -> list[str]:
     return duplicates
 
 
-def dangling_links(units: list[dict]) -> list[str]:
-    known = {unit["folder"] for unit in units}
-    dangling = []
-    for unit in units:
-        links = unit.get("links")
-        if not isinstance(links, list):
+def iter_reference_fields(unit: dict):
+    """Yield every (field-path, list) in a unit's frontmatter that could hold `[[slug]]` refs.
+
+    Walks the shape generically — top-level lists and lists one level inside a map — so a
+    field added to the template is validated without touching this file. Parsing was already
+    generic; validation used to be per-field, and a new field went silently unchecked.
+    """
+    for key, value in unit.items():
+        if key in ("folder", "subject", "path"):
             continue
-        for link in links:
-            target = link.strip().strip("[]")
-            if target and not placeholder(target) and target not in known:
-                dangling.append(f"{unit['path']}: link [[{target}]] has no matching folder")
-    return dangling
+        if isinstance(value, list):
+            yield key, value
+        elif isinstance(value, dict):
+            for sub_key, sub_value in value.items():
+                if isinstance(sub_value, list):
+                    yield f"{key}.{sub_key}", sub_value
 
 
-def dangling_inherited(units: list[dict]) -> list[str]:
-    """`provenance.inherited` records the lineage a session actually acted on.
+# How to word an unresolvable reference, per field. Any field not listed gets the default.
+REFERENCE_REMEDIES = {
+    "provenance.inherited": (
+        "is no longer in the store — restore it, point at what superseded it, "
+        "or unbracket it to keep the lineage"
+    ),
+}
+DEFAULT_REMEDY = "has no matching Understanding"
 
-    A bracketed entry is a live reference and must resolve. Drop the brackets to record an
-    ancestor that has since been pruned or promoted away — the lineage stays readable
-    without pinning the store to knowledge it no longer holds.
+
+def dangling_references(units: list[dict]) -> list[str]:
+    """An unresolvable `[[slug]]` in any frontmatter list, wherever it appears.
+
+    Only bracketed entries are references. A bare string is a historical note — that is how a
+    lineage survives the Understanding it names being pruned or promoted away.
     """
     known = {unit["folder"] for unit in units}
     dangling = []
     for unit in units:
-        provenance = unit.get("provenance")
-        if not isinstance(provenance, dict):
-            continue
-        for entry in provenance.get("inherited") or []:
-            entry = entry.strip()
-            if not entry.startswith("[[") or placeholder(entry):
-                continue
-            target = entry.strip("[]")
-            if target and target not in known:
-                dangling.append(
-                    f"{unit['path']}: inherited [[{target}]] is no longer in the store — "
-                    f"restore it, point at what superseded it, or unbracket it to keep the lineage"
-                )
+        for field, values in iter_reference_fields(unit):
+            for entry in values:
+                entry = str(entry).strip()
+                if not entry.startswith("[[") or placeholder(entry):
+                    continue
+                target = entry.strip("[]")
+                if target and target not in known:
+                    remedy = REFERENCE_REMEDIES.get(field, DEFAULT_REMEDY)
+                    dangling.append(f"{unit['path']}: {field} [[{target}]] {remedy}")
     return dangling
 
 
