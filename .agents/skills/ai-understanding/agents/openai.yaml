@@ -1,5 +1,5 @@
 interface:
-  display_name: "Understanding"
-  short_description: "Export a session's Understandings to disk; import, publish and consume them"
-  default_prompt: "Export this session: write one Understanding per trigger to .context/understandings/<subject>/<slug>.md, each self-contained. List the candidate slugs and their triggers first, and write nothing until I approve — unless I passed --all."
+  display_name: "Export Understandings"
+  short_description: "Distil a session into Understandings on disk; import, publish and consume them"
+  default_prompt: "Export this session as Understandings: read the whole session, split it into one unit per trigger, and write each to .context/understandings/<subject>/<slug>.md — the subject folder groups the session, one file per Understanding. Each must stand alone for an agent with zero context from this session: no 'as established above'. Frontmatter carries slug (matching the filename, unique store-wide), description, trigger, scope (portable only if true outside this repo, else repo-specific), confidence (observed unless reproduced), agents_context, and provenance including any [[slugs]] this session inherited and acted on. Body is Knowledge, Why in 1-3 lines, and Boundaries. Write as evidence, never orders — anything needing must/never language is a rule, not an Understanding, so propose it as one instead. Never overwrite an existing slug: merge on a matching trigger, disambiguate otherwise. Quote evidence inline; no secrets, since these are publishable. List the candidate slugs and their triggers for me to cut before writing anything, unless I passed --all. Afterwards regenerate the index with scripts/understanding_index.py and report any problems it prints."
   model: gpt-5.5
