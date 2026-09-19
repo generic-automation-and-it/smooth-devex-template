@@ -14,7 +14,7 @@ Skills live **flat**, one directory per skill directly under `.agents/skills/`. 
 | **ai-terse** | Reformat this turn's reply into terse, high-density output with a TL;DR | `/ai-terse` |
 | **ai-template-sync** | UPSERT smooth-devex-template scaffold into an existing repo | `/ai-template-sync` |
 | **ai-asset-sync** | Dependabot-style OpenCode sync of skills/rules from `owner/repo@ref:path` | `/ai-asset-sync` |
-| **ai-understanding** | Export session knowledge as Understandings; import, publish, consume | `/ai-understanding [--export [--all]] [--import] [--publish [--all]] [--consume <src>] [--promote <slug>] [--index]` |
+| **ai-understanding** | Export session knowledge as Understandings; import, publish, consume | `/ai-understanding [--export [--all]] [--import] [--publish [--portable-only]] [--consume <src>] [--promote <slug>] [--index]` |
 | **context-load-agents-context** | Load ancestor AGENTS.md context for a file | `/context-load-agents-context` |
 | **context-load-context** | Load domain context before implementation | `/context-load-context auth` |
 | **create-hld** | Author a design-only High-Level Design under `.docs/hlds/NNN-<slug>/` | `/create-hld <kebab-slug>` |
@@ -45,16 +45,18 @@ listen-first default avoids — use deliberately.
 
 Default is `--export`: analyse the current session and write each durable lesson to
 `.context/understandings/<subject>/<slug>.md` — gitignored working memory, where the subject folder groups a
-session's lessons and each Understanding is one file. The index groups by subject but lists every unit,
-because retrieval is by trigger. Export/import move knowledge
+session's lessons and each Understanding is one file. **A unit is a question and its answer**, and covers
+functional or non-functional knowledge about the system being built — not knowledge about the agent
+toolchain used to build it, which belongs in the nearest `*AGENTS.md`. The index groups by subject but
+lists every unit, because retrieval is by the question a unit answers. Export/import move knowledge
 between the session and disk; publish/consume move it between repositories.
 
 | Switch | Effect |
 |--------|--------|
-| `--export` _(default)_ | Analyse the session, write one slug per trigger; proposes the split first |
+| `--export` _(default)_ | Analyse the session, write one slug per question; proposes the split first |
 | `--export --all` | Write every qualifying candidate without pausing for the user to cut the list |
-| `--import` | Read `INDEX.md`, load only the Understandings whose trigger matches the task |
-| `--publish [--all]` | Copy `scope: portable` units to a tracked destination (default `.agents/understandings/`); `--all` includes `repo-specific` |
+| `--import` | Read `INDEX.md`, load only the Understandings whose question matches one the task will raise |
+| `--publish [--portable-only]` | Copy every unit to a tracked destination (default `.agents/understandings/`); `--portable-only` restricts to `scope: portable` |
 | `--consume <src>` | Hydrate from a published directory or `owner/repo@ref:path` (remote fetch via `ai-asset-sync`) |
 | `--promote <slug>` | Escalate to a `*AGENTS.md` context file or a rule |
 | `--index` | Regenerate `INDEX.md` from the slug folders |

@@ -1,7 +1,7 @@
 ---
 slug: <kebab-case-slug, equals the file name without .md, unique store-wide, names the knowledge not the incident>
 description: <one line — what this knowledge is. Shown in INDEX.md>
-trigger: <one line — the situation in which this applies. Shown in INDEX.md>
+question: <OPTIONAL. The question a reader has at the moment this applies, when there is a natural one — one question, one answer. Omit it for an outcome record, where the description is the match. Shown in INDEX.md>
 scope: <portable | repo-specific>
 confidence: <observed | verified | contested>
 links:
@@ -22,17 +22,17 @@ updated: <YYYY-MM-DD>
 
 # <Title — the knowledge in a phrase>
 
-## Knowledge
+## Answer
 
-<Direct operational guidance. What to do, stated so an agent with zero context from the
+<Direct operational guidance — the answer to the question above, and nothing wider than it. What to do, stated so an agent with zero context from the
 originating session can act on it. Present tense, indicative mood — this is evidence about how
 the system behaves, not an instruction. If it needs must/never language, it is a rule, not an
 Understanding.>
 
 ## Why
 
-<1-3 lines. The reasoning or the failure that produced this — enough to judge an edge case the
-Knowledge section does not cover. Not a narrative of the session.>
+<The reasoning or the failure that produced this — only as much as is needed to judge an edge case the
+Answer does not cover. Not a narrative of the session.>
 
 ## Boundaries
 

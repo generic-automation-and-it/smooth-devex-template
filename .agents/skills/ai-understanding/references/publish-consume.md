@@ -20,18 +20,21 @@ approves the publish, which is the review step that keeps published memory small
 | `scope` | Published by default | Meaning |
 |---------|---------------------|---------|
 | `portable` | Yes | True of the stack, tooling, or language anywhere it is used |
-| `repo-specific` | No (needs `--all`) | True only of this repository's setup, data, or conventions |
+| `repo-specific` | Yes (excluded with `--portable-only`) | True only of this repository's setup, data, or conventions |
 
-Getting this wrong in the permissive direction is the expensive failure: a `repo-specific`
-Understanding published and then consumed elsewhere is a local quirk presented to a future agent as
-firsthand universal knowledge, with provenance that makes it look trustworthy.
+Publishing to another repository is what `--portable-only` is for. Getting it wrong in the permissive
+direction is the expensive failure: a `repo-specific` Understanding published and then consumed
+elsewhere is a local quirk presented to a future agent as firsthand universal knowledge, with
+provenance that makes it look trustworthy.
 
-When the distinction is genuinely unclear, mark it `repo-specific`. The cost of leaving knowledge
-behind is one rediscovery. The cost of shipping a false universal is every consumer acting on it.
+When the distinction is genuinely unclear, mark it `repo-specific` at export time — declaring `scope`
+correctly while the evidence is fresh is what lets `--portable-only` filter safely later. The cost of
+leaving knowledge behind is one rediscovery. The cost of shipping a false universal is every consumer
+acting on it.
 
 ## Publish
 
-1. Read the working store's index; select `portable` units (or all, with `--all`).
+1. Read the working store's index; select every unit, or only `portable` units with `--portable-only`.
 2. Show the user the slug list and the destination. Wait for approval — this writes to a tracked path.
 3. Copy each `<subject>/<slug>.md`, plus its `<slug>.assets/` when it has one. Filter per Understanding, never per subject — one subject routinely mixes scopes.
 4. On each published copy, record the origin under `provenance` and leave the working copy untouched.
@@ -70,8 +73,8 @@ Once the content is present locally, reconcile it into the working store:
 | Incoming slug | Action |
 |---------------|--------|
 | Absent locally | Copy the file in; set `provenance.consumed_from`; set `confidence: observed` |
-| Present, same trigger | Merge as a collision. **Local wins on any conflict**; report the difference to the user |
-| Present, different trigger | Bring it in under a slug disambiguated by what distinguishes it |
+| Present, same question | Merge as a collision. **Local wins on any conflict**; report the difference to the user |
+| Present, different question | Bring it in under a slug disambiguated by what distinguishes it |
 
 Two rules make consuming safe to run without reading every incoming file first:
 
@@ -89,7 +92,7 @@ session → .context/understandings/<subject>/<slug>/   (--export, local, dispos
         → .agents/understandings/<subject>/<slug>/    (--publish, tracked, reviewed, per-unit scope filter)
         → ai-asset-sync manifest entry                (transport to another repo)
         → .context/understandings/<subject>/<slug>/   (--consume, into that repo's working memory)
-        → session                                     (--import, matched by trigger)
+        → session                                     (--import, matched by question)
         → *AGENTS.md  or  .github/instructions/       (--promote, when it stops being an observation)
 ```
 

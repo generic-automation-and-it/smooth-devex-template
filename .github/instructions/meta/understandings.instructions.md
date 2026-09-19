@@ -16,12 +16,12 @@ Updated: 2026-09-19
 |------|-------|--------|-----------|
 | **Rules** | `.agents/rules/` (→ `.github/instructions/`) | The user's decisions | Follow always |
 | **AGENTS.md** | Nearest `*AGENTS.md` to the code | Functional intent, layered domain → sub-domain → feature → technology | Authoritative for that code |
-| **Understandings** | `.context/understandings/<subject>/<slug>.md` | Discovered knowledge about how the system actually behaves | Apply when the trigger matches |
+| **Understandings** | `.context/understandings/<subject>/<slug>.md` | Discovered **functional and non-functional** knowledge about how the system actually behaves, stored as a question and its answer | Apply when the question matches one you are asking |
 
 **Rules are not up for reinterpretation** based on what you observe. If a rule appears to be causing
 problems, say so — do not work around it.
 
-**Understandings are evidence, not orders.** Apply one when its trigger matches, and say so when what
+**Understandings are evidence, not orders.** Apply one when its question matches, and say so when what
 you observe contradicts it. They go stale, and a stale Understanding applied confidently is worse than
 none at all.
 
@@ -31,10 +31,11 @@ resolving it silently.
 ## Importing
 
 At the start of a task, read `.context/understandings/INDEX.md` and load any Understanding whose
-**trigger** matches the work at hand. Match first, read second: the index exists so that finding one
+**question** matches one the work at hand will make you ask — or, where a unit carries no question, whose
+**description** matches the work. Match first, read second: the index exists so that finding one
 applicable Understanding does not cost the tokens of reading all of them.
 
-The index groups Understandings by the subject they came out of, but match on **triggers** — the work
+The index groups Understandings by the subject they came out of, but match on **questions** — the work
 that produced a piece of knowledge usually has nothing to do with the work it applies to.
 
 Treat what you load as your own prior knowledge. The store is gitignored and per-workspace, so it may
@@ -43,6 +44,24 @@ be empty or absent — that is a normal state, not an error.
 Keep track of which loaded Understandings actually shaped the work. When the session exports anything,
 those go in its `provenance.inherited` — the store's only signal for which knowledge is earning its
 keep, and the only way to find what depended on a unit that later turns out to be wrong.
+
+## Never export toolchain knowledge as an Understanding
+
+The store is for knowledge about **the system being built** — domain behaviour, data and integration
+constraints, performance and security characteristics. Knowledge about the **tools used to build it** —
+skills, CI workflows, scanners, the agent harness, dependency versions — is not an Understanding, however
+much it cost to learn. The skill you ran is never the subject: a braindump session is not an
+Understanding, but the requirements that came out of it are.
+
+File toolchain knowledge in the nearest `*AGENTS.md`, or in a rule if it is a decision. It is not
+worthless; it is just not memory about the product.
+
+**Outcomes are the exception, and they belong here.** The requirements a braindump distilled from a set of
+meetings; the issues and PRs a piece of work produced and the state it left them in; what was specified but
+not built, and who is carrying it. An `*AGENTS.md` documents what the code does, not what is still owed, so
+this knowledge has no other home — and it is the first thing a next session needs. Record the artifacts and
+their state, not a narrative of the work, and date it: a ticket number is a fact, a ticket's status is a
+snapshot.
 
 ## Never export a rule as an Understanding
 
@@ -77,4 +96,7 @@ mechanics.
 | 2026-09-19 | Initial version. |
 | 2026-09-19 | Store path gained a subject tier: `<subject>/<slug>/`. |
 | 2026-09-19 | `provenance.inherited` records which Understandings a session loaded and acted on. |
+| 2026-09-19 | Outcomes (requirements distilled, issues/PRs produced and their state) named as a first-class kind of Understanding. |
+| 2026-09-19 | A unit is a question/answer pair; `trigger` renamed to `question`. |
+| 2026-09-19 | Scope narrowed: functional/non-functional knowledge about the system only; toolchain knowledge is filed in `*AGENTS.md` instead. |
 | 2026-09-19 | Vocabulary aligned to the export/import vs publish/consume split; `--all` named as the explicit waiver of the pre-write cut, resolving a rule/skill contradiction. |
