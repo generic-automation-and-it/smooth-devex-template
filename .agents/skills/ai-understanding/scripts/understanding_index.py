@@ -22,6 +22,7 @@ Exits 1 when a unit fails validation — the index is still written so the drift
 from __future__ import annotations
 
 import sys
+from datetime import date
 from pathlib import Path
 
 DEFAULT_STORE = Path(".context/understandings")
@@ -33,6 +34,10 @@ OPTIONAL_TEXT_FIELDS = ("question",)
 VALID_SCOPES = ("portable", "repo-specific")
 VALID_CONFIDENCE = ("observed", "verified", "contested")
 UNFILED = "_unfiled"
+# A unit past this many days without an update is worth re-reading. Outcome units — the ones
+# carrying no `question`, which record what a piece of work produced — decay faster than knowledge.
+STALE_AFTER_DAYS = 90
+STALE_AFTER_DAYS_OUTCOME = 30
 
 
 def parse_frontmatter(text: str) -> dict:
@@ -298,6 +303,54 @@ def dangling_references(units: list[dict]) -> list[str]:
     return dangling
 
 
+def inherited_targets(units: list[dict]) -> set[str]:
+    """Every slug any unit records having acted on. The store's only usage signal."""
+    targets = set()
+    for unit in units:
+        provenance = unit.get("provenance")
+        if isinstance(provenance, dict):
+            for entry in provenance.get("inherited") or []:
+                targets.add(str(entry).strip().strip("[]"))
+    return targets
+
+
+def days_since(value) -> int | None:
+    try:
+        return (date.today() - date.fromisoformat(str(value).strip())).days
+    except ValueError:
+        return None
+
+
+def review(units: list[dict]) -> list[str]:
+    """Advisory decay report: which units are worth re-reading, pruning or promoting.
+
+    Not validation — none of this is wrong, and the report never changes the exit code. It exists
+    because a store that only grows stops being readable, and nothing else notices.
+    """
+    used = inherited_targets(units)
+    # In a store where nothing has recorded inheritance yet, "never inherited" carries no signal.
+    lineage_recorded = bool(used)
+
+    lines = []
+    for unit in units:
+        flags = []
+        is_outcome = not unit.get("question")
+        age = days_since(unit.get("updated"))
+        limit = STALE_AFTER_DAYS_OUTCOME if is_outcome else STALE_AFTER_DAYS
+
+        if unit.get("confidence") == "contested":
+            flags.append("contested — the code disagreed with it; confirm or retire")
+        if lineage_recorded and unit["folder"] not in used:
+            flags.append("never inherited — the question may not match what anyone actually asks")
+        if age is not None and age > limit:
+            kind = "outcome" if is_outcome else "knowledge"
+            flags.append(f"{age}d since update ({kind} unit, flagged past {limit}d) — re-check it still holds")
+        if flags:
+            lines.append(f"{unit['path']}:")
+            lines.extend(f"    {f}" for f in flags)
+    return lines
+
+
 def cell(value) -> str:
     if not isinstance(value, str) or not value:
         return "—"
@@ -342,10 +395,10 @@ def render(units: list[dict]) -> str:
     return "\n".join(lines)
 
 
-USAGE = f"""usage: understanding_index.py [store-dir]
+USAGE = f"""usage: understanding_index.py [store-dir] [--review]
 
 Regenerate INDEX.md from the <subject>/<slug>.md units.
-Defaults to {DEFAULT_STORE}.
+Defaults to {DEFAULT_STORE}. --review adds an advisory decay report.
 
 Exit codes: 0 clean · 1 validation problems (index still written) · 2 store not found."""
 
@@ -355,6 +408,8 @@ def main(argv: list[str]) -> int:
     if any(a in ("-h", "--help") for a in args):
         print(USAGE)
         return 0
+    wants_review = "--review" in args
+    args = [a for a in args if a != "--review"]
     unknown = [a for a in args if a.startswith("-")]
     if unknown:
         print(f"unknown option: {unknown[0]}\n\n{USAGE}", file=sys.stderr)
@@ -375,6 +430,11 @@ def main(argv: list[str]) -> int:
         f"indexed {len(units)} understanding(s) across {subject_count} subject(s) "
         f"-> {store / 'INDEX.md'}"
     )
+
+    if wants_review:
+        report = review(units)
+        print("\nreview — advisory, does not affect the exit code")
+        print("\n".join(report) if report else "    nothing flagged")
 
     for problem in problems:
         print(f"  problem: {problem}", file=sys.stderr)

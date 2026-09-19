@@ -16,9 +16,21 @@ models:
 
 # Understanding — Skill
 
-An **Understanding** is a **question and its answer** — a distilled, self-contained unit of hard-won knowledge, written so a future agent with zero context from this session can act on it as if it had learned it firsthand. The question is what a reader has in their head at the moment the knowledge applies; the answer is what to do about it. Pairing them is what makes a unit retrievable and keeps it honest: one question has one answer, so a unit that needs two is two units.
+An **Understanding** is the **input and outcome of a session's memory**, kept so another agent can act on
+it: reusable, terse, structured, and holding what no code file or knowledge document already holds.
 
-An Understanding is **not** a session log, not a summary of what we did, and not documentation of the code. It is the transferable skill that remains after the experience is discarded.
+The last clause is the whole test, and the rest follows from the purpose — it is written for an agent to
+act on, not for a human to read or an archive to keep:
+
+- **terse**, because it competes for a context budget it does not control
+- **structured**, because it must be matched before it is read
+- **no narrative**, because an agent cannot act on a story
+- **evidence, not orders**, because the agent must be able to override it when the system disagrees
+
+Two kinds qualify. **Input** — what went into the work: requirements distilled from meetings, a braindump's
+findings, a constraint someone stated once. **Outcome** — what came out: the issues and PRs a piece of work
+produced and their state, what was decided, what was specified but left unbuilt, and anything learned in
+passing that the work did not set out to learn.
 
 The working store is **local and disposable** (`.context/` is gitignored). That is deliberate: memory accrues cheaply per workspace, and only what earns it gets published. Anything you want to survive this workspace must be published.
 
@@ -59,6 +71,7 @@ Export and import are about **this session's memory**: export writes what the se
 | `--consume <source>` | Hydrate the working store from a published set or another repo |
 | `--promote <slug>` | Escalate an Understanding to a `*AGENTS.md` context file or a rule |
 | `--index` | Regenerate `INDEX.md` from the slug folders |
+| `--review` | Advisory decay report — what is contested, never inherited, or overdue a re-check |
 
 `--all` applies only to `--export`, where it means "skip the cut". `--publish`'s scope filter is a
 separate switch, `--portable-only` — the two are unrelated despite the old design overloading `--all`
@@ -76,49 +89,29 @@ conversation. Invoked bare, or with `--export`, this is what the skill does.
 Read the whole session before writing anything. What qualifies is not "what we did" — it is what a
 future agent would otherwise have to rediscover.
 
-### What qualifies: the system, not the toolchain
+### What qualifies: nothing with another home
 
-An Understanding carries **functional and non-functional knowledge about the system being built** — how a
-domain actually behaves, a constraint the data imposes, an integration that misbehaves under load, a
-security boundary that is not where it looks. The kind of thing that would still be true, and still
-matter, if the work had been done by hand.
+Work down this list. The store is the residue after the other homes have taken what is theirs.
 
-It does **not** carry knowledge about the tools used to do the work. How a skill's script computes a diff,
-which Python version a scanner needs, how a CI workflow's path filters combine, how the agent harness
-shares a checkout — all true, all occasionally useful, none of it an Understanding. That is knowledge
-about the *vehicle*, and the store is for the *cargo*.
-
-The tell: **the skill you used is never the subject.** Running a braindump session is not an
-Understanding; the requirements that came out of it, split by question and given slugs, are. Running a
-task-from-diff is not an Understanding; a constraint you discovered about the feature you were slicing is.
-
-### Outcomes count, narratives do not
-
-A session's **outcome** is knowledge in its own right, and it has no other home. The requirements a
-braindump distilled out of three meetings; the issues and PRs a piece of work produced and what state it
-left them in; what was decided, what was specified but not built, and who is carrying it. None of that
-belongs in an `*AGENTS.md` — which documents what the code does, not what is still owed — and all of it is
-what a next session needs first.
-
-The line against session logs still holds, and it is about **shape**, not subject matter:
-
-| Not this | This |
+| If it is… | It goes… |
 |---|---|
-| "We discussed the export format, then I refactored the parser, then tests passed" | "Issue #67 tracks the skill; PR #68 is open as a draft; publish is specified in a worktask but unbuilt" |
-| A narrative of the work, in order, from the agent's point of view | The durable artifacts, their identifiers, and their state |
+| Visible in the code | nowhere — read the code |
+| Functional intent about a code area | the nearest `*AGENTS.md` |
+| A decision the user made | a rule |
+| A design decision with trade-offs | an LADR in the nearest `*AGENTS.md` |
+| **Reusable, and none of the above has a claim on it** | **here** |
 
-Outcome units go stale faster than anything else in the store, so say so: give the date in `Boundaries`
-and name the command that re-checks the claim. A ticket number is a fact; a ticket's status is a snapshot.
+"Not written down yet" is not the same as "no other home". If something belongs in an `*AGENTS.md` and
+nobody has written it, write it there — otherwise the store becomes the place for anything unfiled.
 
-Two questions that settle it:
+This is what excludes the toolchain. How a skill's script computes a diff, which Python version a scanner
+needs, how a workflow's path filters combine — all true, all expensive to learn, all with a home beside the
+tool they describe. The skill you used is never the subject: running a braindump is not an Understanding,
+the requirements that came out of it are.
 
-- Would this still be true and worth knowing for someone who never used these tools?
-- Is it about the product, or about the process that produced the product?
-- If neither — is it the **outcome** of the work, the artifacts and their state? Then it qualifies on its own terms, and the questions above do not apply.
-
-Tooling knowledge is not worthless — it is just filed elsewhere. It belongs in the nearest `*AGENTS.md`
-(the skill's own, the workflow's own), in a rule if it is a decision, or in setup documentation. Put it
-there and leave the store alone.
+Outcomes are the one kind with no fallback. An `*AGENTS.md` records what the code does, not what is still
+owed, so the state of a piece of work — its issues, its open decisions, its unbuilt specifications — lands
+here or nowhere. Those units go stale fastest: give the date and the command that re-checks them.
 
 ### When to propose one unprompted
 
@@ -152,7 +145,7 @@ Frontmatter fields:
 | `description` | One line — what this knowledge is. Appears in `INDEX.md` |
 | `question` | **Optional.** The question a reader has at the moment this applies, when there is a natural one — one question, one answer. Omit it on an outcome record, where `description` is the match. Appears in `INDEX.md` |
 | `scope` | `portable` (true of the stack/tooling anywhere) or `repo-specific` (true only here). Governs export |
-| `confidence` | `observed` (seen once), `verified` (reproduced or confirmed), `contested` (evidence conflicts) |
+| `confidence` | `observed` (seen once), `verified` (reproduced, or confirmed against source), `contested` (the system disagreed). It records how the knowledge was obtained, **not that it is correct** |
 | `links` | `[[slug]]` references to related Understandings |
 | `agents_context` | Path to the nearest `*AGENTS.md` this bears on, when it concerns a specific code area |
 | `provenance.learned` | Date, absolute |
@@ -170,6 +163,23 @@ Keeping the answer inside the question's scope is what stops a unit over-reachin
 Record the lineage: list under `provenance.inherited` the Understandings this session imported and acted on. That is the store's only evidence of which knowledge is earning its place — a unit nothing ever inherits is either badly triggered or dead weight, and without the record you cannot tell those apart from knowledge that simply has not come up yet. It also gives the blast radius when a unit later turns out to be wrong.
 
 A bracketed `[[slug]]` must resolve. When an ancestor is pruned or promoted away, drop the brackets rather than deleting the entry — the lineage is a historical fact and stays readable, without pinning the store to knowledge it no longer holds.
+
+### Confidence moves
+
+The field is worthless if it only ever gets set once.
+
+| From | To | When |
+|---|---|---|
+| `observed` | `verified` | You used it and it held — confirming a unit you were relying on anyway is the cheapest verification there is, so take it |
+| any | `contested` | The system disagreed. Record what you saw in the body; do not delete the unit |
+| `contested` | `verified` | Someone re-checked and it holds — say what changed, in the changelog |
+
+Raising confidence is a normal part of using the store, not a maintenance task. Lowering it is urgent: a
+confidently wrong unit is the one failure mode worse than an empty store.
+
+Note what it does **not** mean. `verified` says the claim was checked once, by someone, against something.
+Two independent agents reading the source have found a false claim in a unit marked `verified`. Treat it as
+provenance, not warranty — which is why the import protocol says verify rather than defer.
 
 ### Language
 
@@ -197,16 +207,49 @@ python3 .agents/skills/ai-understanding/scripts/understanding_index.py
 
 ## Import (`--import`)
 
-The reverse of export: knowledge comes **off disk and back into the session**. This is also what the
-always-loaded rule asks for at the start of a task, with or without the switch.
+The reverse of export, and where the value is actually realised. This is also what the always-loaded rule
+asks for at the start of a task, with or without the switch.
 
-Read `.context/understandings/INDEX.md` and load every Understanding whose **question** matches one you are about to ask. Read the index first and the units second — that is what the index is for.
+Read `INDEX.md` first and units second. Match on the **question** — or on `description` where a unit
+carries none — against what the work at hand will make you ask.
 
-Treat loaded Understandings as prior knowledge. If one contradicts what the code actually does, say so: they go stale, and a stale one is worse than none. Lower its `confidence` to `contested` and tell the user.
+**How many.** As many as genuinely match, which is usually none or one. Loading a unit costs context you
+cannot spend twice, so a match has to be a match: the same question, not the same subject area. If three
+match, read all three — but three matches on a store this size usually means the questions are too broad,
+which is what `--review` is for.
 
-**Keep track of what you actually used.** Anything loaded here that goes on to shape the work is recorded as `provenance.inherited` on whatever the session exports later. Loading an Understanding and then ignoring it is not inheritance — only record the ones that changed what you did.
+**When nothing matches, say so.** One line, once. Silence is indistinguishable from not having looked, and
+the next person cannot tell whether the store was consulted or ignored.
+
+**When one contradicts the system.** The system wins, always. Say which unit, what it claims, and what you
+observed. Set its `confidence: contested` — do not delete it, and do not quietly work around it. A unit that
+was true and stopped being true is more informative than a missing one.
+
+**Record what you used.** Any unit that changed what you did goes in `provenance.inherited` on whatever the
+session exports later. Loading is not inheriting: only what shaped the work counts. This is the store's
+only evidence of which units earn their place, and `--review` reads it back — a unit nothing ever inherits
+is either badly asked or dead weight.
 
 Rules always win a conflict with an Understanding. Flag the conflict rather than resolving it silently.
+
+## Review (`--review`)
+
+A store that only grows stops being readable. Nothing else notices, so this does:
+
+```bash
+python3 .agents/skills/ai-understanding/scripts/understanding_index.py --review
+```
+
+| Flag | What to do |
+|---|---|
+| `contested` | Confirm it against the system and raise it back to `verified`, or retire it |
+| `never inherited` | The question probably does not match what anyone asks. Re-word it, or accept the unit was never needed and prune it |
+| overdue re-check | Read it against the current system. Outcome units are flagged after 30 days, knowledge after 90 |
+
+Advisory only — it never changes the exit code, because none of it is wrong, it is just decaying. Act on it
+when you are already in the store; do not make a project of it.
+
+Pruning is a legitimate outcome. The store earns its retrieval cost or it does not.
 
 ## Publish (`--publish`)
 
@@ -263,6 +306,7 @@ Propose the promotion; the user decides. Once promoted, the Understanding record
 |:-----|:-------|:----|
 | 2026-09-19 | Initial version. | |
 | 2026-09-19 | `--export`/`--import` are session↔disk; cross-repo moves became `--publish`/`--consume`. | |
+| 2026-09-19 | Definition restated from its purpose — input and outcome of a session's memory, for another agent to act on — with a single "no other home" test replacing two separate qualifying rules. | |
 | 2026-09-19 | Outcomes named as a first-class kind of Understanding: requirements distilled from meetings, and the issues/PRs/worktasks a piece of work produced and their state — none of which has an `*AGENTS.md` home. | |
 | 2026-09-19 | A unit is now an explicit question/answer pair: frontmatter `trigger` became `question`, body `## Knowledge` became `## Answer`. | |
 | 2026-09-19 | Scope narrowed to functional/non-functional knowledge about the system; knowledge about the agent toolchain is explicitly out and belongs in `*AGENTS.md` or setup docs. | |

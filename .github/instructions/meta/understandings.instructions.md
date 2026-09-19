@@ -16,7 +16,7 @@ Updated: 2026-09-19
 |------|-------|--------|-----------|
 | **Rules** | `.agents/rules/` (→ `.github/instructions/`) | The user's decisions | Follow always |
 | **AGENTS.md** | Nearest `*AGENTS.md` to the code | Functional intent, layered domain → sub-domain → feature → technology | Authoritative for that code |
-| **Understandings** | `.context/understandings/<subject>/<slug>.md` | Discovered **functional and non-functional** knowledge about how the system actually behaves, stored as a question and its answer | Apply when the question matches one you are asking |
+| **Understandings** | `.context/understandings/<subject>/<slug>.md` | The **input and outcome** of a session's memory — reusable, and holding only what no code file or knowledge document already holds | Apply when the question matches one you are asking |
 
 **Rules are not up for reinterpretation** based on what you observe. If a rule appears to be causing
 problems, say so — do not work around it.
@@ -41,8 +41,13 @@ that produced a piece of knowledge usually has nothing to do with the work it ap
 Treat what you load as your own prior knowledge. The store is gitignored and per-workspace, so it may
 be empty or absent — that is a normal state, not an error.
 
-Keep track of which loaded Understandings actually shaped the work. When the session exports anything,
-those go in its `provenance.inherited` — the store's only signal for which knowledge is earning its
+When nothing matches, say so — once, in a line. Silence is indistinguishable from not having looked.
+
+When one contradicts what you observe, the system wins: name the unit, say what you saw, and set its
+`confidence: contested`. Do not delete it and do not quietly work around it.
+
+Keep track of which loaded Understandings actually shaped the work. Loading is not inheriting — only what
+changed what you did counts. When the session exports anything, those go in its `provenance.inherited` — the store's only signal for which knowledge is earning its
 keep, and the only way to find what depended on a unit that later turns out to be wrong.
 
 ## Never export toolchain knowledge as an Understanding
@@ -97,6 +102,7 @@ mechanics.
 | 2026-09-19 | Store path gained a subject tier: `<subject>/<slug>/`. |
 | 2026-09-19 | `provenance.inherited` records which Understandings a session loaded and acted on. |
 | 2026-09-19 | Outcomes (requirements distilled, issues/PRs produced and their state) named as a first-class kind of Understanding. |
+| 2026-09-19 | Definition restated: input and outcome of a session's memory, for another agent to act on; qualifying test is "no other home". |
 | 2026-09-19 | A unit is a question/answer pair; `trigger` renamed to `question`. |
 | 2026-09-19 | Scope narrowed: functional/non-functional knowledge about the system only; toolchain knowledge is filed in `*AGENTS.md` instead. |
 | 2026-09-19 | Vocabulary aligned to the export/import vs publish/consume split; `--all` named as the explicit waiver of the pre-write cut, resolving a rule/skill contradiction. |

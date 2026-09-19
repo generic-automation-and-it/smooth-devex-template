@@ -60,6 +60,7 @@ between the session and disk; publish/consume move it between repositories.
 | `--consume <src>` | Hydrate from a published directory or `owner/repo@ref:path` (remote fetch via `ai-asset-sync`) |
 | `--promote <slug>` | Escalate to a `*AGENTS.md` context file or a rule |
 | `--index` | Regenerate `INDEX.md` from the slug folders |
+| `--review` | Advisory decay report — contested, never-inherited, or overdue a re-check |
 
 Governance — Rules vs Understandings, and inheriting at session start — is a rule
 (`.github/instructions/meta/understandings.instructions.md`), not skill text, so it loads without
