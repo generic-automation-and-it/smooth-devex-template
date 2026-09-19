@@ -149,6 +149,16 @@ def read_unit(unit_file: Path, subject: str) -> tuple[dict | None, list[str]]:
     return fields, problems
 
 
+def looks_like_flow_sequence(value) -> bool:
+    """True for a YAML flow sequence this parser reads as a scalar: fully `[...]`-bracketed.
+
+    Requiring the closing bracket is what keeps prose out. A plain scalar cannot legally start
+    with `[` in YAML, but this parser is lenient, and a description reading
+    `[draft] how the thing behaves` is prose the writer meant — not a sequence.
+    """
+    return isinstance(value, str) and value.startswith("[") and value.endswith("]")
+
+
 def inline_sequences(fields: dict, where: str) -> list[str]:
     """Catch a list written in YAML flow style, which this parser reads as a plain scalar.
 
@@ -156,13 +166,30 @@ def inline_sequences(fields: dict, where: str) -> list[str]:
     `dangling_references` never walks it and an unresolvable entry exits 0. Making the parser
     read flow sequences would have to guess where `[[a]]` is one reference and where it is a
     nested sequence; naming the shape is unambiguous and the block form is what the template uses.
+
+    Checks both levels the parser supports. A flow sequence nested in a map — `provenance.inherited`
+    being the one that exists — is the same defect and was missed when only the top level was walked.
     """
-    return [
-        f"{where}: '{key}' is written as an inline list — this parser reads block lists only, so "
+    problems = []
+    for key, value in fields.items():
+        if key in ("folder", "subject", "path"):
+            continue
+        if looks_like_flow_sequence(value):
+            problems.append(_flow_problem(where, key))
+        elif isinstance(value, dict):
+            problems.extend(
+                _flow_problem(where, f"{key}.{sub_key}")
+                for sub_key, sub_value in value.items()
+                if looks_like_flow_sequence(sub_value)
+            )
+    return problems
+
+
+def _flow_problem(where: str, field: str) -> str:
+    return (
+        f"{where}: '{field}' is written as an inline list — this parser reads block lists only, so "
         f"its [[slug]] entries are never checked; rewrite it as a block list"
-        for key, value in fields.items()
-        if isinstance(value, str) and value.startswith("[")
-    ]
+    )
 
 
 def load_units(store: Path) -> tuple[list[dict], list[str]]:
