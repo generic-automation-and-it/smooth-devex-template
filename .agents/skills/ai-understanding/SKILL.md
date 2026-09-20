@@ -123,16 +123,16 @@ Then classify every candidate against the index:
 
 | Candidate matches | Action | Reported as |
 |---|---|---|
-| Nothing in the index | Write it in this run's new folder | `new` |
+| Nothing in the index, and the qualifying test below routes it **to** the store | Write it in this run's new folder | `new` |
 | A current unit, same question, and this session changed nothing | **Write nothing** | `already known` |
 | A current unit, same question, and this session refined it — corrected a claim, moved `confidence`, added a boundary | Write the **complete improved unit** into this run's new folder, reusing the slug | `improved` |
 | A current slug, but a genuinely different question | New unit, disambiguated slug, in this run's folder | `new (disambiguated)` |
-| Nothing in the index, but another artefact already holds the **reusable** knowledge — not merely a decision about it | **Write nothing** | `has another home` |
+| Nothing in the index, but the qualifying test routes it **away** — another artefact already holds the **reusable** knowledge, not merely a decision about it | **Write nothing.** Name that file | `has another home` |
 
-The first four outcomes are decided against the index. The fifth is decided by *What qualifies: nothing
-with another home* below, which runs on every candidate the index does not already answer — so the two
-never compete: a candidate that test routes **to** the store is `new`, and only one it routes **away**
-is `has another home`. That outcome is the exclusion's only reporting slot, and prose does not satisfy
+Rows two to four are decided against the index alone. Rows one and five **split the absent-index case
+between them**, and *What qualifies: nothing with another home* below is what decides which of the two
+applies — so no candidate ever maps to both, and an absent-index candidate is not `new` until that test
+has been run on it. `has another home` is the exclusion's only reporting slot, and prose does not satisfy
 it: **name the file that holds the knowledge**, or the skip is unauditable and indistinguishable from a
 candidate you forgot. Under `--all` it should be rare — the bar is loose there, and a document that
 covers part of the knowledge is not a claim on the rest.
