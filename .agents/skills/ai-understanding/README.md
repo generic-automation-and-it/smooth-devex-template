@@ -36,9 +36,17 @@ A file is a **question and its answer**, plus why it holds and where it stops ap
 
 ```
 /ai-understanding                 # analyse this session and write what is worth keeping
+/ai-understanding wiremock stubs  # same, focused — names the subject and leads with those units
 /ai-understanding --import        # load what matches the task you are starting
 /ai-understanding --review        # what is stale, contested, or nobody ever used
 ```
+
+A focus narrows nothing on its own: anything else worth keeping is still offered, so you cut it rather
+than never seeing it. Best asked for at the end of a piece of work, before you clear or compact the
+session — that is the moment the thinking still exists and is about to stop existing.
+
+`--review` prints each flagged unit's own re-check command where it has one, so a stale unit comes with
+the way to confirm it rather than just a warning.
 
 Ask for `--export --all` when you want the complete dump. It skips the "which of these should I write?"
 question *and* tells the agent to hold its own bar loosely — a marginal one gets written rather than

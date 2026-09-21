@@ -38,7 +38,9 @@ ASSETS_SUFFIX = ".assets"
 LEGACY_UNIT_FILENAME = "UNDERSTANDING.md"
 REQUIRED_FIELDS = ("slug", "description", "scope", "confidence")
 # `question` is optional: knowledge units carry one, outcome units match on `description` alone.
-OPTIONAL_TEXT_FIELDS = ("question",)
+# `recheck` is optional too — one command that re-checks the unit, printed by `--review` beside a
+# staleness flag. Both are validated only for a left-in placeholder; absence is legitimate.
+OPTIONAL_TEXT_FIELDS = ("question", "recheck")
 VALID_SCOPES = ("portable", "repo-specific")
 VALID_CONFIDENCE = ("observed", "verified", "contested")
 UNFILED = "_unfiled"
@@ -473,6 +475,9 @@ def review(units: list[dict], superseded: list[dict] | None = None) -> list[str]
     Runs over current versions only, and the never-inherited signal counts inheritance of **any**
     version: usage accrues to the slug, so a unit improved three times is not reported as unused
     because the lineage names an earlier revision.
+
+    A flagged unit prints its `recheck` command, which is what turns a staleness flag into an action;
+    a stale unit carrying none is told so, since that is the moment to add one.
     """
     superseded = superseded or []
     used = inherited_targets(units + superseded)
@@ -496,6 +501,11 @@ def review(units: list[dict], superseded: list[dict] | None = None) -> list[str]
         if flags:
             lines.append(f"{unit['path']}:")
             lines.extend(f"    {f}" for f in flags)
+            recheck = unit.get("recheck")
+            if isinstance(recheck, str) and recheck and not placeholder(recheck):
+                lines.append(f"    recheck: {recheck}")
+            elif age is not None and age > limit:
+                lines.append("    no 'recheck' command — add one so the next flag is actionable")
 
     revisions: dict[str, int] = {}
     for unit in superseded:
