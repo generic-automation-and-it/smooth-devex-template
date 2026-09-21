@@ -48,9 +48,16 @@ acting on it.
 
 ### Pre-publish check
 
-Understandings are written during debugging, when a literal value is the fastest thing to type. Before
-anything leaves the workspace, confirm no unit carries a credential, token, connection string, or
-internal hostname. Record the shape of the problem, not the value. See
+The **second** net, not the first: redaction happens at write time (`SKILL.md`, *Redact before you write*),
+because a value that reaches a unit is already one `--publish` away from leaving the workspace. This check
+catches what that step missed, and it catches units written before the step existed.
+
+Before anything leaves the workspace, confirm no unit carries a credential, token, connection string, or
+internal hostname. Where one does, strike it in the **working copy** before archiving: the archive is
+generated from the store, so fixing the store fixes every archive after it. That edit is the one exception
+to immutability (`SKILL.md`, *Redact before you write*) — a credential is not knowledge, so it is repaired
+in place rather than superseded, which would leave the value on disk. Record the shape of the problem, not
+the value. See
 `.github/instructions/skills/skill-secret-handling.instructions.md`.
 
 ## Consume
