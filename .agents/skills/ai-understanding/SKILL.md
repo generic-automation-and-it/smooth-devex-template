@@ -60,9 +60,9 @@ Almost every unit is a single file — evidence normally belongs inline, quoted 
 The `-yyyyMMdd-HHmm` stamp (24-hour, UTC — archives are consumed on other machines, so the zone is fixed) records when the run wrote the folder and is set once, never bumped — a unit's own `updated` field tracks freshness. It is what orders versions and what stops two sessions colliding on one folder name.
 
 ```
-agent-memory-design-20260101-0900/store-decay.md     # v1 — superseded, on disk, unlisted
-agent-memory-design-20260211-1430/store-decay.md     # v2 — superseded
-agent-memory-design-20260305-1105/store-decay.md     # v3 — CURRENT, the only one INDEX.md shows
+agent-memory-design-20260101-0900/store-decay.understanding.md     # v1 — superseded, on disk, unlisted
+agent-memory-design-20260211-1430/store-decay.understanding.md     # v2 — superseded
+agent-memory-design-20260305-1105/store-decay.understanding.md     # v3 — CURRENT, the only one INDEX.md shows
 ```
 
 A unit that genuinely needs artifacts gets a sibling `<slug>.assets/` directory. Naming it after the slug is what prevents the collisions a shared directory would cause, and it is paid for only by the rare unit that needs it.
