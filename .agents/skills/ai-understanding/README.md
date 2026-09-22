@@ -5,8 +5,7 @@ rule, a skill or a doc — you don't have the time, or enough evidence, to promo
 with the session.
 
 This skill writes them down as small markdown files — what was asked, what came of it, what got learned
-along the way. No database, no service, nothing to run: a folder you can read in any editor and copy or
-send as-is.
+along the way. No database, no service, nothing to run: a folder you can read in any editor.
 
 Written for the next agent as much as the next person, so picking up the branch next week doesn't start
 from zero. A focus on outcomes — not piles of AI chatter and slop. Terse outcomes, decisions and results
@@ -52,8 +51,11 @@ Ask for `--export --all` when you want the complete dump. It skips the "which of
 question *and* tells the agent to hold its own bar loosely — a marginal one gets written rather than
 dropped, so you prune afterwards instead of beforehand.
 
-Sharing is sending someone the folder. They read it in any editor; their agent reads it the same way
-yours does.
+Sharing is sending someone a zip. The store itself stays local and gitignored — it never travels through
+the repository. Ask for `--publish` (add `--portable-only` to drop anything true only of this repo) and
+you get an archive under `.context/understandings-publish/` to hand over however you like; they take it
+with `--consume <zip>`. It unpacks into their store, where they read it in any editor and their agent
+reads it the same way yours does.
 
 ## The rest
 

@@ -15,10 +15,8 @@ provenance:
   session: <shared by every slug exported from the same session>
   source: <what produced it — a failure, an experiment, a doc, a rejected approach>
   inherited:
-    - <[[slug]] of an Understanding this session loaded and acted on — omit the list if none.
-       Drop the brackets once an ancestor leaves the store, to keep the lineage without pinning it>
-  supersedes: <previous folder name, e.g. agent-memory-design-20260919-1432 — set when this copy improves an
-       earlier one; omit on a first version. A name, never a path, so it survives the file being moved>
+    - <[[slug]] of an Understanding this session loaded and acted on — omit the list if none. Drop the brackets once an ancestor leaves the store, to keep the lineage without pinning it>
+  supersedes: <previous folder name, e.g. agent-memory-design-20260919-1432 — set when this copy improves an earlier one; omit on a first version. A name, never a path, so it survives the file being moved>
   published_from: <owner/repo — set on a published copy only; omit in the working store>
   consumed_from: <owner/repo@ref:path or local path — set when this arrived via --consume; omit otherwise>
   promoted_to: <path of the AGENTS.md or rule that superseded this — set on --promote; omit otherwise>

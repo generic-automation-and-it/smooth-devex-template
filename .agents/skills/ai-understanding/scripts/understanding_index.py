@@ -191,6 +191,15 @@ def read_unit(unit_file: Path, subject: str) -> tuple[dict | None, list[str]]:
             if not value or placeholder(value):
                 problems.append(f"{where}: 'provenance.{key}' is missing or still a placeholder")
 
+        inherited = provenance.get("inherited")
+        if isinstance(inherited, list):
+            for entry in inherited:
+                if placeholder(str(entry).strip()):
+                    problems.append(
+                        f"{where}: 'provenance.inherited' still holds a template placeholder — "
+                        "name what this session inherited, or omit the list"
+                    )
+
     context = fields.get("agents_context")
     if isinstance(context, str) and context and not placeholder(context):
         if not Path(context).exists():
@@ -473,6 +482,12 @@ def inherited_targets(units: list[dict]) -> set[str]:
     shape is caught by `inline_sequences`, but a superseded copy is exempt from validation while still
     feeding this function — so without the guard an old copy corrupts the report with nothing printed
     and exit 0.
+
+    The placeholder guard is the same failure through a different door. An untouched template entry is
+    not bracketed, so it reads as a deliberate unbracketed note and counts as usage: it satisfies the
+    carrier's own lineage *and* sets `lineage_recorded`, flagging every other unit as never inherited.
+    `read_unit` rejects it on a current unit, but a superseded copy is exempt from validation while
+    still feeding this function, so the guard has to live here too.
     """
     targets = set()
     for unit in units:
@@ -483,7 +498,10 @@ def inherited_targets(units: list[dict]) -> set[str]:
         if not isinstance(inherited, list):
             continue
         for entry in inherited:
-            targets.add(str(entry).strip().strip("[]"))
+            entry = str(entry).strip()
+            if placeholder(entry):
+                continue
+            targets.add(entry.strip("[]"))
     return targets
 
 
