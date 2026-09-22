@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Regenerate the Understandings INDEX.md from the subject/slug folders.
 
-The store is `<subject>-<yyyyMMdd-HHmm>/<slug>.md`. A stamped folder is one export run; a slug
-identifies the knowledge, not one copy of it, so the **same slug in several stamped folders is a
-version chain** rather than an error (LADR-010). The newest stamp is the *current* version and the
+The store is `<subject>-<yyyyMMdd-HHmm>/<slug>.understanding.md`. A stamped folder is one export run;
+a slug identifies the knowledge, not one copy of it, so the **same slug in several stamped folders is
+a version chain** rather than an error (LADR-010). The newest stamp is the *current* version and the
 rest are superseded history. `_unfiled/` is the one exempt, unstamped folder, and sorts oldest.
 The index groups by subject for browsing but lists every current unit, because knowledge is
 retrieved by the question it answers rather than by the subject that happened to produce it.
@@ -11,7 +11,8 @@ retrieved by the question it answers rather than by the subject that happened to
 **Validation applies to current versions only.** Superseded copies are immutable history: validating
 them would force edits to the past, and a `[[slug]]` pruned later would leave an old file permanently
 invalid. Folder-level problems (an unstamped or empty subject folder, a stray unit at the store root,
-the old per-unit folder shape) are reported regardless, since they belong to no single version.
+the old per-unit folder shape, a unit file missing the `.understanding.md` postfix) are reported
+regardless, since they belong to no single version.
 
 A unit needing evidence artifacts (a repro, a log excerpt, a diagram) puts them in a
 sibling `<slug>.assets/` directory, which is named after the slug and so cannot collide.
@@ -35,6 +36,11 @@ from pathlib import Path
 
 DEFAULT_STORE = Path(".context/understandings")
 ASSETS_SUFFIX = ".assets"
+# A unit file is `<slug>.understanding.md`: the slug, then a type postfix mirroring the
+# `.instructions.md` one rule files carry. The postfix is what lets a path glob select
+# Understandings and nothing else -- `INDEX.md` and any stray note deliberately fall outside it.
+UNIT_SUFFIX = ".understanding.md"
+UNIT_GLOB = f"*{UNIT_SUFFIX}"
 LEGACY_UNIT_FILENAME = "UNDERSTANDING.md"
 REQUIRED_FIELDS = ("slug", "description", "scope", "confidence")
 # `question` is optional: knowledge units carry one, outcome units match on `description` alone.
@@ -144,9 +150,17 @@ def placeholder(value: str) -> bool:
     return value.startswith("<") and value.endswith(">")
 
 
+def slug_of(unit_file: Path) -> str:
+    """The slug a unit file addresses: its name without the `.understanding.md` postfix.
+
+    Not `Path.stem`, which would keep the `.understanding` half and break every `[[slug]]` link.
+    """
+    return unit_file.name[: -len(UNIT_SUFFIX)]
+
+
 def read_unit(unit_file: Path, subject: str) -> tuple[dict | None, list[str]]:
-    """Load and validate one `<subject>-<yyyyMMdd-HHmm>/<slug>.md`."""
-    slug = unit_file.stem
+    """Load and validate one `<subject>-<yyyyMMdd-HHmm>/<slug>.understanding.md`."""
+    slug = slug_of(unit_file)
     where = f"{subject}/{unit_file.name}"
 
     fields = parse_frontmatter(unit_file.read_text(encoding="utf-8"))
@@ -276,11 +290,14 @@ def load_units(store: Path) -> tuple[list[dict], list[dict], list[str]]:
     problems: list[str] = []
 
     for stray in sorted(store.glob("*.md")):
-        if stray.name != "INDEX.md":
-            problems.append(
-                f"{stray.name} sits at the store root — move it to <subject>-<yyyyMMdd-HHmm>/{stray.name} "
-                f"(use '{UNFILED}' when it belongs to no subject)"
-            )
+        if stray.name == "INDEX.md":
+            continue
+        # One message, not two: a stray that also lacks the postfix needs both fixes in one move.
+        target = stray.name if stray.name.endswith(UNIT_SUFFIX) else f"{stray.stem}{UNIT_SUFFIX}"
+        problems.append(
+            f"{stray.name} sits at the store root — move it to <subject>-<yyyyMMdd-HHmm>/{target} "
+            f"(use '{UNFILED}' when it belongs to no subject)"
+        )
 
     for subject_dir in sorted(p for p in store.iterdir() if p.is_dir()):
         subject = subject_dir.name
@@ -291,13 +308,24 @@ def load_units(store: Path) -> tuple[list[dict], list[dict], list[str]]:
         for legacy in sorted(subject_dir.glob(f"*/{LEGACY_UNIT_FILENAME}")):
             problems.append(
                 f"{subject}/{legacy.parent.name}/ uses the old folder shape — move it to "
-                f"{subject}/{legacy.parent.name}.md (artifacts go in "
+                f"{subject}/{legacy.parent.name}{UNIT_SUFFIX} (artifacts go in "
                 f"{legacy.parent.name}{ASSETS_SUFFIX}/)"
             )
 
-        unit_files = sorted(subject_dir.glob("*.md"))
+        unit_files = sorted(subject_dir.glob(UNIT_GLOB))
+        # Units written before the postfix convention are invisible to the glob above. Naming them
+        # is what keeps a whole pre-existing store from silently reading as empty.
+        unpostfixed = sorted(p for p in subject_dir.glob("*.md") if not p.name.endswith(UNIT_SUFFIX))
+        for stale in unpostfixed:
+            problems.append(
+                f"{subject}/{stale.name} is missing the '{UNIT_SUFFIX}' postfix — rename it to "
+                f"{subject}/{stale.stem}{UNIT_SUFFIX} (its '{ASSETS_SUFFIX}' folder, if any, keeps "
+                f"its name)"
+            )
         if not unit_files:
-            problems.append(f"{subject}/ contains no Understandings")
+            # A folder holding only un-postfixed files already has the more precise problem above.
+            if not unpostfixed:
+                problems.append(f"{subject}/ contains no Understandings")
             continue
 
         for unit_file in unit_files:
@@ -305,7 +333,7 @@ def load_units(store: Path) -> tuple[list[dict], list[dict], list[str]]:
             records.append({
                 # The slug comes from the file name, so a copy whose frontmatter failed to parse
                 # still takes part in version grouping instead of vanishing from it.
-                "slug": unit_file.stem,
+                "slug": slug_of(unit_file),
                 "subject": subject,
                 "path": f"{subject}/{unit_file.name}",
                 "unit": unit,
@@ -568,7 +596,7 @@ def render(units: list[dict]) -> str:
 
 USAGE = f"""usage: understanding_index.py [store-dir] [--review]
 
-Regenerate INDEX.md from the <subject>-<yyyyMMdd-HHmm>/<slug>.md units.
+Regenerate INDEX.md from the <subject>-<yyyyMMdd-HHmm>/<slug>.understanding.md units.
 A slug repeated across stamped folders is a version chain: the newest stamp is indexed,
 older copies stay on disk unlisted and exempt from validation.
 Defaults to {DEFAULT_STORE}. --review adds an advisory decay report.

@@ -44,7 +44,7 @@ listen-first default avoids — use deliberately.
 ### ai-understanding switches
 
 Default is `--export`: read `INDEX.md` first, then write each durable lesson to
-`.context/understandings/<subject>-<yyyyMMdd-HHmm>/<slug>.md` — gitignored working memory. **A stamped
+`.context/understandings/<subject>-<yyyyMMdd-HHmm>/<slug>.understanding.md` — gitignored working memory. **A stamped
 folder is one export run**, holding only what that run produced; an improved Understanding reuses its slug
 and is re-written in full into the new folder, so a slug repeated across folders is a **version chain**
 with the newest stamp current and the rest unlisted history. A run that produces nothing creates no folder.

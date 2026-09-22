@@ -1,6 +1,6 @@
 ---
 name: ai-understanding
-description: Export this session's hard-won knowledge into Understandings under .context/understandings/<subject>-<yyyyMMdd-HHmm>/<slug>.md (one file per unit, grouped into a subject folder stamped with when it was created), import matching ones back at task start, and publish/consume them across workspaces as a zip. Trigger on "export the understandings", "make an Understanding of this", "encode this", "what did we learn", "/ai-understanding", or when a session resolved something that cost real effort and would cost the same again. Not a session log and not code documentation.
+description: Export this session's hard-won knowledge into Understandings under .context/understandings/<subject>-<yyyyMMdd-HHmm>/<slug>.understanding.md (one file per unit, grouped into a subject folder stamped with when it was created), import matching ones back at task start, and publish/consume them across workspaces as a zip. Trigger on "export the understandings", "make an Understanding of this", "encode this", "what did we learn", "/ai-understanding", or when a session resolved something that cost real effort and would cost the same again. Not a session log and not code documentation.
 allowed-tools:
   - Bash(python3 .agents/skills/ai-understanding/scripts/understanding_index.py:*)
   - Read
@@ -36,7 +36,7 @@ The working store is **local and disposable** (`.context/` is gitignored). That 
 
 ## TL;DR
 
-1. Working store: `.context/understandings/<subject>-<yyyyMMdd-HHmm>/<slug>.md` — a stamped folder is **one export run**, holding only what that run produced.
+1. Working store: `.context/understandings/<subject>-<yyyyMMdd-HHmm>/<slug>.understanding.md` — a stamped folder is **one export run**, holding only what that run produced.
 2. `.context/understandings/INDEX.md` is a generated table of **unit + description + question**, one row per slug resolving to its newest version — the only file an agent reads to decide what to load, and the **first thing an export reads**.
 3. One session may yield **several** Understandings; each is its own file, each stands alone, and they share a `provenance.session` value.
 4. A slug is a version key, not a unique name. Same question → reuse the slug and write the complete improved unit into this run's folder. Different question → distinct slug. Never edit or delete a previous copy; newest wins.
@@ -46,11 +46,11 @@ The working store is **local and disposable** (`.context/` is gitignored). That 
 
 ```
 .context/understandings/
-  INDEX.md                            # generated — one row per slug, resolving to its newest version
-  <subject>-<yyyyMMdd-HHmm>/          # ONE EXPORT RUN — holds only what that run produced
-    <slug>.md                        # one Understanding (frontmatter + body)
-    <slug>.assets/                   # only when a unit carries artifacts — repro, log excerpt, diagram
-  _unfiled/                           # exempt from the stamp — a permanent catch-all, not a body of work
+  INDEX.md                    # generated — one row per slug, resolving to its newest version
+  <subject>-<yyyyMMdd-HHmm>/  # ONE EXPORT RUN — holds only what that run produced
+    <slug>.understanding.md   # one Understanding (frontmatter + body)
+    <slug>.assets/            # only when a unit carries artifacts — repro, log excerpt, diagram
+  _unfiled/                   # exempt from the stamp — a permanent catch-all, not a body of work
 ```
 
 **A stamped folder is one export run; a slug is the knowledge.** The same slug appearing in several stamped folders is a **version chain**, not an error: the newest stamp is the current version, the rest are history. `INDEX.md` lists the current version only. The subject *name* is reused across runs so a body of work stays browsable together; the *stamp* is new every run. Use `_unfiled/` for an Understanding belonging to no particular topic.
@@ -273,7 +273,7 @@ never as an `improved` unit: nothing about the knowledge changed.
 
 ### Writing one
 
-Copy `assets/UNDERSTANDING.template.md` to `.context/understandings/<subject>-<yyyyMMdd-HHmm>/<slug>.md` — or under `--path` when given — and fill it.
+Copy `assets/UNDERSTANDING.template.md` to `.context/understandings/<subject>-<yyyyMMdd-HHmm>/<slug>.understanding.md` — or under `--path` when given — and fill it.
 
 Subject **name**: kebab-case, names the topic or piece of work. Reuse the name a body of work already
 uses in the store — `ls .context/understandings/` shows them — so its runs stay browsable together.
@@ -288,13 +288,13 @@ stamp does not gain seconds to avoid this.
 holds a copy of a versioned slug. The subject is derived from the parent folder, so it is never written
 into frontmatter and cannot drift.
 
-Slug: kebab-case, names the **knowledge**, not the incident. `npgsql-enum-mapping-needs-datasource` — not `tuesday-db-bug`.
+Slug: kebab-case, names the **knowledge**, not the incident. `npgsql-enum-mapping-needs-datasource` — not `tuesday-db-bug`. The file is the slug plus the `.understanding.md` postfix — `npgsql-enum-mapping-needs-datasource.understanding.md` — which is what a path glob selects on, so a unit written without it is invisible to the generator and reported as a rename.
 
 Frontmatter fields:
 
 | Field | Meaning |
 |-------|---------|
-| `slug` | Must equal the file name without `.md`. Addresses the **knowledge**, not one copy of it — repeated across stamped folders it forms a version chain, and a `[[slug]]` resolves if any version exists |
+| `slug` | Must equal the file name without the `.understanding.md` postfix. Addresses the **knowledge**, not one copy of it — repeated across stamped folders it forms a version chain, and a `[[slug]]` resolves if any version exists |
 | `description` | One line — what this knowledge is. Appears in `INDEX.md` |
 | `question` | **Optional.** The question a reader has at the moment this applies, when there is a natural one — one question, one answer. Omit it on an outcome record, where `description` is the match. Appears in `INDEX.md` |
 | `scope` | `portable` (true of the stack/tooling anywhere) or `repo-specific` (true only here). Governs export |
@@ -445,7 +445,7 @@ gitignored, so an archive that someone keeps is the only form that survives the 
 The store is never shared through the repository (LADR-008).
 
 - Destination: `.context/understandings-publish/understandings-<YYYYMMDD-HHMMSS>.zip` by default, or `--path` (a file or directory) when given. Outside the store, so the index generator never mistakes it for a subject folder, and never a tracked path.
-- The archive mirrors the store: `<subject>-<yyyyMMdd-HHmm>/<slug>.md` with stamps carried verbatim — never re-stamped — plus each unit's `<slug>.assets/` and a regenerated `INDEX.md` covering only the published units.
+- The archive mirrors the store: `<subject>-<yyyyMMdd-HHmm>/<slug>.understanding.md` with stamps carried verbatim — never re-stamped — plus each unit's `<slug>.assets/` and a regenerated `INDEX.md` covering only the published units.
 - Publishing filters **per Understanding, not per subject** — a subject folder routinely mixes scopes. By default every unit publishes; pass `--portable-only` to restrict the archive to `scope: portable` units, for the cross-repo case. Never let `--portable-only` publish a `repo-specific` unit — that filter is the only thing preventing a local quirk from being shipped to another repo with provenance that makes it look universally verified.
 - When `--portable-only` excludes a unit that a published unit links to, the archived copy drops the brackets around that `[[slug]]` and keeps the entry, so the archive's own index validates.
 - Each archived copy records `provenance.published_from`; the working copy is left in place.
@@ -505,3 +505,4 @@ Propose the promotion; the user decides. Once promoted, the Understanding record
 | 2026-09-20 | **LADR-011: `--all` means breadth, not only silence.** It waives the user's cut *and* loosens the qualifying bar, so a marginal candidate is written rather than dropped. The qualifying test separates a decision already recorded elsewhere from the reusable reasoning behind it, which that record has no claim on. The reconcile step gained a fifth outcome, `has another home`, reported with the path of the file that holds the knowledge. | |
 | 2026-09-19 | **LADR-010: a slug is a version key, not a unique name.** An export run writes its own stamped folder holding only that run's output; an improved unit is re-written in full into it carrying `provenance.supersedes`; previous copies are immutable, unlisted and exempt from validation; `INDEX.md` shows the newest version of each slug. `duplicate_slugs` retired. Export gained the reconcile step (read `INDEX.md` first, four outcomes, generous same-question test, `provenance.inherited` from what it read); import gained the newer-wins precedence rule; consume treats an incoming duplicate as a version. | |
 | 2026-09-21 | Four takes from `mattpocock/skills` (`handoff` and its siblings): a **durability** rule for the body (behaviour and contracts, never a path or line number — paths belong in the checked `agents_context`); **redaction at write time** with `<REDACTED>`, demoting the pre-publish check to the second net; an optional **`recheck`** command that `--review` prints beside a staleness flag; an optional **`skills`** pointer. Export gained a free-text **focus** argument and a timing rule — export at a phase boundary, because it converts a primary source into a secondary one. | |
+| 2026-09-22 | **LADR-013: a unit file is `<slug>.understanding.md`.** The type postfix mirrors `.instructions.md` and gives the governance rule a path glob to attach to, so `.agents/rules/meta/understandings.instructions.md` is scoped `**/*understanding.md` instead of always-applying. `INDEX.md` and `<slug>.assets/` keep their names; an un-postfixed unit in an existing store is reported as a rename rather than skipped. | |
