@@ -26,7 +26,7 @@ that aren't already in the code or an `AGENTS.md`.
 .context/understandings/          # gitignored — local to your workspace, never committed
   INDEX.md                        # generated: one row per Understanding, with the question it answers
   <subject>-<yyyyMMdd-HHmm>/      # one export run
-    <slug>.md                     # one Understanding
+    <slug>.understanding.md       # one Understanding
 ```
 
 A file is a **question and its answer**, plus why it holds and where it stops applying. An agent reads

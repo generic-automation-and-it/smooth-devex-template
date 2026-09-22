@@ -1,5 +1,5 @@
 ---
-slug: <kebab-case-slug, equals the file name without .md, names the knowledge not the incident. Reuse the slug of the unit this improves — the same slug across stamped folders is a version chain, newest current>
+slug: <kebab-case-slug, equals the file name without the .understanding.md postfix, names the knowledge not the incident. Reuse the slug of the unit this improves — the same slug across stamped folders is a version chain, newest current>
 description: <one line — what this knowledge is. Shown in INDEX.md>
 question: <OPTIONAL. The question a reader has at the moment this applies, when there is a natural one — one question, one answer. Omit it for an outcome record, where the description is the match. Shown in INDEX.md>
 scope: <portable | repo-specific>
