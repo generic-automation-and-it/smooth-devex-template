@@ -9,8 +9,10 @@ Vertical slicing lives at the Feature (parent issue) level.
 import argparse
 import json
 import os
+import shlex
 import subprocess
 import sys
+import urllib.parse
 
 
 def run(cmd, check=True, capture=True):
@@ -211,17 +213,64 @@ def suggest_branch_name(layers, title, issue_number):
     return f"{branch_type}/{issue_number}-{slug}"
 
 
+def gh_error_detail(exc):
+    """Best-effort human-readable detail for a failed gh call."""
+    if isinstance(exc, subprocess.CalledProcessError):
+        detail = (exc.stderr or exc.stdout or "").strip()
+        return detail or f"exit code {exc.returncode}"
+    return str(exc) or exc.__class__.__name__
+
+
+def get_issue_database_id(owner, repo, issue_number):
+    """Resolve an issue number to its database id (what the sub-issues API expects)."""
+    return run_json(["gh", "api", f"/repos/{owner}/{repo}/issues/{issue_number}"])["id"]
+
+
 def link_sub_issue(owner, repo, parent_issue_number, child_issue_number):
-    """Link child issue as a sub-issue of the parent using the GitHub REST API."""
+    """Link child issue as a sub-issue of the parent. Soft-fail, reporting gh's error."""
     try:
-        run_json([
+        child_id = get_issue_database_id(owner, repo, child_issue_number)
+        # 201 may have an empty body; do not json-parse stdout. -F types sub_issue_id as int.
+        run([
             "gh", "api", "--method", "POST",
             f"/repos/{owner}/{repo}/issues/{parent_issue_number}/sub_issues",
-            "-f", f"sub_issue_id={child_issue_number}",
+            "-F", f"sub_issue_id={child_id}",
         ])
         return True
-    except Exception:
+    except Exception as exc:
+        print(f"Warning: sub-issue link failed: {gh_error_detail(exc)}", file=sys.stderr)
         return False
+
+
+def check_label(owner, repo, label):
+    """Return ("present" | "missing" | "unknown", detail). 404 is missing; any other error is unknown."""
+    path = f"/repos/{owner}/{repo}/labels/{urllib.parse.quote(label, safe='')}"
+    try:
+        run(["gh", "api", path])
+        return "present", ""
+    except subprocess.CalledProcessError as exc:
+        detail = gh_error_detail(exc)
+        if "HTTP 404" in detail:
+            return "missing", detail
+        return "unknown", detail
+    except Exception as exc:
+        return "unknown", gh_error_detail(exc)
+
+
+def label_fix_command(owner, repo, label):
+    return f"gh label create {shlex.quote(label)} --repo {owner}/{repo} --color 0075ca"
+
+
+def build_create_cmd(owner, repo, title, body, label):
+    cmd = [
+        "gh", "issue", "create",
+        "--repo", f"{owner}/{repo}",
+        "--title", title,
+        "--body", body,
+    ]
+    if label:
+        cmd += ["--label", label]
+    return cmd
 
 
 def parse_feature_issue(value):
@@ -324,6 +373,8 @@ def main():
     title = args.title or build_title(areas, layers, branch_name)
     body = build_task_body(branch_name, base_ref, base_sha, paths, status_counts, diff_stat, layers, feature_issue)
 
+    label_state, label_detail = check_label(owner, repo, args.label) if args.label else (None, "")
+
     if args.dry_run:
         print(f"Title:\n{title}\n")
         print(f"Body:\n{body}\n")
@@ -331,21 +382,33 @@ def main():
             print(f"Would create issue in {owner}/{repo} (no project).")
         else:
             print(f"Would create issue in {owner}/{repo} and add to project {org}/projects/{args.project}.")
+        if label_state:
+            print(f"Label '{args.label}': {'present' if label_state == 'present' else label_state.upper()}")
+            if label_state == "missing":
+                print(f"  Fix (after confirming with the user): {label_fix_command(owner, repo, args.label)}")
+            elif label_state == "unknown":
+                print(f"  Could not check label: {label_detail}")
         if feature_issue:
             print(f"Would link as sub-issue of Feature #{feature_issue}.")
         return 0
 
-    # Create the issue
-    create_cmd = [
-        "gh", "issue", "create",
-        "--repo", f"{owner}/{repo}",
-        "--title", title,
-        "--body", body,
-    ]
-    if args.label:
-        create_cmd += ["--label", args.label]
+    # Create the issue. A missing label would hard-fail gh issue create, so drop it and warn;
+    # an unknown label state (auth/network hiccup) still attempts the label as before.
+    label = args.label
+    if label_state == "missing":
+        print(
+            f"Warning: label '{label}' does not exist in {owner}/{repo}; creating the issue unlabeled. "
+            f"Fix: {label_fix_command(owner, repo, label)}",
+            file=sys.stderr,
+        )
+        label = None
+    elif label_state == "unknown":
+        print(
+            f"Warning: could not check label '{label}' ({label_detail}); applying it anyway.",
+            file=sys.stderr,
+        )
 
-    issue_url = run(create_cmd)
+    issue_url = run(build_create_cmd(owner, repo, title, body, label))
     issue_number = int(issue_url.rstrip("/").split("/")[-1])
     print(f"Created task issue #{issue_number}: {issue_url}")
     print(

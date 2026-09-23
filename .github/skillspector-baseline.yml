@@ -111,6 +111,12 @@ accepted:
       "subprocess module call" — same wrappers as OH1. subprocess is required to invoke
       gh/git; calls use shell=False with an explicit argument list, so there is no shell
       interpolation of untrusted input.
+  - id: OH1
+    file: agile-github-task-from-diff/scripts/test_create_github_task_from_diff.py
+    reason: >-
+      "Unvalidated Output Injection" on constructing subprocess.CalledProcessError as a
+      test fixture (fake gh 404/401/422 stderr). Nothing is executed — the module's run/
+      run_json are mock-patched, so the test never spawns a process and has no sink.
 
   # --- MEDIUM: --autonomous opt-in autonomy phrasing (git skills + index) ---
   - id: EA2
@@ -197,3 +203,23 @@ accepted:
       "Hidden Instructions" — HTML comment carrying the README word budget
       (~1500 words / ≤150 per goal). First-party template guidance, not concealed
       directives.
+
+  # --- HIGH/MEDIUM: create-worktask process-manual vocabulary (false positives) ---
+  - id: P6
+    file: create-worktask/SKILL.md
+    reason: >-
+      "Direct Prompt Extraction" on the phrase "phases, gates, output rules", naming what the
+      linked worktask process manual defines (its "Phase Output Rules" section). The skill
+      scaffolds a local planning file; nothing asks for or reveals a system prompt.
+  - id: P6
+    file: create-worktask/assets/WORKTASK.template.md
+    reason: >-
+      "Direct Prompt Extraction" on the template's first line, which links the process manual
+      that "defines the phases, gates, and output rules". A document cross-reference, not a
+      prompt-extraction request.
+  - id: MP2
+    file: create-worktask/SKILL.md
+    reason: >-
+      "Context Window Stuffing" on the workflow step name "Fill Contexts", which fills the
+      worktask's "## Contexts" section with verified file paths. It lists paths for a later
+      reader; nothing is bulk-loaded into the model's context.

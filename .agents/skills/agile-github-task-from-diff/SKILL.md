@@ -1,6 +1,18 @@
 ---
 name: agile-github-task-from-diff
-description: Create a GitHub Task (sub-issue) from the current git diff vs main and link it as a sub-issue of a parent Feature in the local GitHub Project. Use when Codex needs to summarize branch changes into a horizontally sliced task with acceptance criteria and create it via `gh`.
+description: >
+    Create a GitHub Task (sub-issue) from the current git diff vs main and link it as a
+    sub-issue of a parent Feature in the local GitHub Project. Use when Codex needs to
+    summarize branch changes into a horizontally sliced task with acceptance criteria and
+    create it via `gh`. NOT for braindumps, ideas, meeting transcripts, or breaking a
+    Feature into Tasks — use agile-github-breakdown, which sources issues from contextual
+    knowledge, never a diff. NOT for opening a pull request — use git-commit-push-pr.
+allowed-tools: >
+    Bash(.agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py:*),
+    Bash(python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py:*),
+    Bash(git fetch:*),
+    Bash(gh auth status:*),
+    Read
 models:
   claude: sonnet      # medium-complexity; diff analysis + issue authoring across layers
   copilot: auto
@@ -57,9 +69,10 @@ python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_fr
 - Classifies the diff into **horizontal layers**: `backend`, `tests`, `documentation`, `ai-tooling`, `config`, `general`.
 - Builds a title from the detected layers and affected top-level areas.
 - Generates an acceptance criteria checklist based on touched paths.
+- Checks the `--label` exists (read-only `gh api` GET); `--dry-run` reports `Label '<name>': present|MISSING|UNKNOWN`.
 - Creates the issue via `gh issue create`.
 - Adds the issue to the GitHub Project via `gh project item-add`.
-- Links the issue as a sub-issue of the parent Feature via the GitHub REST API (`gh api POST /repos/.../sub_issues`).
+- Links the issue as a sub-issue of the parent Feature via the GitHub REST API: resolves the new issue's database `id` (`gh api /repos/{owner}/{repo}/issues/<n>`), then `gh api --method POST /repos/{owner}/{repo}/issues/<parent>/sub_issues -F sub_issue_id=<id>`.
 
 ## Rename Branch After Creation
 
@@ -88,11 +101,20 @@ Notes:
 
 - `gh` CLI authenticated with a token that has `repo` and `project` scopes.
 - `git` available in the repo.
-- The `task` label must exist in the target repo (create with `gh label create task --color 0075ca`).
+- The `task` label should exist in the target repo. When it is missing the issue is created unlabeled and the script prints the fix command — see [Gotchas](#gotchas).
+
+## Gotchas
+
+- **Sub-issue API takes the database `id`, not the issue number.** `gh issue create` returns only a URL, so the script does a second read-only GET for `.id` and posts it with `-F` (integer-typed); `-f` would send a JSON string. A "sub-issue link failed" warning now carries `gh`'s stderr and signals a real problem worth reading.
+- **Missing label does not block creation.** A 404 on the label check creates the issue unlabeled, prints `gh label create <label> --repo <owner>/<repo> --color 0075ca`, and exits `0`. The script never creates the label. Run that command only after the user explicitly confirms; it is deliberately left out of `allowed-tools` so the permission prompt stays. Any other check error (auth, network) is reported and the label is still applied.
+- **Script output lines are the source of truth.** Trust `Created task issue #…`, `Added to project …` and `Linked as sub-issue …` over an immediate `gh issue view` read-back — project membership and sub-issue relations can lag behind the write.
+- **Only committed changes are diffed** (`merge-base..HEAD`). Staged, unstaged, and untracked work is invisible to the task; commit it first or the task under-describes the branch.
+- **`allowed-tools` pre-approves, it does not restrict.** It lists only the script and read-only commands. The branch rename (`git branch -m`) and `gh label create` still go through the normal permission prompt.
 
 ## Troubleshooting
 
 - If `gh issue create` fails, run `gh auth status` to verify authentication.
 - If `gh project item-add` fails, ensure your token has the `project` scope (`gh auth refresh -s project`).
-- If the sub-issue API call fails, the script prints a fallback message; link manually in the GitHub UI.
-- If the diff is empty, ensure your branch contains changes against main or override `--base-ref`.
+- If the sub-issue API call fails, read the printed `gh` error, then link manually in the GitHub UI using the fallback message.
+- If the label check reports `UNKNOWN`, the `gh` error is printed beside it; fix auth/network and re-run the dry run.
+- If the diff is empty, ensure your branch contains committed changes against main or override `--base-ref`.
