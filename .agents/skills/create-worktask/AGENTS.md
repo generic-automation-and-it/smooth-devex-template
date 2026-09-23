@@ -23,5 +23,5 @@ Authoring skill for worktask files under the gitignored `.context/work-tasks/`. 
 | Date | Change | Ref |
 |:-----|:-------|:----|
 | 2026-09-20 | Initial version — replaces the `worktask-create.sh` UserPromptSubmit hook (Claude-only) with a skill all four runners can invoke. Hook deleted, `settings.json` registration removed. | |
-| 2026-09-21 | Absorbed the P2/hidden-instructions rationale that used to also live in `SKILL.md` (moved here in response to a GHAS SkillSpector advisory finding — this file is outside the scan's scope). | #71 |
+| 2026-09-21 | Absorbed the P2/hidden-instructions rationale that used to also live in `SKILL.md` (moved here in response to a GHAS SkillSpector advisory finding, on the belief that this file is outside the scan's scope — it is not; the static scan covers `AGENTS.md` too, see 2026-09-23). | #71 |
 | 2026-09-23 | Cleared the four static-gate findings #74 merged with (the gate was red on its PR). The EA2 hit was a `SKILL.md` changelog row quoting the phrase it had removed, so the quote was reworded. The P6 and MP2 hits are process-manual vocabulary (section and step names shared with the template), so they are baselined with reasons in `.github/skillspector-baseline.yml` rather than renamed. | |
