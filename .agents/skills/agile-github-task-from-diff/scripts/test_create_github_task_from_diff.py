@@ -14,9 +14,9 @@ patched on the loaded module, so no test here shells out to git or gh.
 import importlib.util
 import io
 import unittest
+import unittest.mock as mock
 from contextlib import redirect_stderr
 from pathlib import Path
-from unittest import mock
 
 SCRIPT = Path(__file__).resolve().parent / "create_github_task_from_diff.py"
 
