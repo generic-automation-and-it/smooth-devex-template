@@ -111,6 +111,12 @@ accepted:
       "subprocess module call" — same wrappers as OH1. subprocess is required to invoke
       gh/git; calls use shell=False with an explicit argument list, so there is no shell
       interpolation of untrusted input.
+  - id: OH1
+    file: agile-github-task-from-diff/scripts/test_create_github_task_from_diff.py
+    reason: >-
+      "Unvalidated Output Injection" on constructing subprocess.CalledProcessError as a
+      test fixture (fake gh 404/401/422 stderr). Nothing is executed — the module's run/
+      run_json are mock-patched, so the test never spawns a process and has no sink.
 
   # --- MEDIUM: --autonomous opt-in autonomy phrasing (git skills + index) ---
   - id: EA2
