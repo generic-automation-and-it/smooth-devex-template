@@ -72,7 +72,7 @@ python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_fr
 - Checks the `--label` exists (read-only `gh api` GET); `--dry-run` reports `Label '<name>': present|MISSING|UNKNOWN`.
 - Creates the issue via `gh issue create`.
 - Adds the issue to the GitHub Project via `gh project item-add`.
-- Links the issue as a sub-issue of the parent Feature via the GitHub REST API: resolves the new issue's database `id` (`gh api GET /repos/.../issues/<n>`), then `gh api POST /repos/.../sub_issues -F sub_issue_id=<id>`.
+- Links the issue as a sub-issue of the parent Feature via the GitHub REST API: resolves the new issue's database `id` (`gh api /repos/{owner}/{repo}/issues/<n>`), then `gh api --method POST /repos/{owner}/{repo}/issues/<parent>/sub_issues -F sub_issue_id=<id>`.
 
 ## Rename Branch After Creation
 
