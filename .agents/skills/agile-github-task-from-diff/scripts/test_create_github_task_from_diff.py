@@ -100,5 +100,37 @@ class BuildCreateCmdTests(unittest.TestCase):
         self.assertNotIn("--label", task.build_create_cmd("o", "r", "T", "B", None))
 
 
+class NoParentIdTests(unittest.TestCase):
+    def test_flag_defaults_off(self):
+        self.assertFalse(task.parse_args([]).noparentid)
+
+    def test_flag_parses(self):
+        self.assertTrue(task.parse_args(["--noparentid"]).noparentid)
+
+    def test_combined_with_feature_issue_errors(self):
+        err = io.StringIO()
+        with redirect_stderr(err), self.assertRaises(SystemExit) as exit_:
+            task.parse_args(["--noparentid", "--feature-issue", "42"])
+        self.assertEqual(exit_.exception.code, 2)
+        self.assertIn("--noparentid cannot be combined with --feature-issue", err.getvalue())
+
+
+class BuildTaskBodyTests(unittest.TestCase):
+    def body(self, feature_issue):
+        return task.build_task_body(
+            "b", "origin/main", "abcdef0", ["README.md"], {"M": 1}, "stat", ["documentation"], feature_issue
+        )
+
+    def test_without_parent_scopes_against_repo(self):
+        body = self.body(None)
+        self.assertIn("scope confirmed against the repo.", body)
+        self.assertNotIn("sub-issue", body)
+
+    def test_with_parent_scopes_against_feature(self):
+        body = self.body(42)
+        self.assertIn("scope confirmed against parent Feature #42.", body)
+        self.assertIn("sub-issue of Feature #42", body)
+
+
 if __name__ == "__main__":
     unittest.main()

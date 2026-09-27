@@ -145,7 +145,8 @@ def build_task_body(branch_name, base_ref, base_sha, paths, status_counts, diff_
     areas = summarize_areas(paths)
     area_str = ", ".join(f"`{a}`" for a in areas)
 
-    checklist = ["- [ ] Diff reviewed and scope confirmed against parent Feature."]
+    scope_check = f"against parent Feature #{feature_issue}" if feature_issue else "against the repo"
+    checklist = [f"- [ ] Diff reviewed and scope confirmed {scope_check}."]
     if any(p.startswith(("src/", "Project")) for p in paths):
         checklist.append("- [ ] Build succeeds or follow-up issue raised.")
     if any("test" in p.lower() or "spec" in p.lower() for p in paths):
@@ -292,7 +293,7 @@ def parse_feature_issue(value):
         raise RuntimeError(f"--feature-issue must be an integer or GitHub issue URL, got: {value}")
 
 
-def main():
+def build_parser():
     parser = argparse.ArgumentParser(
         description=(
             "Create a GitHub Task (sub-issue) from the git diff vs main, "
@@ -340,8 +341,26 @@ def main():
         "--open", action="store_true",
         help="Open the created issue in the browser.",
     )
+    parser.add_argument(
+        "--noparentid", action="store_true",
+        help=(
+            "Create the issue in the repo only: no GitHub Project and no parent Feature. "
+            "Cannot be combined with --feature-issue."
+        ),
+    )
+    return parser
 
-    args = parser.parse_args()
+
+def parse_args(argv=None):
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.noparentid and args.feature_issue:
+        parser.error("--noparentid cannot be combined with --feature-issue: a repo-only task has no parent.")
+    return args
+
+
+def main():
+    args = parse_args()
 
     ensure_tool("git")
     ensure_tool("gh")
@@ -378,7 +397,9 @@ def main():
     if args.dry_run:
         print(f"Title:\n{title}\n")
         print(f"Body:\n{body}\n")
-        if args.no_project:
+        if args.noparentid:
+            print(f"Would create issue in {owner}/{repo} only (--noparentid: no project, no parent).")
+        elif args.no_project:
             print(f"Would create issue in {owner}/{repo} (no project).")
         else:
             print(f"Would create issue in {owner}/{repo} and add to project {org}/projects/{args.project}.")
@@ -417,7 +438,9 @@ def main():
     )
 
     # Add to GitHub Project (unless suppressed)
-    if args.no_project:
+    if args.noparentid:
+        print("Skipped project add and parent link (--noparentid).")
+    elif args.no_project:
         print("Skipped project add (--no-project).")
     else:
         try:
