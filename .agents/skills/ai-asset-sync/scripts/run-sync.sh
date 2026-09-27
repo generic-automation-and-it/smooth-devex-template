@@ -228,8 +228,12 @@ run_model() {
         *" ${v} "*) continue ;;
       esac
       case "$v" in
-        *KEY*|*TOKEN*|*SECRET*|*PASSWORD*|*CREDENTIAL*) ;;
-        OPENCODE_*) continue ;;
+        OPENCODE_*)
+          case "$(printf '%s' "$v" | tr '[:lower:]' '[:upper:]')" in
+            *KEY*|*TOKEN*|*SECRET*|*PASSWORD*|*CREDENTIAL*) ;;
+            *) continue ;;
+          esac
+          ;;
       esac
       unset "$v" 2>/dev/null || true
     done
