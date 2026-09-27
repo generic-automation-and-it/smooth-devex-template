@@ -62,7 +62,7 @@ The ai-merge model reads upstream content someone else controls, so it is treate
 | Model process gets only the selected `OPENCODE_<PROVIDER>_API_KEY` — no `GITHUB_TOKEN`, OIDC or other keys (env allowlist) | `run-sync.sh` |
 | `sync` agent cannot read or edit `.git/**` (credentials, hooks) or `.env*` | `assets/opencode.json` |
 | Checkout uses `persist-credentials: false`. If a checkout still persisted the token in `.git/config`, it is **set aside** (backed up outside the repo) while the model runs and restored byte-for-byte before push | reusable workflow + `run-sync.sh` |
-| Bot commit/push run with hooks disabled and a one-shot `gh` credential helper | `run-sync.sh` |
+| Git hooks disabled for every git command the script runs; push uses a one-shot `gh` credential helper | `run-sync.sh` |
 | Provider keys mapped on the sync step only, never job-wide | reusable workflow |
 
 **Composite action users:** no change is required: a default checkout keeps working, because the script sets the persisted token aside for the model phase. `persist-credentials: false` is still recommended (the token then never touches disk):

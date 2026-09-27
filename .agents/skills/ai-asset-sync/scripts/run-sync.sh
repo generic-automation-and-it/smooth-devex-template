@@ -59,6 +59,15 @@ need_cmd() {
 need_cmd python3
 need_cmd git
 
+# No git hook ever runs for this script's git commands: the model can edit
+# tracked hook dirs (e.g. .husky/), and checkout/commit/push hooks would run
+# with GH_TOKEN in their environment. Set once via GIT_CONFIG_COUNT (git >=
+# 2.31), appended after any entries the caller already exported, so no
+# individual git call can forget it.
+_git_cfg_n="${GIT_CONFIG_COUNT:-0}"
+export "GIT_CONFIG_KEY_${_git_cfg_n}=core.hooksPath" "GIT_CONFIG_VALUE_${_git_cfg_n}=/dev/null"
+export GIT_CONFIG_COUNT=$((_git_cfg_n + 1))
+
 [ -f "$MANIFEST_PATH" ] || die "manifest not found: $MANIFEST_PATH"
 
 # Scratch space lives INSIDE the repo root so the OpenCode agent can read the
@@ -707,9 +716,7 @@ if git diff --cached --quiet; then
   exit 0
 fi
 
-# Hooks are disabled for the bot's commit/push: the model can edit tracked hook
-# dirs (e.g. .husky/), and a hook would run with GH_TOKEN in its environment.
-git -c core.hooksPath=/dev/null commit -m "$PR_TITLE"
+git commit -m "$PR_TITLE"
 
 TEMPLATE="${REPO_ROOT}/.github/pull_request_template.md"
 python3 - "$TEMPLATE" "${REPORT_DIR}/summary.md" "${REPORT_DIR}/pr-body.md" <<'PY'
@@ -744,8 +751,7 @@ PY
 
 # One-shot gh credential helper: GH_TOKEN stays in the environment, is never
 # written to .git/config, and needs no persisted checkout credential.
-git -c core.hooksPath=/dev/null -c credential.helper= -c 'credential.helper=!gh auth git-credential' \
-  push origin "$BRANCH"
+git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push origin "$BRANCH"
 gh pr create \
   --title "$PR_TITLE" \
   --body-file "${REPORT_DIR}/pr-body.md" \
