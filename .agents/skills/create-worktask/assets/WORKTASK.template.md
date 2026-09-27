@@ -3,7 +3,7 @@
 Process: [`AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md`](../../.agents/templates/AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md) defines the phases, gates, and output rules for the workflow below, starting at Phase 0.
 
 ## Execution Profile
-- **Recommended session model:** [model — human action: set with /model BEFORE starting]
+- **Recommended session effort:** [low | medium | high | xhigh | max — human action: set the runner's effort level BEFORE starting]
 - **Path:** [Lightweight (0→1→6→7→8) | Full (0→1→2→3→4→5→6→7→8)]
 - **Subagents:** none
 - **Commits during execution:** not allowed

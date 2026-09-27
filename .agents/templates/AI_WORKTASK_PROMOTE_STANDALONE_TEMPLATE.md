@@ -1,7 +1,7 @@
 # Task: [one-liner task description]
 
 ## Execution Profile
-- **Recommended session model:** [model]   <!-- human action: set with /model BEFORE starting; switch at a gate if a later phase needs more reasoning -->
+- **Recommended session effort:** [low | medium | high | xhigh | max]   <!-- human action: set the runner's effort level BEFORE starting; raise it at a gate if a later phase needs more reasoning -->
 - **Path:** Lightweight (0→1→6→7→8) | Full (0→1→2→3→4→5→6→7→8)
 - **Subagents:** none | Explore (read-only fan-out) | worktree-isolated writers
 - **Commits during execution:** not allowed | allowed via the git-commit skill
@@ -69,7 +69,7 @@ Use when: 3+ files, new patterns, cross-cutting concerns, or ambiguous scope.
 
 **Parallelism means batching tool calls, not spawning agents.** Issue N independent reads, greps, or builds of unrelated projects in a single message. Sequence only when one call's output feeds the next. Never run two write operations against the same file, and never run concurrent `dotnet build` / `dotnet test` over the same solution.
 
-Where a phase does spawn a subagent, carry the model hint in the repo's per-runner form (as in `git-commit/SKILL.md` and `git-commit-push/SKILL.md`) — `claude:` / `copilot:` / `codex:`. The *session* model is not set by this file; it is a human action (`/model`), recorded in the Execution Profile.
+Where a phase does spawn a subagent, carry an `effort:` hint on the same `low` → `medium` → `high` → `xhigh` → `max` scale as skill frontmatter — never a per-runner model. The subagent runs on the session's model. The *session* effort is not set by this file; it is a human action (the runner's effort setting), recorded in the Execution Profile.
 
 ---
 
@@ -150,13 +150,10 @@ Reply 'approved' to proceed to Phase 2, or provide corrections.
    - Performance or scalability constraints
    - Security/compliance considerations
 
-**Optional read-only fan-out.** This is the one phase where a subagent is routinely justified: if locating the relevant patterns means sweeping many directories or naming conventions, dispatch a read-only search agent and take its conclusion. Model hint at that spawn point:
+**Optional read-only fan-out.** This is the one phase where a subagent is routinely justified: if locating the relevant patterns means sweeping many directories or naming conventions, dispatch a read-only search agent and take its conclusion. Effort hint at that spawn point:
 
 ```yaml
-models:
-  claude: sonnet
-  copilot: gpt-5.4
-  codex: gpt-5.4
+effort: medium
 ```
 
 **Output format:**
@@ -363,13 +360,10 @@ Does this plan look correct? Reply 'approved' to proceed, or provide feedback.
 - **Never run concurrent `dotnet build` / `dotnet test` over the same solution.** Build and test once, in the session, after the merge.
 - The session owns the merge step and the post-merge build + test run.
 - **Weigh the cost first:** a .NET worktree pays a fresh `dotnet restore` per agent, and EF Core migration ordering still collides at merge — for most tasks sequential is faster end to end.
-- Model hint at that spawn point:
+- Effort hint at that spawn point:
 
 ```yaml
-models:
-  claude: sonnet
-  copilot: gpt-5.4
-  codex: gpt-5.4
+effort: medium
 ```
 
 **Output format:**
@@ -497,3 +491,4 @@ Then apply the two checks a diff review does not cover:
 |------|------|---------|
 | 2026-05-30 | | Initial version. |
 | 2026-09-20 | Worktask template & hook remediation | Removed the git-policy override and the autonomous-commit instructions — commits are now a per-task Execution Profile field routed through the `git-commit` skill, push never. Added `## Execution Profile`, replacing the 17-row phase/model table and the fabricated cost/quality metric; model hints now bind only at spawn points, in the per-runner `claude:`/`copilot:`/`codex:` form. `Agent Fleet Autonomy` → `Subagents` (default none, three justified shapes; parallelism means batched tool calls). Phases 1/4/7 no longer spawn specialist rosters; Phase 6 is sequential unless worktree-isolated with a merge step; Phase 7 delegates to the runner's review skill. Genericized the frontend/stack specifics. `load-context` → `context-load-context`; test tiers corrected to L0 unit / L1 component / L2 integration. Self-check "Gate"s renamed to "Exit check". Added the FALLBACK banner naming `ai-workflow-rules.instructions.md` authoritative, plus this `## Changelog` heading. |
+| 2026-09-27 | Model → effort | The Execution Profile recommends a session **effort** (`low` → `max`, set via the runner's effort setting) instead of a model, and the Phase 2/6 spawn-point hints are `effort: medium` instead of a per-runner `claude:`/`copilot:`/`codex:` model block. Subagents run on the session's model. |

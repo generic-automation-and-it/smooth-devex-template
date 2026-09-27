@@ -1,18 +1,14 @@
 ---
 name: create-worktask
-description: >
-    Invoke to scaffold and fully populate a worktask under `.context/work-tasks/`
-    so it is self-contained enough for a standalone AI coder to execute end-to-end.
-    Trigger keywords: "create worktask", "create a work task", "make a work-task",
-    "promote this to a worktask". Also triggers on /create-worktask.
-    Does NOT trigger on questions about how worktasks work.
-allowed-tools: >
-    Bash(.agents/skills/create-worktask/scripts/scaffold-worktask.sh:*),
-    Read, Write, Edit, Glob, Grep
-models:
-  claude: opus        # high-complexity; investigation + requirement authoring the whole 9-phase workflow runs on
-  copilot: auto
-  codex: gpt-5.5
+description: 'Invoke to scaffold and fully populate a worktask under `.context/work-tasks/` so it is self-contained enough for a standalone AI coder to execute end-to-end. Trigger keywords: "create worktask", "create a work task", "make a work-task", "promote this to a worktask". Also triggers on /create-worktask. Does NOT trigger on questions about how worktasks work.'
+allowed-tools:
+  - Bash(.agents/skills/create-worktask/scripts/scaffold-worktask.sh:*)
+  - Read
+  - Write
+  - Edit
+  - Glob
+  - Grep
+effort: xhigh  # investigation + requirement authoring the whole 9-phase workflow runs on
 ---
 
 # Create Worktask — standalone task authoring
@@ -36,12 +32,13 @@ gaps, so populate it from **real investigation**, not placeholders.
 - **Commit permission is per-task and defaults to not allowed.** The Execution Profile's
   `Commits during execution` field is the only thing that grants it; `Push` is always `never`. Nothing
   in a worktask overrides `git-policy.instructions.md`.
-- **The session model is a human action.** Recommend it; never claim to set it. The user runs
-  `/model <name>` before starting and can switch at a gate.
+- **The session effort is a human action.** Recommend a level (`low` → `max`); never claim to set it,
+  and never recommend a model. The user sets the runner's effort level before starting and can raise
+  it at a gate.
 - **No HTML comments in `assets/WORKTASK.template.md`.** Authoring guidance for the asset lives in
   this skill's `AGENTS.md` instead. See that file for why.
 - **Do not execute the worktask in the same turn that creates it.** Creating and executing are separate
-  invocations; the user chooses the model and path in between.
+  invocations; the user chooses the effort and path in between.
 
 ## Invocation
 
@@ -53,7 +50,7 @@ gaps, so populate it from **real investigation**, not placeholders.
 .context/work-tasks/<kebab-slug>.md
 ├── # Task: <one-liner>
 ├── Process: link to AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md
-├── ## Execution Profile   # model recommendation, path, subagents, commits, push
+├── ## Execution Profile   # effort recommendation, path, subagents, commits, push
 ├── ## Contexts            # verified paths only
 ├── ## Instructions        # summary, acceptance criteria, requirements, scope,
 │                          # integration points, NFRs, tests, dependencies
@@ -79,7 +76,7 @@ gaps, so populate it from **real investigation**, not placeholders.
    (`add-vessel-eta-validation`, `fix-claims-filter-bug`).
 
 4. **Fill the Execution Profile:**
-   - **Recommended session model + Path** — from the complexity read in step 7
+   - **Recommended session effort + Path** — from the complexity read in step 7
    - **Subagents** — `none` unless the task genuinely needs read-only fan-out or worktree-isolated writers
    - **Commits during execution** — `not allowed` unless the user explicitly grants it for this task
    - **Push** — `never`
@@ -100,19 +97,19 @@ gaps, so populate it from **real investigation**, not placeholders.
    - **Dependencies and references** — prior work, tickets/PRs, patterns to follow, known gotchas,
      migration path for breaking changes
 
-7. **Recommend the session model and path** — a human action, reported to the user and recorded in the
+7. **Recommend the session effort and path** — a human action, reported to the user and recorded in the
    Execution Profile:
-   - **Lightweight path (0→1→6→7→8)** with a fast model — config changes, single-file fixes,
+   - **Lightweight path (0→1→6→7→8)** at `low`/`medium` effort — config changes, single-file fixes,
      straightforward CRUD, <5 files, clear patterns
-   - **Full path (0→1→2→3→4→5→6→7→8)** with a high-reasoning model — cross-cutting concerns,
+   - **Full path (0→1→2→3→4→5→6→7→8)** at `high`/`xhigh`/`max` effort — cross-cutting concerns,
      architectural decisions, ambiguous requirements, 5+ files, new patterns, complex integrations
-   - One-line rationale. Remind the user to set it with `/model` before starting execution.
+   - One-line rationale. Remind the user to set the runner's effort level before starting execution.
 
 8. **Delete what does not apply** — remove unused placeholder bullets and drop `## Overrides` entirely
    when there are none. A worktask full of unfilled brackets reads as noise and hides the real content.
 
 9. **Confirm** — show the file path, key acceptance criteria, files/domains affected, estimated
-   complexity, and the recommended model + path.
+   complexity, and the recommended effort + path.
 
 ## Quality bar before confirming
 
@@ -122,7 +119,7 @@ gaps, so populate it from **real investigation**, not placeholders.
 - [ ] Are scope boundaries explicit — what is OUT as well as what is IN?
 - [ ] Are the required test tiers named (L0/L1/L2) with what each must cover?
 - [ ] Are dependencies and integration points concrete?
-- [ ] Is the Execution Profile filled in — model, path, subagents, commits, push?
+- [ ] Is the Execution Profile filled in — effort, path, subagents, commits, push?
 - [ ] Are all unfilled placeholder brackets gone?
 - [ ] Does the worktask link the process template rather than restating its phases?
 

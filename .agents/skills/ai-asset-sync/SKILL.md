@@ -7,10 +7,7 @@ allowed-tools:
   - Bash(git:*)
   - Bash(gh:*)
   - Bash(python3:*)
-models:
-  claude: opus
-  copilot: auto
-  codex: gpt-5.5
+effort: high  # AI-merge of local vs upstream skills/rules + chore PR
 ---
 
 # AI Asset Sync — Skill

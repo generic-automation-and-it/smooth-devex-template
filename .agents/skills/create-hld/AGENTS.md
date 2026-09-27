@@ -15,7 +15,7 @@ Authoring skill for design-only HLD folders under `.docs/hlds/NNN-<slug>/`. The 
 
 - The index is `max(existing NNN)+1`, computed by globbing `.docs/hlds/[0-9][0-9][0-9]-*/`. A non-conforming folder name (no 3-digit prefix) is silently ignored, so a stray dir won't shift numbering.
 - Scripts are `bash` + coreutils only and discover repo root via `git rev-parse` — no Claude-specific behaviour, so Codex/Copilot/Cursor run them identically. Both must stay executable (`chmod +x`).
-- Complexity tier is **high** (`claude: opus`): multi-turn clarification gates + architectural judgment, unlike the script-driven low-tier skills.
+- Effort is **`xhigh`**: multi-turn clarification gates + architectural judgment, unlike the script-driven `low`-effort skills.
 
 ## Changelog
 
