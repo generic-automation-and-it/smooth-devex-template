@@ -181,11 +181,12 @@
   "agent": {
     "sync": {
       "mode": "primary",
-      "description": "AI-DevEx asset merge agent: edit inside the repo root only (upstream snapshot is staged into an in-repo scratch dir), never .git/ (credentials, hooks) or .env files, no skill/task/bash/external paths. Git and PR creation stay in run-sync.sh.",
+      "description": "AI-DevEx asset merge agent: edit inside the repo root only (upstream snapshot is staged into an in-repo scratch dir), never .git/ (credentials, hooks) or .env files, no grep (its permission matches the regex, not the path), no skill/task/bash/external paths. Git and PR creation stay in run-sync.sh.",
       "tools": {
         "skill": false,
         "task": false,
         "edit": true,
+        "grep": false,
         "bash": false,
         "webfetch": false,
         "websearch": false
@@ -196,7 +197,10 @@
         "edit": {
           "*": "allow",
           "*.git": "deny",
-          "*.git/*": "deny"
+          "*.git/*": "deny",
+          "*.env": "deny",
+          "*.env.*": "deny",
+          "*.env.example": "allow"
         },
         "bash": "deny",
         "webfetch": "deny",
@@ -208,7 +212,7 @@
           "*.env.*": "deny",
           "*.env.example": "allow"
         },
-        "grep": "allow",
+        "grep": "deny",
         "glob": "allow",
         "list": "allow",
         "external_directory": "deny"
