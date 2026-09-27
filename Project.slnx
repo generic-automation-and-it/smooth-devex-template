@@ -35,6 +35,7 @@
     <File Path=".agents/hooks/load-agents-context.sh" />
     <File Path=".agents/hooks/manage-rule-system-context.sh" />
     <File Path=".agents/hooks/slnx-docs-sync.py" />
+    <File Path=".agents/hooks/worktask-skill-trigger.sh" />
   </Folder>
   <Folder Name="/.agents/rules/">
     <File Path=".agents/rules/ai-workflow-rules.instructions.md" />
