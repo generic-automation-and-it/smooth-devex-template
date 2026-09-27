@@ -124,13 +124,6 @@ jobs:
       OPENCODE_AI_SYNC_CONFIG: ${{ vars.OPENCODE_AI_SYNC_CONFIG || '' }}
       AI_ASSET_SYNC_PR_TITLE: ${{ inputs.pr_title || vars.AI_ASSET_SYNC_PR_TITLE || '' }}
       OPENCODE_CLI_VERSION: ${{ vars.OPENCODE_CLI_VERSION || '' }}
-      OPENCODE_GEMINI_API_KEY: ${{ secrets.OPENCODE_GEMINI_API_KEY }}
-      OPENCODE_COPILOT_API_KEY: ${{ secrets.OPENCODE_COPILOT_API_KEY }}
-      OPENCODE_OPENAI_API_KEY: ${{ secrets.OPENCODE_OPENAI_API_KEY }}
-      OPENCODE_ANTHROPIC_API_KEY: ${{ secrets.OPENCODE_ANTHROPIC_API_KEY }}
-      OPENCODE_GO_OPENAI_API_KEY: ${{ secrets.OPENCODE_GO_OPENAI_API_KEY }}
-      OPENCODE_GO_ANTHROPIC_API_KEY: ${{ secrets.OPENCODE_GO_ANTHROPIC_API_KEY }}
-      OPENCODE_OPENROUTER_API_KEY: ${{ secrets.OPENCODE_OPENROUTER_API_KEY }}
       OPENCODE_DISABLE_CLAUDE_CODE: "1"
     steps:
       - name: Checkout consumer repo
@@ -138,6 +131,9 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ github.token }}
+          # The ai-merge model can read the repo root; a persisted token in
+          # .git/config would be readable. run-sync.sh pushes via gh instead.
+          persist-credentials: false
 
       # 1. Copy-installed / in-repo: skill at .agents/skills/ai-asset-sync
       # 2. Reusable-workflow mode: fetch this template as a side checkout,
@@ -151,10 +147,19 @@ jobs:
           # to the commit of this reusable workflow file.
           ref: ${{ inputs.tools_ref || vars.SMOOTH_DEVEX_TOOLS_REF || github.job_workflow_sha }}
           path: .smooth-devex-template
+          persist-credentials: false
 
       - name: Sync AI assets
+        # Secrets are scoped to this step only — the checkout steps never see them.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENCODE_GEMINI_API_KEY: ${{ secrets.OPENCODE_GEMINI_API_KEY }}
+          OPENCODE_COPILOT_API_KEY: ${{ secrets.OPENCODE_COPILOT_API_KEY }}
+          OPENCODE_OPENAI_API_KEY: ${{ secrets.OPENCODE_OPENAI_API_KEY }}
+          OPENCODE_ANTHROPIC_API_KEY: ${{ secrets.OPENCODE_ANTHROPIC_API_KEY }}
+          OPENCODE_GO_OPENAI_API_KEY: ${{ secrets.OPENCODE_GO_OPENAI_API_KEY }}
+          OPENCODE_GO_ANTHROPIC_API_KEY: ${{ secrets.OPENCODE_GO_ANTHROPIC_API_KEY }}
+          OPENCODE_OPENROUTER_API_KEY: ${{ secrets.OPENCODE_OPENROUTER_API_KEY }}
           AI_ASSET_SYNC_MANIFEST: ${{ inputs.manifest_path || '.github/assets/ai-sync.yml' }}
           AI_ASSET_SYNC_MODEL: ${{ inputs.model || '' }}
           AI_ASSET_SYNC_ENTRIES_FILTER: ${{ inputs.entries_filter || '' }}

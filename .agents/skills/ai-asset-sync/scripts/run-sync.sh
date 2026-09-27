@@ -12,6 +12,7 @@
 # Env (see AGENTS.md):
 #   OPENCODE_AI_SYNC_PROVIDER / _MODEL_PRIMARY / _MODEL_SECONDARY / _CONFIG
 #   OPENCODE_CLI_VERSION, OPENCODE_<PROVIDER>_API_KEY, GITHUB_TOKEN
+#   The model process receives only the selected provider's key.
 set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -58,6 +59,15 @@ need_cmd() {
 need_cmd python3
 need_cmd git
 
+# No git hook ever runs for this script's git commands: the model can edit
+# tracked hook dirs (e.g. .husky/), and checkout/commit/push hooks would run
+# with GH_TOKEN in their environment. Set once via GIT_CONFIG_COUNT (git >=
+# 2.31), appended after any entries the caller already exported, so no
+# individual git call can forget it.
+_git_cfg_n="${GIT_CONFIG_COUNT:-0}"
+export "GIT_CONFIG_KEY_${_git_cfg_n}=core.hooksPath" "GIT_CONFIG_VALUE_${_git_cfg_n}=/dev/null"
+export GIT_CONFIG_COUNT=$((_git_cfg_n + 1))
+
 [ -f "$MANIFEST_PATH" ] || die "manifest not found: $MANIFEST_PATH"
 
 # Scratch space lives INSIDE the repo root so the OpenCode agent can read the
@@ -73,7 +83,7 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
 fi
 REPORT_DIR="${WORKDIR}/report"
 mkdir -p "$REPORT_DIR"
-cleanup() { rm -rf "$WORKDIR"; }
+cleanup() { [ -z "${GIT_CFG_BACKUP:-}" ] || restore_git_credentials; rm -rf "$WORKDIR"; }
 trap cleanup EXIT
 
 # Resolve an entry path to its PHYSICAL repo-relative path (symlink-aware:
@@ -197,6 +207,73 @@ key_var_for() {
     OPENCODE-GO-ANTHROPIC) echo OPENCODE_GO_ANTHROPIC_API_KEY ;;
     OPEN_ROUTER) echo OPENCODE_OPENROUTER_API_KEY ;;
   esac
+}
+
+MODEL_ENV_ALLOW="PATH HOME USER LOGNAME SHELL TMPDIR TERM LANG LC_ALL LC_CTYPE
+  XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_STATE_HOME
+  HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy
+  SSL_CERT_FILE SSL_CERT_DIR NODE_EXTRA_CA_CERTS"
+
+# Least privilege for the model process (skill-secret-handling): an allowlist,
+# not a deny-list, so tokens nobody thought of (GH_TOKEN, OIDC, a developer
+# shell's other keys) never reach it. The selected provider's key and
+# non-secret OPENCODE_* settings pass; unset runs in a subshell so no value
+# ever appears on a command line.
+run_model() {
+  local keep="$1" v
+  shift
+  (
+    for v in $(compgen -e); do
+      case " ${MODEL_ENV_ALLOW//$'\n'/ } ${keep} " in
+        *" ${v} "*) continue ;;
+      esac
+      case "$v" in
+        OPENCODE_*)
+          case "$(printf '%s' "$v" | tr '[:lower:]' '[:upper:]')" in
+            *KEY*|*TOKEN*|*SECRET*|*PASSWORD*|*CREDENTIAL*) ;;
+            *) continue ;;
+          esac
+          ;;
+      esac
+      unset "$v" 2>/dev/null || true
+    done
+    exec "$@"
+  )
+}
+
+# actions/checkout v4/v5 persist the job token as an http extraheader in
+# .git/config unless told not to. That file sits inside the repo root the
+# model can read, so while the model runs the config is backed up OUTSIDE the
+# repo and the extraheader removed; restore_git_credentials puts it back
+# byte-for-byte before commit/push (and on any exit). Only the repo's own
+# config file is inspected (no includes): checkout v6 keeps credentials in an
+# included file under RUNNER_TEMP, outside the model's reach. A token typed
+# into a remote URL is not ours to rewrite, so that still fails closed.
+GIT_CFG_BACKUP=""
+GIT_CFG_PATH=""
+set_aside_git_credentials() {
+  local cfg name
+  cfg="$(git rev-parse --git-path config 2>/dev/null)" || return 0
+  [ -f "$cfg" ] || return 0
+  if git config --file "$cfg" --get-regexp '^remote\..*\.url$' 2>/dev/null | grep -Eq 'https?://[^/@[:space:]]+@'; then
+    die "a git remote URL in ${cfg} embeds a credential the ai-merge model could read — remove it from the URL (use gh auth / a credential helper)"
+  fi
+  git config --file "$cfg" --get-regexp '^http\..*\.extraheader$' >/dev/null 2>&1 || return 0
+  GIT_CFG_BACKUP="$(mktemp "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/ai-sync-gitconfig.XXXXXX")"
+  GIT_CFG_PATH="$cfg"
+  cp -p "$cfg" "$GIT_CFG_BACKUP"
+  git config --file "$cfg" --name-only --get-regexp '^http\..*\.extraheader$' | sort -u \
+    | while IFS= read -r name; do git config --file "$cfg" --unset-all "$name"; done
+  log "persisted checkout credential set aside for the ai-merge phase (restored before push)"
+}
+
+restore_git_credentials() {
+  [ -n "$GIT_CFG_BACKUP" ] || return 0
+  if [ -f "$GIT_CFG_BACKUP" ]; then
+    cp -p "$GIT_CFG_BACKUP" "$GIT_CFG_PATH"
+    rm -f "$GIT_CFG_BACKUP"
+  fi
+  GIT_CFG_BACKUP=""
 }
 
 OPENCODE_READY=0
@@ -323,14 +400,14 @@ EOF
   local raw="${WORKDIR}/opencode.out"
   local rc=1
   set +e
-  opencode run --agent sync --model "${pid}/${primary}" --format default --log-level WARN \
+  run_model "$key_var" opencode run --agent sync --model "${pid}/${primary}" --format default --log-level WARN \
     <"$prompt" >"$raw" 2>"${WORKDIR}/opencode.err"
   rc=$?
   set -e
   if [ "$rc" -ne 0 ] && [ -n "$secondary" ] && [ "$secondary" != "$primary" ]; then
     log "primary model failed; trying secondary ${secondary}"
     set +e
-    opencode run --agent sync --model "${pid}/${secondary}" --format default --log-level WARN \
+    run_model "$key_var" opencode run --agent sync --model "${pid}/${secondary}" --format default --log-level WARN \
       <"$prompt" >"$raw" 2>"${WORKDIR}/opencode.err"
     rc=$?
     set -e
@@ -396,6 +473,10 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
       die "entry path '${path}' (physical: ${phys}) has uncommitted changes — commit/stash before syncing"
     fi
   done 3<"${REPORT_DIR}/work-list.txt"
+fi
+
+if cut -f7 "${REPORT_DIR}/work-list.txt" | grep -qx 'ai-merge'; then
+  set_aside_git_credentials
 fi
 
 append_result() {
@@ -477,6 +558,7 @@ data["advance_lock"] = data["action"] in {"applied", "merged"}
 open(sys.argv[3], "a", encoding="utf-8").write(json.dumps(data) + "\n")
 PY
 done 3<"${REPORT_DIR}/work-list.txt"
+restore_git_credentials
 
 python3 - "${REPORT_DIR}/manifest.json" "${LOCKFILE_PATH}" <<'PY' >"${REPORT_DIR}/watch-paths.txt"
 import json, sys
@@ -671,7 +753,9 @@ body += (
 Path(dest).write_text(body, encoding="utf-8")
 PY
 
-git push origin "$BRANCH"
+# One-shot gh credential helper: GH_TOKEN stays in the environment, is never
+# written to .git/config, and needs no persisted checkout credential.
+git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push origin "$BRANCH"
 gh pr create \
   --title "$PR_TITLE" \
   --body-file "${REPORT_DIR}/pr-body.md" \

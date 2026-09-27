@@ -19,12 +19,14 @@ The skill-scan gate (`.github/workflows/skill-scan.yml`) fails on any ACTIVE (no
 
    ```bash
    REF=$(grep -m1 'SKILLSPECTOR_REF:' .github/workflows/skill-scan.yml | awk '{print $2}')
-   python3 -m venv /tmp/skillspector-venv && /tmp/skillspector-venv/bin/pip -q install "git+https://github.com/NVIDIA/SkillSpector@${REF}"
+   python3.12 -m venv /tmp/skillspector-venv && /tmp/skillspector-venv/bin/pip -q install "git+https://github.com/NVIDIA/SkillSpector@${REF}"
    /tmp/skillspector-venv/bin/skillspector scan .agents/skills/ --no-llm --format json --output /tmp/skillspector.json || true
-   python3 .github/scripts/skillspector-report.py /tmp/skillspector.json /tmp/skillspector.sarif .agents/skills \
+   /tmp/skillspector-venv/bin/python .github/scripts/skillspector-report.py /tmp/skillspector.json /tmp/skillspector.sarif .agents/skills \
      --baseline .github/skillspector-baseline.yml --decision-file /tmp/gate.txt
    cat /tmp/gate.txt   # must print: pass
    ```
+
+   Use CI's Python (3.12): the install silently yields no `skillspector` binary on 3.9. Run the report with the **venv** Python — it carries PyYAML; a system `python3` without it loads an empty baseline and reports every accepted finding as ACTIVE. If `main` fails locally too, suspect the environment before the diff.
 
    No network / install fails → fall back to prediction (step 1) and say so in the PR description.
 3. **Baseline in the same commit/PR.** Every expected first-party finding gets a justified entry in `.github/skillspector-baseline.yml` (`id` + `file` + written `reason`) alongside the code that introduces it. A skill PR that will trip the gate without its baseline update is incomplete.
@@ -51,4 +53,5 @@ Baseline matching is `(id, file)` and line-agnostic: moving a flagged pattern to
 
 | Date | Change | Ref |
 |:-----|:-------|:----|
+| 2026-09-27 | Local gate recipe uses Python 3.12 and the venv interpreter for the report script (system `python3` without PyYAML reads an empty baseline and fails every finding). | |
 | 2026-09-13 | Initial version — created after repeated post-PR SkillSpector fixup loops on skill PRs (#66). | #66 |
