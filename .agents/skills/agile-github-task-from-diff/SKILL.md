@@ -1,22 +1,13 @@
 ---
 name: agile-github-task-from-diff
-description: >
-    Create a GitHub Task (sub-issue) from the current git diff vs main and link it as a
-    sub-issue of a parent Feature in the local GitHub Project. Use when Codex needs to
-    summarize branch changes into a horizontally sliced task with acceptance criteria and
-    create it via `gh`. NOT for braindumps, ideas, meeting transcripts, or breaking a
-    Feature into Tasks — use agile-github-breakdown, which sources issues from contextual
-    knowledge, never a diff. NOT for opening a pull request — use git-commit-push-pr.
-allowed-tools: >
-    Bash(.agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py:*),
-    Bash(python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py:*),
-    Bash(git fetch:*),
-    Bash(gh auth status:*),
-    Read
-models:
-  claude: sonnet      # medium-complexity; diff analysis + issue authoring across layers
-  copilot: auto
-  codex: gpt-5.4
+description: Create a GitHub Task (sub-issue) from the current git diff vs main and link it as a sub-issue of a parent Feature in the local GitHub Project. Use when Codex needs to summarize branch changes into a horizontally sliced task with acceptance criteria and create it via `gh`. NOT for braindumps, ideas, meeting transcripts, or breaking a Feature into Tasks — use agile-github-breakdown, which sources issues from contextual knowledge, never a diff. NOT for opening a pull request — use git-commit-push-pr.
+allowed-tools:
+  - Bash(.agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py:*)
+  - Bash(python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py:*)
+  - Bash(git fetch:*)
+  - Bash(gh auth status:*)
+  - Read
+effort: medium  # diff analysis + issue authoring across layers
 ---
 
 # Task From Diff
@@ -29,7 +20,7 @@ Generate a GitHub **Task** issue from the current branch diff versus main. The t
 
 1. Ensure the repo has an up-to-date `origin/main` (or override the base ref).
 2. Run a dry run to review the generated title, body, and acceptance criteria.
-3. Create the task issue, add it to the project, and optionally link it as a sub-issue of the Feature.
+3. Create the task issue, add it to the project, and optionally link it as a sub-issue of the Feature — or, with `--noparentid`, create it in the repo only (no project, no parent).
 4. Rename the current branch to match the `<type>/<issue>-short-description` naming standard using the newly created issue number — see [Rename Branch After Creation](#rename-branch-after-creation).
 
 ## Script
@@ -42,6 +33,9 @@ python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_fr
 
 # Create task, add to project #1, link as sub-issue of Feature #42 (number or issue URL)
 python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py --feature-issue 42
+
+# Repo-only task: no GitHub Project, no parent Feature
+python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py --noparentid
 
 # Combine flags from the Inputs table as needed, e.g.:
 python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py \
@@ -56,7 +50,8 @@ python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_fr
 | `--title` | _(generated)_ | Override the auto-generated task title. |
 | `--repo` | _(from remote)_ | GitHub repo as `owner/repo`. Auto-detected when omitted. |
 | `--project` | `1` | GitHub project number under the org. |
-| `--no-project` | — | Create the issue only; skip adding it to any GitHub Project. |
+| `--no-project` | — | Create the issue only; skip adding it to any GitHub Project. A `--feature-issue` parent is still linked. |
+| `--noparentid` | — | Repo-only task: skip the GitHub Project **and** the parent Feature link. Mutually exclusive with `--feature-issue` — combining them exits `2` before anything is read or created. |
 | `--org` | _(repo owner)_ | GitHub org that owns the project. Defaults to the repo owner detected from the git remote. |
 | `--label` | `task` | Label applied to the created issue. |
 | `--base-ref` | `origin/main` → `main` | Override base ref for the diff. |
@@ -71,8 +66,8 @@ python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_fr
 - Generates an acceptance criteria checklist based on touched paths.
 - Checks the `--label` exists (read-only `gh api` GET); `--dry-run` reports `Label '<name>': present|MISSING|UNKNOWN`.
 - Creates the issue via `gh issue create`.
-- Adds the issue to the GitHub Project via `gh project item-add`.
-- Links the issue as a sub-issue of the parent Feature via the GitHub REST API: resolves the new issue's database `id` (`gh api /repos/{owner}/{repo}/issues/<n>`), then `gh api --method POST /repos/{owner}/{repo}/issues/<parent>/sub_issues -F sub_issue_id=<id>`.
+- Adds the issue to the GitHub Project via `gh project item-add` (skipped by `--no-project` and `--noparentid`).
+- Links the issue as a sub-issue of the parent Feature (only when `--feature-issue` is set) via the GitHub REST API: resolves the new issue's database `id` (`gh api /repos/{owner}/{repo}/issues/<n>`), then `gh api --method POST /repos/{owner}/{repo}/issues/<parent>/sub_issues -F sub_issue_id=<id>`.
 
 ## Rename Branch After Creation
 

@@ -2,7 +2,7 @@
 
 ## TL;DR
 
-Middle of the git skill chain: delegates committing to `git-commit` (haiku-tier sub-agent), then pushes via `scripts/push.sh`, which owns upstream tracking, the nothing-to-push case, and `--issue`-driven branch rename.
+Middle of the git skill chain: delegates committing to `git-commit` (`effort: low` sub-agent), then pushes via `scripts/push.sh`, which owns upstream tracking, the nothing-to-push case, and `--issue`-driven branch rename.
 
 ## Key Behaviors
 

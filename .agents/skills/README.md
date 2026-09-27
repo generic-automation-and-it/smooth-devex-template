@@ -9,7 +9,7 @@ Skills live **flat**, one directory per skill directly under `.agents/skills/`. 
 | Skill | Purpose | Usage |
 |-------|---------|-------|
 | **agile-github-breakdown** | Turn a braindump or existing Feature into GitHub Feature + Task issues | `/agile-github-breakdown` |
-| **agile-github-task-from-diff** | Create a GitHub Task (sub-issue) from the current git diff vs main | `/agile-github-task-from-diff` |
+| **agile-github-task-from-diff** | Create a GitHub Task (sub-issue) from the current git diff vs main | `/agile-github-task-from-diff [--feature-issue <n> \| --noparentid]` |
 | **ai-brain-dump** | Listen-first capture session; synthesize on request | `/ai-brain-dump [--oktoask] [--thinking] [--oktoreaddocs] [--oktowebsearch] [--all]` |
 | **ai-terse** | Reformat this turn's reply into terse, high-density output with a TL;DR | `/ai-terse` |
 | **ai-template-sync** | UPSERT smooth-devex-template scaffold into an existing repo | `/ai-template-sync` |
@@ -87,43 +87,60 @@ The `--autonomous` switch suppresses all interactive questions across the entire
 
 `--autonomous` is forwarded automatically through the skill chain: `git-commit-push-pr` → `git-commit-push` → `git-commit`.
 
-## Model Selection
+## Effort
 
-Skills are classified by complexity tier. Each SKILL.md carries a `models` frontmatter block with the recommended model per tool. When a skill is invoked as a sub-agent, use the model from its `models` block.
+Skills never pick a model, and never differ per provider — every skill runs on whatever model the session already uses. Each SKILL.md instead carries a single `effort` frontmatter field on the standard AI-harness reasoning-effort scale:
 
-| Complexity | Claude Code | GitHub Copilot | OpenAI Codex |
-|-----------|-------------|----------------|--------------|
-| **low** | `haiku` | `gpt-5.4-mini` | `gpt-5.4-mini` |
-| **medium** | `sonnet` | `auto` | `gpt-5.4` |
-| **high** | `opus` | `auto` | `gpt-5.5` |
+| Effort | Use for |
+|--------|---------|
+| `low` | Script-driven or single-turn work; no deep reasoning |
+| `medium` | Structured authoring across a few files or steps |
+| `high` | Multi-turn synthesis or judgment calls |
+| `xhigh` | Design and planning artefacts that downstream work is built on |
+| `max` | Reserved — not set by any skill; the user raises a run to it explicitly |
 
-### Skill complexity classification
+A harness that honours skill `effort` applies it on invocation; a harness with a coarser scale uses its nearest supported level. When a skill invokes another skill as a sub-agent, run it at the **callee's** `effort` on the session's model.
 
-| Skill | Complexity | Rationale |
-|-------|-----------|-----------|
+### Skill effort levels
+
+| Skill | Effort | Rationale |
+|-------|--------|-----------|
 | **context-load-context** | low | File discovery and loading; no deep reasoning |
 | **context-load-agents-context** | low | Script-driven file traversal; no deep reasoning |
 | **git-commit** | low | Diff review + conventional commit; straightforward |
-| **git-sync** | low | Fetch + merge; straightforward git operations |
+| **git-sync** | medium | Default path is script-only, but `--fix` resolves merge conflicts by merging the intent of both sides — the effort must cover the heaviest mode |
+| **ai-terse** | medium | Not mechanical reformatting: decides what is signal, compresses without changing meaning, applies the Auto-Clarity exceptions, and judges Holes/Ignored for the TL;DR |
 | **git-commit-push** | medium | Branch rename logic + upstream tracking |
 | **git-commit-push-pr** | medium | PR template authoring + state management |
-| **agile-github-breakdown** | high | Multi-turn FR/NFR → Task graph + GitHub writes |
 | **agile-github-task-from-diff** | medium | Diff classification + issue authoring |
 | **manage-rule-system** | medium | Cross-tool frontmatter authoring |
-| **ai-terse** | low | Single-turn reply reformatting; no tools or deep reasoning |
-| **ai-brain-dump** | high | Multi-turn synthesis + deep requirement reasoning |
-| **ai-template-sync** | high | Interactive multi-turn Q&A + conditional file sync across tools |
+| **ai-template-sync** | medium | `sync.sh` does the copy/compare; the agent only picks flags, runs the rules-layout pre-flight and builds the conflict table |
+| **ai-brain-dump** | medium | Listen-first capture — `high` would be re-paid on every turn of a long session. Deep reasoning happens downstream, in the skills its output feeds (`ai-understanding`, `agile-github-breakdown`, `create-hld`, `create-worktask`) |
 | **ai-asset-sync** | high | AI-merge of local vs upstream skills/rules + chore PR |
 | **ai-understanding** | high | Judging what qualifies as transferable knowledge + merge/promotion decisions |
-| **create-hld** | high | Multi-turn clarification gates + architectural judgment (LADRs, NFRs, diagrams) |
-| **create-worktask** | high | Investigation + requirement authoring the whole 9-phase workflow runs on |
+| **agile-github-breakdown** | xhigh | Multi-turn FR/NFR → Task graph + GitHub writes |
+| **create-hld** | xhigh | Multi-turn clarification gates + architectural judgment (LADRs, NFRs, diagrams) |
+| **create-worktask** | xhigh | Investigation + requirement authoring the whole 9-phase workflow runs on |
 
-### Sub-skill invocation model guidance
+### Sub-skill invocation
 
-When a skill invokes another skill as a sub-agent, use the sub-skill's model tier:
+- **git-commit-push** → invokes **git-commit** at `effort: low`
+- **git-commit-push-pr** → invokes **git-commit-push** at `effort: medium`
 
-- **git-commit-push** → invokes **git-commit** (low): use `haiku` / `gpt-5.4-mini` / `gpt-5.4-mini`
-- **git-commit-push-pr** → invokes **git-commit-push** (medium): use `sonnet` / `auto` / `gpt-5.4`
+### Frontmatter shape
+
+Every SKILL.md frontmatter uses the same fields, in this order:
+
+```yaml
+---
+name: <folder-name>
+description: <one line; single-quoted only when YAML requires it>
+allowed-tools:        # optional; always a block list
+  - Bash(<command>:*)
+  - Read
+effort: <low|medium|high|xhigh>  # one-line rationale
+---
+```
 
 ## Naming & Ordering
 
@@ -142,9 +159,9 @@ A skill's folder name MUST equal its `name:` frontmatter (this is the slash-comm
 ## About Skills
 
 Each skill is a directory containing:
-- **SKILL.md** — The skill definition with workflow steps and `models` frontmatter
+- **SKILL.md** — The skill definition with workflow steps and `effort` frontmatter
 - **AGENTS.md** — Maintenance context for agents *modifying* the skill (coupling, rationale, drift hazards) per `.agents/rules/meta/knowledge-conventional-contexts-quality.instructions.md`
-- **agents/openai.yaml** — OpenAI Codex agent registration with model specification
+- **agents/openai.yaml** — OpenAI Codex agent registration (display name, description, default prompt; no model)
 - **scripts/** — Helper scripts (if applicable)
 - **references/** — Reference documentation (if applicable)
 - **assets/** — Templates the skill copies into a target location (if applicable)
