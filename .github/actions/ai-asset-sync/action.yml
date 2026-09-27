@@ -1,24 +1,35 @@
 name: AI asset sync
 description: Install OpenCode CLI, run ai-asset-sync, and open a chore PR when AI assets differ from upstream.
 
-# Direct-use env contract (composite actions do NOT see repo/org vars or
-# secrets automatically — the CALLING job must map them as env):
+# Direct use (composite actions do NOT see repo/org vars or secrets
+# automatically — the CALLING job must map them as env):
 #
-#   env:
-#     OPENCODE_AI_SYNC_PROVIDER: ${{ vars.OPENCODE_AI_SYNC_PROVIDER || 'GEMINI' }}
-#     OPENCODE_AI_SYNC_MODEL_PRIMARY: ${{ vars.OPENCODE_AI_SYNC_MODEL_PRIMARY || '' }}
-#     OPENCODE_AI_SYNC_MODEL_SECONDARY: ${{ vars.OPENCODE_AI_SYNC_MODEL_SECONDARY || '' }}
-#     OPENCODE_AI_SYNC_CONFIG: ${{ vars.OPENCODE_AI_SYNC_CONFIG || '' }}
-#     OPENCODE_CLI_VERSION: ${{ vars.OPENCODE_CLI_VERSION || '' }}
-#     OPENCODE_<PROVIDER>_API_KEY: ${{ secrets.OPENCODE_<PROVIDER>_API_KEY }}
+#   permissions:
+#     contents: write
+#     pull-requests: write
+#   steps:
+#     - uses: actions/checkout@v4
+#       with:
+#         fetch-depth: 0
+#         persist-credentials: false   # keep the job token off disk
+#     - uses: generic-automation-and-it/smooth-devex-template/.github/actions/ai-asset-sync@main
+#       env:
+#         OPENCODE_AI_SYNC_PROVIDER: ${{ vars.OPENCODE_AI_SYNC_PROVIDER || 'GEMINI' }}
+#         OPENCODE_AI_SYNC_MODEL_PRIMARY: ${{ vars.OPENCODE_AI_SYNC_MODEL_PRIMARY || '' }}
+#         OPENCODE_AI_SYNC_MODEL_SECONDARY: ${{ vars.OPENCODE_AI_SYNC_MODEL_SECONDARY || '' }}
+#         OPENCODE_AI_SYNC_CONFIG: ${{ vars.OPENCODE_AI_SYNC_CONFIG || '' }}
+#         OPENCODE_CLI_VERSION: ${{ vars.OPENCODE_CLI_VERSION || '' }}
+#         OPENCODE_<PROVIDER>_API_KEY: ${{ secrets.OPENCODE_<PROVIDER>_API_KEY }}
 #
 # Only the selected provider's key is read, and only it reaches the model
 # process. Without these mappings the run defaults to GEMINI and dies on the
 # missing-key check. Map secrets on THIS step's env, not the job's.
 #
-# Check the consumer repo out with `persist-credentials: false`: the ai-merge
-# model can read the repo root, so run-sync.sh refuses to start an ai-merge
-# while a token is persisted in .git/config (it pushes via gh instead).
+# `persist-credentials: false` is recommended, not required: the push goes
+# through a one-shot gh credential helper, so the token never needs to be on
+# disk. If a checkout does persist it in .git/config (checkout v4/v5 default),
+# run-sync.sh sets it aside while the ai-merge model runs and restores it
+# afterwards, because the model can read the repo root.
 #
 # The reusable workflow (pipeline-ai-asset-sync.yml) does all of this for
 # you — prefer it.

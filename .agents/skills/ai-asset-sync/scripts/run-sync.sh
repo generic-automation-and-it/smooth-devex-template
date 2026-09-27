@@ -74,7 +74,7 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
 fi
 REPORT_DIR="${WORKDIR}/report"
 mkdir -p "$REPORT_DIR"
-cleanup() { rm -rf "$WORKDIR"; }
+cleanup() { [ -z "${GIT_CFG_BACKUP:-}" ] || restore_git_credentials; rm -rf "$WORKDIR"; }
 trap cleanup EXIT
 
 # Resolve an entry path to its PHYSICAL repo-relative path (symlink-aware:
@@ -228,19 +228,39 @@ run_model() {
   )
 }
 
-# actions/checkout persists the job token into .git/config unless told not to.
-# That file sits inside the repo root the model can read, so an ai-merge run
-# refuses to start while a credential is stored there. Only the repo's own
+# actions/checkout v4/v5 persist the job token as an http extraheader in
+# .git/config unless told not to. That file sits inside the repo root the
+# model can read, so while the model runs the config is backed up OUTSIDE the
+# repo and the extraheader removed; restore_git_credentials puts it back
+# byte-for-byte before commit/push (and on any exit). Only the repo's own
 # config file is inspected (no includes): checkout v6 keeps credentials in an
-# included file under RUNNER_TEMP, outside the model's reach.
-assert_no_persisted_git_credentials() {
-  local cfg
+# included file under RUNNER_TEMP, outside the model's reach. A token typed
+# into a remote URL is not ours to rewrite, so that still fails closed.
+GIT_CFG_BACKUP=""
+GIT_CFG_PATH=""
+set_aside_git_credentials() {
+  local cfg name
   cfg="$(git rev-parse --git-path config 2>/dev/null)" || return 0
   [ -f "$cfg" ] || return 0
-  if git config --file "$cfg" --get-regexp '^http\..*\.extraheader$' >/dev/null 2>&1 \
-    || git config --file "$cfg" --get-regexp '^remote\..*\.url$' 2>/dev/null | grep -Eq 'https?://[^/@[:space:]]+@'; then
-    die "git credentials are persisted in ${cfg}, which the ai-merge model can read — check out with 'persist-credentials: false' (actions/checkout) or remove the credential from the remote URL"
+  if git config --file "$cfg" --get-regexp '^remote\..*\.url$' 2>/dev/null | grep -Eq 'https?://[^/@[:space:]]+@'; then
+    die "a git remote URL in ${cfg} embeds a credential the ai-merge model could read — remove it from the URL (use gh auth / a credential helper)"
   fi
+  git config --file "$cfg" --get-regexp '^http\..*\.extraheader$' >/dev/null 2>&1 || return 0
+  GIT_CFG_BACKUP="$(mktemp "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/ai-sync-gitconfig.XXXXXX")"
+  GIT_CFG_PATH="$cfg"
+  cp -p "$cfg" "$GIT_CFG_BACKUP"
+  git config --file "$cfg" --name-only --get-regexp '^http\..*\.extraheader$' | sort -u \
+    | while IFS= read -r name; do git config --file "$cfg" --unset-all "$name"; done
+  log "persisted checkout credential set aside for the ai-merge phase (restored before push)"
+}
+
+restore_git_credentials() {
+  [ -n "$GIT_CFG_BACKUP" ] || return 0
+  if [ -f "$GIT_CFG_BACKUP" ]; then
+    cp -p "$GIT_CFG_BACKUP" "$GIT_CFG_PATH"
+    rm -f "$GIT_CFG_BACKUP"
+  fi
+  GIT_CFG_BACKUP=""
 }
 
 OPENCODE_READY=0
@@ -443,7 +463,7 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
 fi
 
 if cut -f7 "${REPORT_DIR}/work-list.txt" | grep -qx 'ai-merge'; then
-  assert_no_persisted_git_credentials
+  set_aside_git_credentials
 fi
 
 append_result() {
@@ -525,6 +545,7 @@ data["advance_lock"] = data["action"] in {"applied", "merged"}
 open(sys.argv[3], "a", encoding="utf-8").write(json.dumps(data) + "\n")
 PY
 done 3<"${REPORT_DIR}/work-list.txt"
+restore_git_credentials
 
 python3 - "${REPORT_DIR}/manifest.json" "${LOCKFILE_PATH}" <<'PY' >"${REPORT_DIR}/watch-paths.txt"
 import json, sys
