@@ -106,6 +106,14 @@
         "hooks": [
           {
             "type": "command",
+            "command": ".agents/hooks/worktask-skill-trigger.sh"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": ".agents/hooks/manage-rule-system-context.sh"
           }
         ]

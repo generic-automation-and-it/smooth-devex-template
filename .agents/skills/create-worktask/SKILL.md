@@ -1,6 +1,6 @@
 ---
 name: create-worktask
-description: 'Invoke to scaffold and fully populate a worktask under `.context/work-tasks/` so it is self-contained enough for a standalone AI coder to execute end-to-end. Trigger keywords: "create worktask", "create a work task", "make a work-task", "promote this to a worktask". Also triggers on /create-worktask. Does NOT trigger on questions about how worktasks work.'
+description: 'Invoke to scaffold and fully populate a worktask under `.context/work-tasks/` so it is self-contained enough for a standalone AI coder to execute end-to-end. Trigger keywords: "create worktask", "create a work task", "make a work-task", "promote this to a worktask". Also triggers on /create-worktask (Claude Code) or $create-worktask (Codex). Does NOT trigger on questions about how worktasks work.'
 allowed-tools:
   - Bash(.agents/skills/create-worktask/scripts/scaffold-worktask.sh:*)
   - Read
@@ -42,7 +42,8 @@ gaps, so populate it from **real investigation**, not placeholders.
 
 ## Invocation
 
-`/create-worktask <kebab-slug>` — or describe the work in natural language and follow the workflow.
+Use `/create-worktask <kebab-slug>` in Claude Code or `$create-worktask <kebab-slug>` in Codex —
+or describe the work in natural language and follow the workflow.
 
 ## Output structure (the contract)
 
@@ -127,8 +128,9 @@ gaps, so populate it from **real investigation**, not placeholders.
 
 - The script is `bash` + coreutils only and finds the repo root via `git rev-parse` — Codex, Copilot
   and Cursor run it identically. It must stay executable (`chmod +x`).
-- This skill replaced the `UserPromptSubmit` hook `.agents/hooks/worktask-create.sh` (removed
-  2026-09-20), which only fired for Claude Code. Skill invocation works across all four runners.
+- The original worktask-writing hook was removed in 2026-09. A shared `UserPromptSubmit` router
+  now detects imperative requests in Claude Code and Codex and points them here; it does not
+  create a worktask itself. Direct skill invocation and normal skill discovery still work.
 
 ## Changelog
 
@@ -136,3 +138,4 @@ gaps, so populate it from **real investigation**, not placeholders.
 | :---- | :---- | :---- |
 | 2026-09-20 | Created — replaces the `worktask-create.sh` UserPromptSubmit hook. Carries the hook's remediated contract (Execution Profile; link-don't-copy; commits per-task and default not allowed; L0/L1/L2 tiers; model as a human action) plus a deterministic scaffolder and an asset template. | — |
 | 2026-09-21 | Reworded the `description` and the P2/hidden-instructions Non-Negotiable to address GHAS SkillSpector advisory findings (Direct Prompt Extraction, Excessive Agency) on PR #71 — dropped the no-questions autonomy phrasing (replaced with "self-contained enough to execute end-to-end") and moved the hidden-instructions rationale to `AGENTS.md` (believed at the time to be outside the scan; it is scanned — see the 2026-09-23 row in `AGENTS.md`). No behavior change. | #71 |
+| 2026-09-27 | Documented the shared Claude Code/Codex prompt hook that routes imperative requests to this skill without duplicating its workflow. | — |

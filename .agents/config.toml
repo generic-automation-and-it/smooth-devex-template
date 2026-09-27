@@ -11,9 +11,10 @@
 #     below. The destructive-command `deny` list (DB writes, branch deletes) and
 #     the `ask` entries CANNOT be expressed in Codex config — the sandbox is the
 #     only guardrail.
-#   - settings.json `hooks` (PostToolUse / UserPromptSubmit) → Codex has no hook
-#     system. `notify` only fires on turn completion, not per-tool, so the
-#     context-load / slnx-docs-sync / rule-enforce hooks have no Codex analogue.
+#   - settings.json `hooks` → Codex supports command hooks through hooks.json
+#     (read here via `.codex/hooks.json`). Only explicitly mirrored hooks run in
+#     Codex; Claude Code's settings.json registrations are not imported.
+#     Codex requires project trust and separate hook review before they run.
 #   - settings.json `compileCommands` / `testCommands` → no Codex equivalent.
 #   - settings.json `env.CLAUDE_CODE_USE_POWERSHELL_TOOL` → Claude-only; omitted.
 

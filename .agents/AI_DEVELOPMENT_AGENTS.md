@@ -25,8 +25,9 @@ This is a unified AI development experience folder that centralizes skills, prom
 | `.agents/prompts/` | Reusable prompt templates (code review, architecture analysis) |
 | `.agents/roles/` | Multi-agent role instructions (PO, Architect, QA, Backend/Frontend Engineer, Heimdall Reviewer) |
 | `.agents/rules/` | Enforced AI development rules (workflow rules, coding standards) |
-| `.agents/settings.json` | Claude Code config — tool permissions, compile/test commands, hook registrations; every script in `.agents/hooks/` MUST be registered here or it silently never fires (#32) |
-| `.agents/config.toml` | OpenAI Codex config (read via the `.codex` symlink) — the Codex counterpart of `settings.json`. Mirrors what Codex's TOML schema supports: `approval_policy`/`sandbox_mode` (Codex has no per-command ACLs or hooks), root-doc fallback, web search |
+| `.agents/settings.json` | Claude Code config — tool permissions, compile/test commands, hook registrations; Claude hooks must be registered here or they silently never fire (#32) |
+| `.agents/config.toml` | OpenAI Codex config (read via the `.codex` symlink) — approval/sandbox policy, root-doc fallback, web search; Codex has no per-command ACLs |
+| `.agents/hooks.json` | Codex hook registrations (read via `.codex/hooks.json`); project and hook trust are required before they run |
 | `.agents/skills/` | Executable skills (multi-file workflows) — flat dirs, category-prefixed folder names |
 | `.agents/skills/agile-github-breakdown/` | Turn a braindump or existing Feature into GitHub Feature + Task issues |
 | `.agents/skills/agile-github-task-from-diff/` | Create a GitHub Task (sub-issue) from the current git diff vs main |
@@ -141,4 +142,5 @@ ls -la | grep -E '(\.claude|\.codex|\.cursor)'
 | 2026-07-23 | Changed Codex `approval_policy` from `unless-allow-listed` to `never` to resolve configuration load error. | #54 |
 | 2026-05-30 | Initial version. | |
 | 2026-06-10 | Registered orphaned `UserPromptSubmit` hooks (`worktask-create.sh`, `agentmd-create-update.sh`, `knowledge-rule-enforce.sh`) in `settings.json` — they existed on disk but never fired. | #32 |
-| 2026-09-20 | Replaced the `worktask-create.sh` UserPromptSubmit hook with the `create-worktask` skill; hook deleted and its `settings.json` registration removed. Hooks are Claude-only (Codex has no hook system — see `config.toml`), so worktask creation was unavailable to Codex/Copilot/Cursor. | |
+| 2026-09-20 | Replaced the `worktask-create.sh` UserPromptSubmit hook with the `create-worktask` skill; hook deleted and its `settings.json` registration removed. At the time, the repo's Codex config documented no hook support. | |
+| 2026-09-27 | Added a shared, context-only `UserPromptSubmit` router for imperative worktask requests in Claude Code `settings.json` and Codex `hooks.json`. The skill remains directly invocable and owns the worktask workflow; Codex project and hook trust are required. | |
