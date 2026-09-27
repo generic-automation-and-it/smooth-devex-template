@@ -11,6 +11,7 @@ Dependabot-style AI-asset sync: one CI entrypoint (`scripts/run-sync.sh`) reconc
 - **Blocker → leave the local tree untouched** and report in the PR body. Do not clobber a heavily diverged consumer copy.
 - **No file diff → no PR.** Lockfile SHA is advanced only inside a real sync PR. Equivalent/no-op runs re-analyse next time (accepted model cost).
 - **Secrets stay in the environment.** `OPENCODE_<PROVIDER>_API_KEY` and `GITHUB_TOKEN` are read by scripts / `gh` / opencode `{env:…}` placeholders. Never echo, never put in prompts, never commit.
+- **The model never reaches a credential (LADR-004).** Launch opencode only through `run_model` (env allowlist). Keep `.git/**` and `.env*` denied for `read` and `edit`. Never drop `persist-credentials: false` or the persisted-credential pre-flight, and keep `core.hooksPath=/dev/null` on the bot's commit/push. Removing any one of these re-opens a path from injected upstream content to `GITHUB_TOKEN`.
 
 ## System Context
 
@@ -78,7 +79,15 @@ sequenceDiagram
 - **Status**: Accepted
 - **Context**: Review-report's `review` agent cannot write files; analyse can edit but is scoped to review findings. Asset sync must write merged trees.
 - **Decision**: Dedicated `sync` agent in `assets/opencode.json`: `edit` allow, `bash`/`skill`/`task` deny. Git/PR/clone stay in `run-sync.sh`.
-- **Consequences**: Prompt-injected upstream content cannot `rm` or push, and with `external_directory: deny` plus the in-repo scratch dir it cannot edit anything outside the repo root either. Merge quality depends on the model seeing both trees via read/grep.
+- **Consequences**: Prompt-injected upstream content cannot `rm` or push, and with `external_directory: deny` plus the in-repo scratch dir it cannot edit anything outside the repo root either. Merge quality depends on the model seeing both trees via read/grep. **Gap closed by LADR-004:** "inside the repo root" included `.git/`, so the agent could read a persisted checkout token and write a git hook that the script's own push would run.
+
+### LADR-004: Credential isolation for the model process
+
+- **Date**: 2026-09-27
+- **Status**: Accepted
+- **Context**: LADR-003 blocked shell and outside-repo paths, but the model could still reach credentials three ways. (1) `actions/checkout` persists the job token as an `extraheader` in `.git/config`, inside the readable repo root. (2) `edit` over `.git/hooks/` (or a tracked hook dir such as `.husky/`) plants code that `git commit`/`git push` run with `GH_TOKEN` in their environment. (3) The opencode child inherited the whole environment: `GH_TOKEN`, every provider key and, on a developer shell, unrelated tokens. The agent-level `read: "allow"` also replaced opencode's default `.env` deny.
+- **Decision**: (1) Checkouts use `persist-credentials: false`; the script pushes through a one-shot `gh auth git-credential` helper and **fails closed** before any ai-merge run while `.git/config` holds an `extraheader` or a credentialed remote URL. Only the repo's own config file is inspected, since an included credentials file outside the repo is beyond the model's reach. (2) `read`/`edit` deny `.git/**`; `read` restates the `.env` denies; the bot's commit and push run with `core.hooksPath=/dev/null`. (3) `run_model` launches opencode from a subshell that unsets everything outside an allowlist: system/locale/proxy/CA variables, the selected key, and `OPENCODE_*` names that do not look like secrets.
+- **Consequences**: Composite-action consumers that keep the default checkout now fail on ai-merge runs with an actionable message (`overwrite`-only runs are unaffected). A custom `OPENCODE_AI_SYNC_CONFIG` may reference only allowlisted variables, the selected key, or non-secret `OPENCODE_*` names. Consumer repo hooks do not run on sync commits. **Rejected alternative:** a deny-list (`env -u …`): it passed through every token nobody listed, as a local test showed. **Rejected alternative:** `env -i NAME=value`: it puts the key in the process list.
 
 ## Key Behaviors
 
@@ -86,6 +95,7 @@ sequenceDiagram
 - `source` shape is `owner/repo@ref:path`. First `:` after `@` starts the path, so refs must not contain `:`. Charsets are strict (owner/repo `[A-Za-z0-9._-]`, ref `[A-Za-z0-9._/-]`, no leading `-`, no `..` segments) because these values flow into `gh api` / `gh repo clone` — loosening them reopens an injection surface.
 - Staging is containment-scoped: only paths whose sidecar action is `applied`/`merged` (plus the lockfile) are `git add`ed. Edits the agent makes outside those paths are left unstaged and warned about — a prompt-injected upstream cannot smuggle changes to other entries into the commit.
 - 3-way limitation: the lockfile base SHA is passed to the model as provenance text only; the base tree is NOT checked out. Merge quality relies on local + remote trees.
+- Credential pre-flight runs only when some entry has `strategy: ai-merge`, after the clean-tree guard and before any network or model call.
 - Sandbox: the scratch dir (upstream clones, prompts, reports) lives INSIDE the repo root (`.ai-sync-tmp.*`, excluded via `info/exclude`, removed on exit) so `external_directory` is DENIED in `assets/opencode.json` — the agent cannot touch paths outside the repo.
 - Pre-flight clean-tree guard: any uncommitted change under an entry path aborts the run before mutation, so pre-existing local edits can never be bundled into a sync PR.
 - Entry paths are resolved to their PHYSICAL repo-relative form (symlink-aware — `.agents/rules` → `.github/instructions`) before all git status/staging; paths resolving outside the repo root are fatal.
@@ -111,3 +121,4 @@ sequenceDiagram
 | 2026-09-13 | Initial skill: manifest/lockfile, AI-merge, composite action, reusable workflow. | |
 | 2026-09-13 | Review hardening: strict source charsets + negative tests, containment-scoped staging, fd-3 work loop, `synced_at` stamped, tools_ref precedence (input > Variable), 3-way limitation documented. | |
 | 2026-09-13 | Copilot-review hardening: in-repo sandbox + `external_directory: deny`, dangerous-destination + overlap manifest rejection, clean-tree guard, symlink-physical git paths, lockfile write moved to PR path, `chore[NO-TICKET]` title (+ `--pr-title`), run-id branch suffix, installer PATH propagation, non-Gemini model fail-fast, nonzero-exit → blocker, type-change-safe overwrite. | #66 |
+| 2026-09-27 | LADR-004 credential isolation: env allowlist for the opencode child, `.git/**` + `.env*` denied for read/edit, `persist-credentials: false` + fail-closed pre-flight, hook-free commit/push via one-shot `gh` credential helper, provider keys moved to step scope. | |

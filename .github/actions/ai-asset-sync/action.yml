@@ -12,9 +12,16 @@ description: Install OpenCode CLI, run ai-asset-sync, and open a chore PR when A
 #     OPENCODE_CLI_VERSION: ${{ vars.OPENCODE_CLI_VERSION || '' }}
 #     OPENCODE_<PROVIDER>_API_KEY: ${{ secrets.OPENCODE_<PROVIDER>_API_KEY }}
 #
-# Only the selected provider's key is read. Without these mappings the run
-# defaults to GEMINI and dies on the missing-key check. The reusable workflow
-# (pipeline-ai-asset-sync.yml) maps all of this for you — prefer it.
+# Only the selected provider's key is read, and only it reaches the model
+# process. Without these mappings the run defaults to GEMINI and dies on the
+# missing-key check. Map secrets on THIS step's env, not the job's.
+#
+# Check the consumer repo out with `persist-credentials: false`: the ai-merge
+# model can read the repo root, so run-sync.sh refuses to start an ai-merge
+# while a token is persisted in .git/config (it pushes via gh instead).
+#
+# The reusable workflow (pipeline-ai-asset-sync.yml) does all of this for
+# you — prefer it.
 
 inputs:
   manifest_path:

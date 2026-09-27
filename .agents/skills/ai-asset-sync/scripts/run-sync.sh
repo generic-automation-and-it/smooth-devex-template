@@ -12,6 +12,7 @@
 # Env (see AGENTS.md):
 #   OPENCODE_AI_SYNC_PROVIDER / _MODEL_PRIMARY / _MODEL_SECONDARY / _CONFIG
 #   OPENCODE_CLI_VERSION, OPENCODE_<PROVIDER>_API_KEY, GITHUB_TOKEN
+#   The model process receives only the selected provider's key.
 set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -199,6 +200,49 @@ key_var_for() {
   esac
 }
 
+MODEL_ENV_ALLOW="PATH HOME USER LOGNAME SHELL TMPDIR TERM LANG LC_ALL LC_CTYPE
+  XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_STATE_HOME
+  HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy
+  SSL_CERT_FILE SSL_CERT_DIR NODE_EXTRA_CA_CERTS"
+
+# Least privilege for the model process (skill-secret-handling): an allowlist,
+# not a deny-list, so tokens nobody thought of (GH_TOKEN, OIDC, a developer
+# shell's other keys) never reach it. The selected provider's key and
+# non-secret OPENCODE_* settings pass; unset runs in a subshell so no value
+# ever appears on a command line.
+run_model() {
+  local keep="$1" v
+  shift
+  (
+    for v in $(compgen -e); do
+      case " ${MODEL_ENV_ALLOW//$'\n'/ } ${keep} " in
+        *" ${v} "*) continue ;;
+      esac
+      case "$v" in
+        *KEY*|*TOKEN*|*SECRET*|*PASSWORD*|*CREDENTIAL*) ;;
+        OPENCODE_*) continue ;;
+      esac
+      unset "$v" 2>/dev/null || true
+    done
+    exec "$@"
+  )
+}
+
+# actions/checkout persists the job token into .git/config unless told not to.
+# That file sits inside the repo root the model can read, so an ai-merge run
+# refuses to start while a credential is stored there. Only the repo's own
+# config file is inspected (no includes): checkout v6 keeps credentials in an
+# included file under RUNNER_TEMP, outside the model's reach.
+assert_no_persisted_git_credentials() {
+  local cfg
+  cfg="$(git rev-parse --git-path config 2>/dev/null)" || return 0
+  [ -f "$cfg" ] || return 0
+  if git config --file "$cfg" --get-regexp '^http\..*\.extraheader$' >/dev/null 2>&1 \
+    || git config --file "$cfg" --get-regexp '^remote\..*\.url$' 2>/dev/null | grep -Eq 'https?://[^/@[:space:]]+@'; then
+    die "git credentials are persisted in ${cfg}, which the ai-merge model can read — check out with 'persist-credentials: false' (actions/checkout) or remove the credential from the remote URL"
+  fi
+}
+
 OPENCODE_READY=0
 ensure_opencode() {
   if [ "${OPENCODE_READY}" = "1" ]; then
@@ -323,14 +367,14 @@ EOF
   local raw="${WORKDIR}/opencode.out"
   local rc=1
   set +e
-  opencode run --agent sync --model "${pid}/${primary}" --format default --log-level WARN \
+  run_model "$key_var" opencode run --agent sync --model "${pid}/${primary}" --format default --log-level WARN \
     <"$prompt" >"$raw" 2>"${WORKDIR}/opencode.err"
   rc=$?
   set -e
   if [ "$rc" -ne 0 ] && [ -n "$secondary" ] && [ "$secondary" != "$primary" ]; then
     log "primary model failed; trying secondary ${secondary}"
     set +e
-    opencode run --agent sync --model "${pid}/${secondary}" --format default --log-level WARN \
+    run_model "$key_var" opencode run --agent sync --model "${pid}/${secondary}" --format default --log-level WARN \
       <"$prompt" >"$raw" 2>"${WORKDIR}/opencode.err"
     rc=$?
     set -e
@@ -396,6 +440,10 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
       die "entry path '${path}' (physical: ${phys}) has uncommitted changes — commit/stash before syncing"
     fi
   done 3<"${REPORT_DIR}/work-list.txt"
+fi
+
+if cut -f7 "${REPORT_DIR}/work-list.txt" | grep -qx 'ai-merge'; then
+  assert_no_persisted_git_credentials
 fi
 
 append_result() {
@@ -638,7 +686,9 @@ if git diff --cached --quiet; then
   exit 0
 fi
 
-git commit -m "$PR_TITLE"
+# Hooks are disabled for the bot's commit/push: the model can edit tracked hook
+# dirs (e.g. .husky/), and a hook would run with GH_TOKEN in its environment.
+git -c core.hooksPath=/dev/null commit -m "$PR_TITLE"
 
 TEMPLATE="${REPO_ROOT}/.github/pull_request_template.md"
 python3 - "$TEMPLATE" "${REPORT_DIR}/summary.md" "${REPORT_DIR}/pr-body.md" <<'PY'
@@ -671,7 +721,10 @@ body += (
 Path(dest).write_text(body, encoding="utf-8")
 PY
 
-git push origin "$BRANCH"
+# One-shot gh credential helper: GH_TOKEN stays in the environment, is never
+# written to .git/config, and needs no persisted checkout credential.
+git -c core.hooksPath=/dev/null -c credential.helper= -c 'credential.helper=!gh auth git-credential' \
+  push origin "$BRANCH"
 gh pr create \
   --title "$PR_TITLE" \
   --body-file "${REPORT_DIR}/pr-body.md" \

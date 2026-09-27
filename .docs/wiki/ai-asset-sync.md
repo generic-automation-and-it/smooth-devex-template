@@ -53,6 +53,20 @@ Branch: `chore/ai-sync-{UTC YYYYMMDD-HHMM}-{run id}` (fresh each run, collision-
 
 Private source repos work only where that token can read them (same repo/org). Cross-org private sources are out of scope. No PAT / GitHub App token.
 
+## Credential isolation
+
+The ai-merge model reads upstream content someone else controls, so it is treated as a prompt-injection target and kept away from every credential:
+
+| Measure | Where |
+|---------|-------|
+| Model process gets only the selected `OPENCODE_<PROVIDER>_API_KEY` — no `GITHUB_TOKEN`, OIDC or other keys (env allowlist) | `run-sync.sh` |
+| `sync` agent cannot read or edit `.git/**` (credentials, hooks) or `.env*` | `assets/opencode.json` |
+| Checkout uses `persist-credentials: false`; an ai-merge run **refuses to start** while a token is persisted in `.git/config` | reusable workflow + `run-sync.sh` |
+| Bot commit/push run with hooks disabled and a one-shot `gh` credential helper | `run-sync.sh` |
+| Provider keys mapped on the sync step only, never job-wide | reusable workflow |
+
+**Composite action users:** check out with `persist-credentials: false`, or every run with an `ai-merge` entry fails with `git credentials are persisted in .git/config`. The reusable workflow already does this.
+
 ## Non-goals
 
 Move/rename (remote path ≠ local path), one-PR-per-entry, auto-merge of the sync PR.
