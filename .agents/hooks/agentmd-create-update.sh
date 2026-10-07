@@ -9,7 +9,7 @@
 PROMPT=$(jq -r '.prompt // empty')
 [ -z "$PROMPT" ] && exit 0
 
-echo "$PROMPT" | grep -qiE '(update|create an?)\s+agents?\.md' || exit 0
+echo "$PROMPT" | grep -qiE '(update|create( an?)?)\s+agents?\.md' || exit 0
 
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 RULE_FILE="${REPO_ROOT}/.agents/rules/meta/knowledge-conventional-contexts-quality.instructions.md"

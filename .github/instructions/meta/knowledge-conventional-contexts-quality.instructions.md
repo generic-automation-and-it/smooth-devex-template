@@ -64,7 +64,7 @@ Gate 1 alone keeps every restated LADR. Gates 2 and 4 are [clean-code](../clean-
 
 Applies to `.docs/hlds/NNN-*/AGENTS.md` (authored by the `create-hld` skill). The HLD — README, LADRs, NFRs, diagrams — is written for humans **and** AI coders; its AGENTS.md holds only agent-relevant content found in **none** of them: a tie to a repo rule the HLD does not mention, a constraint from a source document the HLD omits, a vocabulary trap the HLD does not define.
 
-- **TL;DR is one line pointing at `README.md`** — agents auto-load AGENTS.md, not README.md. The one permitted cross-reference.
+- **TL;DR is one line pointing at `README.md`** — agents auto-load AGENTS.md, not README.md. The only pointer line; any other link sits inside the Non-Negotiable that needs it.
 - **Omit** System Context (diagrams live in `diagrams/`) and Architecture Decisions (the README LADR table and `ladrs/` are the home). Omit Quality Constraints unless it states something no NFR does.
 - **Draft and Prototype LADRs bind as intent**: flag a deviation, never silently override it. Stated here once — do not repeat it per HLD.
 - **A TL;DR, one or two Non-Negotiables and a Changelog is the expected result**, not an incomplete one.

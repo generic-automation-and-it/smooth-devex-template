@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-REPO_ROOT=$(git rev-parse --show-toplevel)
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || { cd "$(dirname "$0")/../../../.." && pwd; })
 RULE="$REPO_ROOT/.agents/rules/meta/knowledge-conventional-contexts-quality.instructions.md"
 
 if [ ! -f "$RULE" ]; then
