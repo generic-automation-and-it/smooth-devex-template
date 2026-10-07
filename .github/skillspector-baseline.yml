@@ -188,13 +188,6 @@ accepted:
 
   # --- HIGH: create-hld template comments flagged as hidden instructions ---
   - id: P2
-    file: create-hld/assets/AGENTS.template.md
-    reason: >-
-      "Hidden Instructions" — HTML comments in a first-party scaffold template carrying
-      authoring guidance (word budget, no-restatement rule) for the human/agent filling
-      in the generated HLD AGENTS.md. Visible in the file, no directives to exfiltrate
-      or execute anything. Removing them removes the economy-bar guidance.
-  - id: P2
     file: create-hld/assets/LADR.template.md
     reason: >-
       "Hidden Instructions" — HTML comments carrying LADR authoring guidance (status

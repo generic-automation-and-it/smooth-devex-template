@@ -78,10 +78,11 @@ erDiagram
 
 ## Test References
 
-\[Backend only. Test tier (L0/L1) and sub-folder path within test projects. Omit if no tests exist.\]
+\[Test tier (L0/L1/L2, as defined in root `AGENTS.md`) and sub-folder path within test projects. Omit if no tests exist.\]
 
-- L0 unit tests: `test/[TestProject]/[SubFolder]/`
-- L1 integration tests: `test/[TestProject]/[SubFolder]/`
+- L0 unit tests: `tests/[TestProject]/[SubFolder]/`
+- L1 component tests: `tests/[TestProject]/[SubFolder]/`
+- L2 integration tests: `tests/[TestProject]/[SubFolder]/`
 
 ## Quality Constraints
 

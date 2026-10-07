@@ -41,8 +41,8 @@ thorough one they skim. Leave the implementer room to be good at their job.
 - **No `Alternatives Considered` section.** Where a rejected option is one a competent person would
   actually try, fold it into the Decision as a single clause. Otherwise drop it.
 - **No code** anywhere except `examples/`. README, LADRs, NFRs, and AGENTS.md are code-free.
-- **AGENTS.md has no architecture section.** Architecture lives in `diagrams/`. The HLD
-  AGENTS.md follows `scripts/hld-agents-rules.sh`, which deliberately omits System Context.
+- **AGENTS.md follows the repo AGENTS.md quality rule** — its *Design-Documentation Folders* section
+  and value gate. `scripts/hld-agents-rules.sh` prints both, plus the HLD delta.
 - **C1 is the floor, not the ceiling.** Always produce a C4Context. Investigate the design and
   *recommend* further diagrams (`references/diagram-selection.md`); do not pad by default.
 - **Clarify before inventing.** Initiative name, goals, constraints, stakeholders, target
@@ -58,7 +58,7 @@ Budgets are ceilings, not targets. Over budget means cut content, not reformat i
 | LADR | ~400 words | Context ≤ 5 bullets · Decision ≤ 3 short paragraphs · Consequences ≤ 5 bullets |
 | NFR | ~200 words | Requirement · Verification · Acceptance Criteria · Applies To |
 | README | ~1500 words | ≤ 150 words per goal, before its acceptance criteria |
-| AGENTS.md | ~700 words | Guardrails only, never narrative |
+| AGENTS.md | ~200 words | Only what README, LADRs and NFRs do not state |
 
 **NFR specificity test** — an NFR earns a file only if *"would this read the same for any other feature
 in this repo?"* answers **no**. Delete it if yes **and** the concern is already bound by a documented
@@ -82,7 +82,7 @@ a neighbour, or narrate the authoring process.
 ```
 .docs/hlds/NNN-<kebab-slug>/
 ├── README.md            # human entry point: intent + spec (no impl, no code)
-├── AGENTS.md            # AI-coder guardrails — NO architecture/System-Context section
+├── AGENTS.md            # README pointer + only what README, LADRs, NFRs do not state
 ├── diagrams/
 │   └── c4-context.md    # C1 System Context (mandatory) + AI-recommended diagrams
 ├── ladrs/
@@ -94,7 +94,7 @@ a neighbour, or narrate the authoring process.
 
 - `NNN` is 3-digit, zero-padded, next-available — the scaffold script computes it.
 - `AGENTS.md` is plain-named (root of the HLD folder); the `load-agents-context` hook still
-  auto-loads it. It is guardrails, not narrative.
+  auto-loads it, and its TL;DR points agents at the README.
 - File shapes are defined by the templates in `assets/`; the scaffold script seeds them.
 
 ## Workflow
@@ -122,11 +122,12 @@ a neighbour, or narrate the authoring process.
    from the README NFR table.
 7. **Draft tactical LADRs** only if a *how* decision is genuinely constrained (runtime, protocol,
    config). Number after the strategic ones; never renumber.
-8. **Draft AGENTS.md** — apply `scripts/hld-agents-rules.sh`. Derive Non-Negotiables from the
-   LADRs, fill the decisions and NFR pointer tables. No architecture section.
-9. **Wire the tables** — README LADR table and NFR table list every file with status.
+8. **Wire the tables** — README LADR table and NFR table list every file with status.
+9. **Draft AGENTS.md** only now, once the README, LADRs and NFRs are final — apply the repo rule's
+   design-folder section (`scripts/hld-agents-rules.sh`). Keep only lines absent from all of them.
 10. **Cut pass** — re-read every file against the budgets and the two tests. Remove justification,
-    restatement, and prescribed mechanism. Expect to delete, not to polish.
+    restatement, and prescribed mechanism. For each AGENTS.md line, search the HLD's README, `ladrs/`
+    and `nfrs/` first; delete it if found there. Expect to delete, not to polish.
 
 To read the AGENTS.md rules at any point (agent-agnostic, no hook needed):
 ```bash
@@ -143,6 +144,7 @@ To read the AGENTS.md rules at any point (agent-agnostic, no hook needed):
 - [ ] Nothing designed for a need that does not exist yet; deferrals are one-line `Open` items with triggers.
 - [ ] No `Alternatives Considered` sections.
 - [ ] C1 diagram present; every extra diagram is one-concern and answers something C1 cannot.
+- [ ] AGENTS.md restates nothing in README, LADRs or NFRs, and its TL;DR points at the README.
 - [ ] AGENTS.md has no architecture section, no code, no impl/phasing.
 - [ ] No code outside `examples/`.
 - [ ] Mermaid renders (no syntax errors).
@@ -151,10 +153,9 @@ To read the AGENTS.md rules at any point (agent-agnostic, no hook needed):
 ## Agent-agnostic notes
 
 - Scripts are `bash` + coreutils only; no Claude-specific behaviour.
-- The AGENTS.md quality rules ship inside the skill (`scripts/hld-agents-rules.sh` + the
-  summary above), so Codex / Copilot / Cursor — which do not run Claude Code hooks — are fully
-  self-contained. The repo's global `knowledge-rule-enforce.sh` hook is unaffected and still
-  governs general (non-HLD) AGENTS.md files.
+- `scripts/hld-agents-rules.sh` prints the repo AGENTS.md quality rule plus the HLD delta, so
+  Codex / Copilot / Cursor — which do not run Claude Code hooks — read the same rules without one.
+  The skill carries no copy of the rule; porting the skill without the rule file breaks the script.
 
 ## References
 
@@ -167,3 +168,4 @@ To read the AGENTS.md rules at any point (agent-agnostic, no hook needed):
 | :---- | :---- | :---- |
 | 2026-06-16 | Created — design-only HLD skill, made project-agnostic for the smooth-devex template. | — |
 | 2026-09-13 | Ported the economy bar from downstream: terse/YAGNI/KISS non-negotiables, requirement-not-recipe rule, per-file word budgets, NFR specificity test, line test, closing cut pass, and removal of `Alternatives Considered` from the LADR template. | — |
+| 2026-10-07 | AGENTS.md defers to repo rule; ~200 words; drafted last | — |
