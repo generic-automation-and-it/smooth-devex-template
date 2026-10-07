@@ -122,9 +122,9 @@ a neighbour, or narrate the authoring process.
    from the README NFR table.
 7. **Draft tactical LADRs** only if a *how* decision is genuinely constrained (runtime, protocol,
    config). Number after the strategic ones; never renumber.
-8. **Draft AGENTS.md last**, after the README, LADRs and NFRs exist — apply the repo rule's
+8. **Wire the tables** — README LADR table and NFR table list every file with status.
+9. **Draft AGENTS.md** only now, once the README, LADRs and NFRs are final — apply the repo rule's
    design-folder section (`scripts/hld-agents-rules.sh`). Keep only lines absent from all of them.
-9. **Wire the tables** — README LADR table and NFR table list every file with status.
 10. **Cut pass** — re-read every file against the budgets and the two tests. Remove justification,
     restatement, and prescribed mechanism. For each AGENTS.md line, search the HLD's README, `ladrs/`
     and `nfrs/` first; delete it if found there. Expect to delete, not to polish.
