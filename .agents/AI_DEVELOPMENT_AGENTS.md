@@ -144,3 +144,4 @@ ls -la | grep -E '(\.claude|\.codex|\.cursor)'
 | 2026-06-10 | Registered orphaned `UserPromptSubmit` hooks (`worktask-create.sh`, `agentmd-create-update.sh`, `knowledge-rule-enforce.sh`) in `settings.json` — they existed on disk but never fired. | #32 |
 | 2026-09-20 | Replaced the `worktask-create.sh` UserPromptSubmit hook with the `create-worktask` skill; hook deleted and its `settings.json` registration removed. At the time, the repo's Codex config documented no hook support. | |
 | 2026-09-27 | Added a shared, context-only `UserPromptSubmit` router for imperative worktask requests in Claude Code `settings.json` and Codex `hooks.json`. The skill remains directly invocable and owns the worktask workflow; Codex project and hook trust are required. | |
+| 2026-10-07 | `agentmd-create-update.sh`, `knowledge-rule-enforce.sh` print the AGENTS.md quality rule; no embedded copy | |
