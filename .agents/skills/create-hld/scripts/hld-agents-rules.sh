@@ -22,5 +22,4 @@ cat <<'DELTA'
 Apply the rule's *Design-Documentation Folders* section. In addition, an HLD AGENTS.md carries:
 - No code or code snippets — those live in examples/ only.
 - No implementation plan, phasing or execution sequencing — tracked in the issue/work tracker.
-- No diagram — diagrams live in diagrams/.
 DELTA
