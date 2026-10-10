@@ -22,7 +22,7 @@ Root AGENTS.md / NFR files alone are NOT sufficient. Domain-specific context is 
 |------------|-------|
 | Backend code (.NET, C#, server-side) | `.agents/rules/backend/*` rules (scoped to `**/*.cs` via frontmatter; attach when a C# file is opened) |
 
-All rules under `.agents/rules/` are auto-loaded every session, organized into category subfolders (`backend/`, `git/`, `meta/`); applicability is scoped per-file via frontmatter (`paths`/`globs`/`applyTo`). For functional `*AGENTS.md` context: use the `context-load-context` skill with `[domain]` or manually request the relevant files. The Rule Categories table in root `AGENTS.md` lists each rule and what it covers.
+All rules under `.agents/rules/` are auto-loaded every session, organized into category subfolders (`backend/`, `git/`, `meta/`); applicability is scoped per-file via frontmatter (`paths`/`globs`/`applyTo`). For functional `*AGENTS.md` context: use the `context-load-context` skill with `[domain]` or manually request the relevant files. Root `AGENTS.md` lists the rule category folders; per-rule coverage lives in the rule files themselves.
 
 If no context loaded: **BLOCK** → offer: Load / Search / Create / BYPASS.
 
