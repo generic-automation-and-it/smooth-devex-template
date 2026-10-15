@@ -1,49 +1,37 @@
-# .agents/skills — AGENTS.md
+# AGENTS.md - .agents/skills
 
 ## TL;DR
 
-First-party AI agent skills. They legitimately run shell, `gh`/`git`, and template file operations, which the NVIDIA SkillSpector gate (`.github/workflows/skill-scan.yml`) rates HIGH for an untrusted third party — so accepted, inherent findings are **omitted from the published SARIF** via a justified allowlist, and the gate fails only on **new** findings.
+Read [`README.md`](./README.md) first — skill index, switches, effort levels and frontmatter shape live there.
 
 ## Non-Negotiables
 
-- **Secrets go through the environment, never into text.** Any skill needing a secret MUST follow `.github/instructions/skills/skill-secret-handling.instructions.md`: a script reads the value from a runtime environment variable; the value never appears in `SKILL.md`, prompts, agent YAML, README, or any committed file. First secret consumer: `ai-asset-sync` reads `OPENCODE_<PROVIDER>_API_KEY` and `GITHUB_TOKEN` from the runtime environment only (opencode `{env:…}` placeholders + `gh` env auth) — the compliant reference implementation. A skill that launches a model with tools must also keep that model away from credentials (env allowlist, no `.git/**`/`.env*` access, no persisted checkout token, hook-free git after the model runs). Walk the **Checklist** in that rule when authoring or reviewing such a skill.
-- **Never silence a SkillSpector finding by removing a skill's capability.** If the flagged behavior is the skill's actual job (shell out to `gh`, swap a symlink, refresh a template dir), keep it and add a justified entry to `.github/skillspector-baseline.yml`. A green gate bought by gutting a skill is a failure.
-- **Every baseline entry needs a written `reason`.** The allowlist is auditable, not a blanket mute. A new finding id, or the same id in a new file, is not baselined and blocks the PR until reviewed.
+- **Never silence a SkillSpector finding by removing a skill's capability.** If the flagged behavior is
+  the skill's job (shell out to `gh`, swap a symlink, refresh a template dir), keep it and baseline it
+  per [skillspector-pre-pr](../../.github/instructions/skills/skillspector-pre-pr.instructions.md). A green
+  gate bought by gutting a skill is a failure.
 
 ## Architecture Decisions
 
 ### LADR-001 — Gate on the deterministic static scan; LLM semantic stage is advisory
 
-- **Date:** 2026-06-21 · **Status:** Accepted
-- **Context:** The accepted-findings baseline is built from a static (`--no-llm`) scan. When the LLM semantic stage runs (provider/model supplied via org settings), its analyzers surface **additional, nondeterministic** findings whose ids/locations are not in the static baseline. Those count as ACTIVE and fail the gate — so a model or prompt change re-breaks the gate even though no skill changed.
-- **Decision:** The gate runs a **deterministic static scan (`--no-llm`)** whose baseline-aware decision is authoritative. The **LLM semantic stage runs as a separate non-blocking advisory scan** (`continue-on-error`, self-skips with no key); its findings are rendered in the job summary via `--advisory` and **never affect the gate decision**.
-- **Consequences:** The gate is stable across model/prompt drift and needs no LLM key to function. Static analyzers still block real dangerous patterns (`curl|bash`, `eval`, `rm -rf`, secret exfiltration), so the gate stays meaningful. Trade-off: a *semantic-only* dangerous pattern (one no static rule catches) would surface in the advisory section for human review rather than hard-blocking. To make the semantic layer hard-block instead, gate on the LLM report and baseline its findings (accepting periodic re-triage on drift).
-
-## Key Behaviors
-
-- The gate decision is computed by `.github/scripts/skillspector-report.py`, not by SkillSpector's raw `risk > 50` exit code (which is pinned at 100 for first-party skills by design). The script subtracts baselined findings and fails only on active ones; a scan error still hard-fails.
-- The job summary lists **Active** findings (gate-failing) separately from **Accepted (baselined)** findings, and flags stale baseline entries after a fix removes a finding.
-- **`ai-understanding` never writes to the tracked tree.** Its working store is `.context/understandings/<subject>-<yyyyMMdd-HHmm>/<slug>.understanding.md` (gitignored), and `--publish` writes a zip under `.context/understandings-publish/`, also gitignored — the store is not shared through the repository. A change that makes this skill write to `.agents/understandings/` or any other tracked path turns unreviewed session observations into shared repository memory — see that skill's LADR-001 and LADR-008.
-- **`ai-understanding` has a host-repo dependency that nothing enforces.** Its task-start trigger — read the store's `INDEX.md` before working — lives in the host repository's root `AGENTS.md`, not in the skill. Porting the skill tree without that section installs the skill in a state where it still exports fine but is never read, silently. Copy the root Understandings section along with the skill; a port that skips it is incomplete rather than merely unconfigured.
-- **Skills pick an effort level, never a model.** Every `SKILL.md` frontmatter is `name`, one-line `description`, optional block-list `allowed-tools`, then `effort` (`low` | `medium` | `high` | `xhigh` | `max`) — the shape and per-skill levels are tabled in `README.md` → Effort. There is no per-provider model block and `agents/openai.yaml` carries no `model:`: the session's model runs every skill, and a sub-skill is invoked at its own `effort`. Re-adding a `models:` block or a per-runner model hint reintroduces the provider coupling this removed. `max` is deliberately unused by any skill — it is the user's explicit escalation.
-- Two scans run per CI invocation (policy A, LADR-001): a **gating static scan** (`--no-llm`, drives the decision + SARIF) and, when a key is configured, a **non-gating LLM advisory scan** rendered as a separate, clearly-labeled summary section. The baseline (`skillspector-baseline.yml`) covers only the static scan.
+- **Status:** Accepted · **Date:** 2026-06-21
+- **Decision:** The gate runs `--no-llm` against `.github/skillspector-baseline.yml`; the LLM scan runs
+  separately, non-blocking, and never affects the decision. Gating on it re-breaks the gate on every
+  model/prompt drift with no skill change.
+- **Consequence:** a semantic-only dangerous pattern surfaces in the advisory summary for human review,
+  not as a block. Hard-blocking on it means baselining LLM findings and re-triaging on drift.
 
 ## Changelog
 
-> AI loading note: Skip this section during routine task execution. Use it only when updating this rule file.
-
 | Date | Change | Ref |
-|:-----|:-------|:----|
-| 2026-06-21 | Initial version — documents the SkillSpector baseline gate contract and the secret-handling guardrail for skills. | #52 |
-| 2026-06-21 | LADR-001: gate on the deterministic static scan; LLM semantic stage runs as a non-blocking advisory (policy A). Resolves the static-vs-LLM baseline mismatch that failed the gate on run 27907080342. | #52 |
-| 2026-09-13 | `ai-asset-sync` becomes the first skill consuming secrets (env-only: provider API key + `GITHUB_TOKEN`); status text updated from "no skill handles a real secret". | #66 |
-| 2026-09-19 | `ai-understanding` added — `--export` writes a session's discovered knowledge to the gitignored `.context/understandings/` store; `--publish` to a tracked path is a separate approved step. | |
-| 2026-09-19 | `ai-understanding`: publish retargeted from a tracked path to a zip under `.context/` (LADR-008); store path shows the stamped subject folder. | |
-| 2026-09-21 | `ai-understanding`: unit bodies are path-free (a path that is the knowledge goes in the generator-validated `agents_context`), redaction moved to write time with the pre-publish check demoted to the second net, and optional `recheck`/`skills` fields added — `--review` prints a unit's `recheck` beside a staleness flag. Store paths and the never-write-to-the-tracked-tree contract are unchanged. | |
-| 2026-09-22 | `ai-understanding`: unit files carry a `.understanding.md` type postfix (LADR-013), mirroring `.instructions.md`, so the governance rule scopes to `**/*understanding.md` instead of always-applying. Store location and the never-write-to-the-tracked-tree contract are unchanged. | |
-| 2026-07-31 | SARIF now **omits** baselined findings instead of marking them `suppressions`; the code-scanning check was red because the back end did not honor SARIF suppressions. Summary "Accepted (baselined)" section is unchanged (reads the scan output). | |
-| 2026-09-20 | `create-worktask` added, replacing the Claude-only `worktask-create.sh` hook. Its `assets/` template is deliberately HTML-comment-free so it needs no `P2` baseline entry — unlike `create-hld/assets/*`, whose four entries are the precedent. | |
-| 2026-09-22 | `ai-understanding`: fixed a lineage defect where a template placeholder left in `provenance.inherited` counted as a deliberate unbracketed note — it satisfied its own carrier and set the store-wide lineage flag while resolving to nothing, so every unit reported as never inherited at exit `0`. Guarded in both the validator and the lineage reader (a superseded copy skips validation but still feeds the reader). Also recorded the skill's unenforced host-repo dependency: the read-the-index-at-task-start trigger lives in the host's root `AGENTS.md`, so a port that omits it installs a store nothing reads. Store location and the never-write-to-the-tracked-tree contract are unchanged. | |
-| 2026-09-27 | Skill frontmatter normalised to one shape (single-line `description`, block-list `allowed-tools`) and the per-provider `models` block replaced by a single `effort` level (`low` → `max`); `model:` dropped from every `agents/openai.yaml`; git sub-skill chains and the worktask template/`create-worktask` now carry effort, not models. `agile-github-task-from-diff` gained `--noparentid`. | |
-| 2026-09-27 | Effort re-rated after review: `git-sync` low→medium (`--fix` resolves conflicts semantically), `ai-terse` low→medium (compression is meaning-preserving judgment), `ai-template-sync` high→medium (script does copy/compare), `ai-brain-dump` high→medium (capture skill; its downstream consumers carry the deep reasoning, and a high level is re-paid every listening turn). Rationale per skill in `README.md` → Effort. | |
-| 2026-09-27 | Secret-handling audit: `ai-asset-sync` model process isolated from credentials (its LADR-004); `ai-template-sync` refuses credentialed clone URLs; `skill-secret-handling` rule gained an authoring/review Checklist for agents. | |
+| :---- | :---- | :---- |
+| 2026-06-21 | Initial; SkillSpector baseline gate; secret-handling guardrail | #52 |
+| 2026-06-21 | LADR-001: static gate, LLM advisory (policy A) | #52 |
+| 2026-07-31 | SARIF omits baselined findings instead of `suppressions` | #57 |
+| 2026-09-13 | `ai-asset-sync`: first secret consumer, env-only | #66 |
+| 2026-09-19 | `ai-understanding` added; store gitignored under `.context/` | #68 |
+| 2026-09-22 | `create-worktask` added; its `assets/` is HTML-comment-free (no `P2` baseline entry) | #74 |
+| 2026-09-27 | `effort` replaces `models`; no `model:` in `agents/openai.yaml` | #83 |
+| 2026-09-27 | Secret-handling audit: model processes isolated from credentials | #85 |
+| 2026-10-15 | Cut to README pointer + LADR-001; skill-specific facts moved to each skill's AGENTS.md | — |

@@ -1,21 +1,20 @@
-# ai-brain-dump — AGENTS.md
+# AGENTS.md - ai-brain-dump
 
 ## TL;DR
 
-Pure-prompt behavioral skill (no scripts): a listen-first capture session whose entire value is in NOT acting — never implement, modify, or synthesize until explicitly asked.
+Read [`SKILL.md`](./SKILL.md) first — switches, phases and guardrails live there; the cost rationale is in [`README.md`](./README.md).
 
 ## Non-Negotiables
 
-- **A braindump is never permission to implement.** Even with all switches on, only *grounding* (reading/searching) is widened — the no-modify rule holds until the user asks to synthesize.
-- **Don't "optimize" the SKILL.md by deduplicating switch semantics.** The switch rules are intentionally restated in Modes, Listen, and Guardrails — reinforcement against the model's drift toward premature questioning/action is the point, not redundancy.
-
-## Architecture Decisions
-
-- **LADR-001** (2026-05, accepted): Default mode is tool-free, opt-in switches relax it. *Context:* file/web tool payloads are injected into context and re-billed every subsequent turn of a long capture session. *Decision:* default forbids tools; `--oktoreaddocs`/`--oktowebsearch` opt back in. *Consequence:* any edit that adds default tool use destroys the skill's cost profile — see the README cost table before changing switch behavior.
+- **Don't deduplicate the switch rules in SKILL.md.** They are restated on purpose in Modes & Switches,
+  Listen and Guardrails — the repetition counters the model's drift toward premature questions and action.
+- **A switch change edits three tables.** The switch table lives in SKILL.md, this skill's `README.md`
+  (with cost) and `.agents/skills/README.md` → ai-brain-dump switches; updating one leaves the others stale.
 
 ## Changelog
 
 | Date | Change | Ref |
-|:-----|:-------|:----|
-| 2026-06-12 | Initial version. | |
-| 2026-09-13 | Added `--all` (enables `--oktoask` `--thinking` `--oktoreaddocs` `--oktowebsearch`). | |
+| :---- | :---- | :---- |
+| 2026-06-12 | Initial | #40 |
+| 2026-09-13 | `--all` switch | #61 |
+| 2026-10-15 | Cut to HLD shape: SKILL.md pointer + non-SKILL.md traps only | — |
