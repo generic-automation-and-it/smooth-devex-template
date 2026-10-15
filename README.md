@@ -148,6 +148,37 @@ tests/
 
 ---
 
+## Use it in another repository
+
+To pull just the **agent skills** (`.agents/skills/`) from this template into an existing repository,
+without copying the rest of the template, run the one-command installer. The installer is per-skill
+opt-in, keeps an editable manifest, and never touches the calling repo's `src/`, `tests/`, or
+`.github/` directories.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash
+```
+
+```powershell
+irm https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.ps1 | iex
+```
+
+State lives in `<your-repo>/.agents/skills/_smooth-devex-shared/installation.json` (UTC stamp plus a
+`name` / `installed` pair per skill). Flip a skill off by setting its `installed` flag to `false`; the
+installer will leave it on disk but stop overwriting it on every run. Full contract and operator
+documentation: [`scripts/SKILLS_INSTALLER.md`](scripts/SKILLS_INSTALLER.md).
+
+The installer owns only this template's skills. Skills from other repositories (for example
+`smooth-ai-product-context-memory`'s `mimisbrunnr-*` set) are not installed here — install them with
+that repository's own installer.
+
+`ai-brain-dump` and `ai-understanding` ship in this repository's `.agents/skills/` but are on the
+installer's hardcoded deny list: one captures in-conversation content, the other exports session state
+to `.context/`. Both are session-scoped — shipping either implicitly into every consumer install
+would surprise the operator. Copy them manually if you want them.
+
+---
+
 ## Contributing
 
 - Work on a branch off `main`: `<type>/<ticket>-short-description` (e.g. `feat/1234-add-user-export`).
