@@ -47,16 +47,48 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-# Skills the installer will NOT carry across to a consumer repo, even when they are present in source.
-# Interactive / session-scoped skills do not fit the implicit "ship in a template" install contract -
-# an operator who did not ask for a personal braindump or session-archiving tool gets one.
+# Skills the installer is allowed to carry across to a consumer repo. The installer is scoped to
+# this explicit allow list - a positive owned set, not a deny list - so the only skills that ever
+# enter a consumer's manifest or land on disk are these.
 #
-# ai-brain-dump starts a listen-first session that captures in-conversation content. Installing it
-# implicitly on every consumer repo would surprise the operator. Stay opt-in via a manual copy.
+# The rest of the source tree's `.agents/skills/` is treated as **local**: it lives in this template
+# for use inside the template, and the installer ignores it on its way through. An unscoped installer
+# pulled a target repo's local-only skills into its manifest as `installed:true` - that is the bug
+# PR #245 fixed in `smooth-ai-product-context-memory`, and the same shape applies here.
 #
-# ai-understanding exports session-derived state into per-repo .context/ folders. It is the consumer's
-# own archival pipeline, not a skill the installer should silently plant alongside the read-only ones.
-$script:DenyList = @('ai-brain-dump', 'ai-understanding')
+# The owned set is deliberately small. This is a template repo, not a domain plugin; the few skills
+# worth carrying to a consumer are the ones that operate on the template's own shape (asset sync,
+# template sync, rule system) or that are useful in any consumer project (terse response, hld +
+# worktask authoring).
+#
+# If a skill you want to distribute lands here, add it to this list and to the harness's owned
+# set in test-install-skills.sh. Anything else stays local.
+$script:OwnedList = @(
+    'ai-asset-sync'
+    'ai-template-sync'
+    'ai-terse'
+    'create-hld'
+    'create-worktask'
+    'manage-rule-system'
+)
+
+# Mirror of is_owned_skill in install-skills.sh. The harness compares the two lists byte-for-byte;
+# both must agree on which names are installable.
+function Test-OwnedSkill {
+    param([string] $Name)
+    foreach ($o in $script:OwnedList) {
+        if ($Name -ceq $o) { return $true }
+    }
+    # Test-only: SKILLS_TEST_OWNED_EXTRA is set by scripts/test-install-skills.sh to extend the
+    # owned list with synthetic names so the harness can exercise add/drop cases without planting
+    # real source-owned names. Production installers never set this.
+    if ($null -ne $env:SKILLS_TEST_OWNED_EXTRA -and $env:SKILLS_TEST_OWNED_EXTRA -ne '') {
+        foreach ($o in ($env:SKILLS_TEST_OWNED_EXTRA -split '\s+')) {
+            if ($Name -ceq $o) { return $true }
+        }
+    }
+    return $false
+}
 
 if (Get-Variable -Name PSNativeCommandArgumentPassing -ErrorAction SilentlyContinue) {
     $PSNativeCommandArgumentPassing = 'Standard'
@@ -88,7 +120,7 @@ function Get-DiskSkills {
     param([string] $Root)
     @(Get-ChildItem -LiteralPath $Root -Directory |
         Where-Object { $_.Name -ne '_smooth-devex-shared' } |
-        Where-Object { -not $script:DenyList.Contains($_.Name) } |
+        Where-Object { Test-OwnedSkill -Name $_.Name } |
         Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'SKILL.md') -PathType Leaf } |
         Select-Object -ExpandProperty Name |
         Sort-Object)
@@ -122,12 +154,12 @@ function Read-InstallationJson {
 }
 
 function Get-CatalogSkills {
-    # Every folder carrying a SKILL.md, minus the shared folder and the deny list.
+    # Every folder carrying a SKILL.md, minus the shared folder, intersected with the owned set.
     param([string] $Root)
     if (-not (Test-Path -LiteralPath $Root -PathType Container)) { return @() }
     @(Get-ChildItem -LiteralPath $Root -Directory |
         Where-Object { $_.Name -ne '_smooth-devex-shared' } |
-        Where-Object { -not $script:DenyList.Contains($_.Name) } |
+        Where-Object { Test-OwnedSkill -Name $_.Name } |
         Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'SKILL.md') -PathType Leaf } |
         Select-Object -ExpandProperty Name)
 }
@@ -145,18 +177,17 @@ function Build-InstallationJson {
         [object[]] $ExistingSkills
     )
 
-    # The catalogue is the union: what the source offers, plus anything already on disk. Deriving the
-    # manifest from disk alone makes a first install into an empty skills folder a no-op - there is
-    # nothing on disk, so there is nothing to install, and the operator's very first run leaves them with
-    # an empty folder and a manifest listing nothing. A skill the operator added by hand is in neither
-    # the source nor the manifest, and dropping it would delete state the operator owns.
+    # The catalogue is the union (source + disk) INTERSECTED with the owned set. Without the
+    # intersection, an unowned skill that happens to be in source or disk would still enter the
+    # manifest as installed:true - the unscoped installer pulled a foreign repo's local-only skills
+    # into its manifest exactly that way.
     #
-    # $DiskSkills and $SourceSkills are already deny-filtered by their getters, but defence-in-depth
-    # here keeps a caller who reaches into this function with raw arrays from getting a denied name
-    # into the manifest.
+    # $DiskSkills and $SourceSkills are already owned-filtered by their getters, but defence-in-depth
+    # here keeps a caller who reaches into this function with raw arrays from getting an unowned
+    # name into the manifest.
     $catalog = @(
         $DiskSkills + $SourceSkills |
-            Where-Object { $_ -notin $script:DenyList } |
+            Where-Object { Test-OwnedSkill -Name $_ } |
             Sort-Object -Unique
     )
 
@@ -278,10 +309,12 @@ function Update-InstalledSkills {
 
     $repoSkills = Join-Path $script:TempRepo '.agents/skills'
     foreach ($name in $installedNames) {
-        # Belt-and-braces: the manifest already excluded denied skills. Re-check here in case the
-        # caller hand-wrote the manifest and put a denied name back in with installed:true.
-        if ($script:DenyList.Contains($name)) {
-            Write-Info "Skipping denied skill: $name"
+        # Belt-and-braces: the manifest already excluded unowned skills (built from the owned
+        # intersection). Re-check here in case the caller hand-wrote the manifest and put an
+        # unowned name back in with installed:true. Same rejection shape the source repo's PR
+        # #245 added.
+        if (-not (Test-OwnedSkill -Name $name)) {
+            Write-Info "Skipping unowned skill: $name"
             continue
         }
         $source = Join-Path $repoSkills $name

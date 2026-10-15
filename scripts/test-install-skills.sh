@@ -69,6 +69,7 @@ make_root() {
 run_sh() {
   local root="$1"; shift
   SKILLS_ROOT="$root" SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
+    SKILLS_TEST_OWNED_EXTRA="alpha beta gamma delta epsilon" \
     bash "$installer_sh" "$@" >"$scratch/out" 2>"$scratch/err"
 }
 
@@ -114,11 +115,12 @@ root="$(make_root "first" alpha beta)"
 run_sh "$root" >/dev/null 2>&1 || true
 manifest="$root/_smooth-devex-shared/installation.json"
 if [ ! -f "$manifest" ]; then no "first run creates installation.json"; exit 1; fi
-# The catalogue is source union disk: the skills the clone offers (real names from this checkout) plus
-# the synthetic ones this case planted (alpha/beta). A manifest derived from disk alone would omit every
-# real skill and make a first install into an empty folder a no-op.
+# The catalogue is the owned intersection of source + disk. Real owned skills from source (the six
+# .agents/skills names from this template) plus the harness's synthetic owned names (alpha/beta via
+# SKILLS_TEST_OWNED_EXTRA). An unowned skill like agile-github-breakdown is in source but NOT in
+# the catalogue - the contract this case pins.
 names=" $(manifest_names "$root") "
-for expected in alpha beta ai-terse agile-github-breakdown; do
+for expected in alpha beta ai-terse create-hld; do
   case "$names" in
     *" $expected "*) ;;
     *) no "first run lists source skills as well as those on disk" "$expected missing from: $names"; exit 1 ;;
@@ -129,7 +131,15 @@ if [ "$(manifest_flag "$root" alpha)" != "true" ] || [ "$(manifest_flag "$root" 
   exit 1
 fi
 if ! manifest_timestamp_ok "$root"; then no "first run stamps an ISO-8601 UTC time"; exit 1; fi
-ok "first run: manifest from source union disk, all installed:true, ISO-8601 UTC stamp"
+
+# Unowned check: agile-github-breakdown ships in source but is NOT owned - must not enter the manifest.
+# This is the contract this whole PR fixes; the unscoped installer pulled such names in.
+case "$names" in
+  *" agile-github-breakdown "*) no "first run: unowned source skill is not in the manifest" "found: $names" ;;
+  *) ok "first run: unowned source skill (agile-github-breakdown) is not in the manifest" ;;
+esac
+
+ok "first run: manifest from owned source ∪ disk, all installed:true, ISO-8601 UTC stamp"
 
 # ---------------------------------------------------------------------------------------------
 # 2. reconcile: keep an operator's false, add new skills, drop removed ones
@@ -258,10 +268,10 @@ done
 # 4. only installed:true folders are replaced from the clone source
 # ---------------------------------------------------------------------------------------------
 
-# ai-terse (leaf, no scripts/) and agile-github-breakdown (carries scripts/) both exist in the
-# checkout, so both are real clone-and-copy cases rather than synthetic names that would only
-# exercise the warning branch.
-root="$(make_root "update" ai-terse agile-github-breakdown)"
+# ai-terse (leaf, no scripts/) and create-hld (carries scripts/) both exist in the checkout AND are
+# owned, so both are real clone-and-copy cases rather than synthetic names that would only exercise
+# the warning branch.
+root="$(make_root "update" ai-terse create-hld)"
 printf 'operator edit\n' >"$root/ai-terse/SKILL.md"
 run_sh "$root" >/dev/null 2>&1
 
@@ -270,7 +280,7 @@ if grep -q '^name:' "$root/ai-terse/SKILL.md" 2>/dev/null; then
 else
   no "an installed:true skill is replaced from the clone source" "SKILL.md still: $(head -1 "$root/ai-terse/SKILL.md")"
 fi
-if [ -d "$root/agile-github-breakdown/scripts" ]; then
+if [ -d "$root/create-hld/scripts" ]; then
   ok "the copied skill carries its scripts folder"
 else
   no "the copied skill carries its scripts folder"
@@ -279,7 +289,7 @@ fi
 # Now the same run with one skill switched off: the off folder must be left exactly as it is.
 # The manifest has to exist before it can be switched off, so this is a first run followed by an
 # edit: that is the operator's actual sequence (install, then turn a skill off).
-root2="$(make_root "update-off" ai-terse agile-github-breakdown)"
+root2="$(make_root "update-off" ai-terse create-hld)"
 printf 'operator edit\n' >"$root2/ai-terse/SKILL.md"
 run_sh "$root2" >/dev/null 2>&1
 printf 'operator edit\n' >"$root2/ai-terse/SKILL.md"
@@ -296,6 +306,45 @@ if [ "$(cat "$root2/ai-terse/SKILL.md")" = "operator edit" ]; then
   ok "an installed:false skill is never overwritten"
 else
   no "an installed:false skill is never overwritten" "content is now: $(head -1 "$root2/ai-terse/SKILL.md")"
+fi
+
+# 4b. An unowned skill present on disk (and in source) is left byte-identical and never enters the
+# manifest. This is the bug the unscoped installer had - it pulled a foreign repo's local-only
+# skills into its manifest and marked them installed:true. The owned-set gate stops that here.
+#
+# agile-github-breakdown is in source but NOT in OWNED_LIST, so it is the unowned probe for this
+# case. We plant it on disk with operator-local content (a non-source SKILL.md), run, and assert
+# the disk content is unchanged AND the manifest has no such name.
+root="$(make_root "update-unowned" agile-github-breakdown)"
+printf 'operator-local content\n' >"$root/agile-github-breakdown/SKILL.md"
+run_sh "$root" >/dev/null 2>&1
+if [ "$(cat "$root/agile-github-breakdown/SKILL.md")" = "operator-local content" ]; then
+  ok "an unowned source skill left on disk is left byte-identical (not copied over)"
+else
+  no "an unowned source skill left on disk is left byte-identical" "now: $(cat "$root/agile-github-breakdown/SKILL.md")"
+fi
+case " $(manifest_names "$root") " in
+  *" agile-github-breakdown "*) no "an unowned source skill on disk is not listed in the manifest" "found in manifest" ;;
+  *) ok "an unowned source skill on disk is not listed in the manifest" ;;
+esac
+
+# 4c. A hand-edited manifest naming an unowned skill installed:true is refused at the update step.
+# The catalogue already excluded it; the update-loop guard is defence-in-depth so a hand edit
+# cannot smuggle a foreign skill onto disk.
+root="$(make_root "update-unowned-edit" alpha)"
+run_sh "$root" >/dev/null 2>&1
+python3 - "$root/_smooth-devex-shared/installation.json" <<'PYEOF'
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path))
+data["skills"].append({"name": "agile-github-breakdown", "installed": True})
+json.dump(data, open(path, "w"), indent=2)
+PYEOF
+run_sh "$root" >/dev/null 2>&1
+if [ ! -d "$root/agile-github-breakdown" ]; then
+  ok "hand-edited manifest cannot install an unowned skill (update-loop guard)"
+else
+  no "hand-edited manifest cannot install an unowned skill" "agile-github-breakdown/ landed"
 fi
 
 # ---------------------------------------------------------------------------------------------

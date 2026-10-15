@@ -33,19 +33,51 @@ SKILLS_REPO="${SKILLS_REPO:-https://github.com/generic-automation-and-it/smooth-
 # became "main" and then failed on any source that has no main branch. `-` substitutes only when unset.
 SKILLS_BRANCH="${SKILLS_BRANCH-main}"
 
-# Skills the installer will NOT carry across to a consumer repo, even when they are present in source.
-# Interactive / session-scoped skills do not fit the implicit "ship in a template" install contract —
-# an operator who did not ask for a personal braindump or session-archiving tool gets one.
+# Skills the installer is allowed to carry across to a consumer repo. The installer is scoped to
+# this explicit allow list — a positive owned set, not a deny list — so the only skills that ever
+# enter a consumer's manifest or land on disk are these.
 #
-# ai-brain-dump starts a listen-first session that captures in-conversation content. Installing it
-# implicitly on every consumer repo would surprise the operator. Stay opt-in via a manual copy.
+# The rest of the source tree's `.agents/skills/` is treated as **local**: it lives in this template
+# for use inside the template, and the installer ignores it on its way through. An unscoped installer
+# pulled a target repo's local-only skills into its manifest as `installed:true` — that is the bug
+# PR #245 fixed in `smooth-ai-product-context-memory`, and the same shape applies here.
 #
-# ai-understanding exports session-derived state into per-repo .context/ folders. It is the consumer's
-# own archival pipeline, not a skill the installer should silently plant alongside the read-only ones.
-DENY_LIST=(ai-brain-dump ai-understanding)
+# The owned set is deliberately small. This is a template repo, not a domain plugin; the few skills
+# worth carrying to a consumer are the ones that operate on the template's own shape (asset sync,
+# template sync, rule system) or that are useful in any consumer project (terse response, hld +
+# worktask authoring).
+#
+# If a skill you want to distribute lands here, add it to this list and to the harness's owned
+# set in test-install-skills.sh. Anything else stays local.
+OWNED_LIST=(
+  ai-asset-sync
+  ai-template-sync
+  ai-terse
+  create-hld
+  create-worktask
+  manage-rule-system
+)
 
 die() { echo "install-skills: $*" >&2; exit 1; }
 log() { echo "install-skills: $*" >&2; }
+
+# The owned set is the single source of truth for what this installer carries across. Mirrors
+# $script:OwnedList in install-skills.ps1 byte-for-byte (the harness compares the two).
+is_owned_skill() {
+  local name="$1" o
+  for o in "${OWNED_LIST[@]}"; do
+    [ "$name" = "$o" ] && return 0
+  done
+  # Test-only: SKILLS_TEST_OWNED_EXTRA is set by scripts/test-install-skills.sh to extend the
+  # owned list with synthetic names so the harness can exercise add/drop cases without planting
+  # real source-owned names. Production installers never set this.
+  if [ -n "${SKILLS_TEST_OWNED_EXTRA:-}" ]; then
+    for o in ${SKILLS_TEST_OWNED_EXTRA}; do
+      [ "$name" = "$o" ] && return 0
+    done
+  fi
+  return 1
+}
 
 # ---------------------------------------------------------------------------
 # 1. Find skills root
@@ -68,16 +100,12 @@ find_skills_root() {
 
 list_disk_skills() {
   local skills_root="$1"
-  local dir name denied
+  local dir name
   for dir in "$skills_root"/*/; do
     [ -d "$dir" ] || continue
     name="$(basename "$dir")"
     [ "$name" = "_smooth-devex-shared" ] && continue
-    denied=0
-    for d in "${DENY_LIST[@]}"; do
-      [ "$name" = "$d" ] && denied=1 && break
-    done
-    [ "$denied" = 1 ] && continue
+    is_owned_skill "$name" || continue
     if [ -f "$dir/SKILL.md" ]; then
       printf '%s\n' "$name"
     fi
@@ -135,18 +163,25 @@ import json, sys
 skills = sorted(line.strip() for line in sys.stdin if line.strip())
 print(json.dumps(skills))
 ")"
-  deny_json="$(printf '%s\n' "${DENY_LIST[@]}" | python3 -c "
+  # Owned union for the python reconciliation step: production OWNED_LIST plus the test-only
+  # SKILLS_TEST_OWNED_EXTRA env var (set by scripts/test-install-skills.sh). Without the union
+  # here, the manifest builder's intersection step would silently drop the synthetic names the
+  # harness uses for add/drop cases.
+  owned_json="$( { printf '%s\n' "${OWNED_LIST[@]}"; [ -n "${SKILLS_TEST_OWNED_EXTRA:-}" ] && printf '%s\n' ${SKILLS_TEST_OWNED_EXTRA}; } | python3 -c "
 import json, sys
 print(json.dumps(sorted(line.strip() for line in sys.stdin if line.strip())))
 ")"
 
-  python3 - "$disk_skills_json" "$existing_json" "$source_skills_json" "$deny_json" <<'PYEOF'
+  python3 - "$disk_skills_json" "$existing_json" "$source_skills_json" "$owned_json" <<'PYEOF'
 import json, sys
 from datetime import datetime, timezone
 
-disk_skills = set(json.loads(sys.argv[1])) - set(json.loads(sys.argv[4]))
+# Catalogue is source union disk INTERSECTED with the owned set. Without the intersection, a skill
+# in source or disk that is not owned would still enter the manifest as installed:true (the unscoped
+# installer pulled a foreign repo's local-only skills into its manifest exactly that way).
+disk_skills = set(json.loads(sys.argv[1])) & set(json.loads(sys.argv[4]))
 existing_raw = sys.argv[2].strip()
-source_skills = set(json.loads(sys.argv[3])) - set(json.loads(sys.argv[4]))
+source_skills = set(json.loads(sys.argv[3])) & set(json.loads(sys.argv[4]))
 
 # The catalogue is the union: what the source offers, plus anything already here. A skill the operator
 # added by hand is in neither the source nor the manifest until it has a SKILL.md, and dropping it would
@@ -182,16 +217,12 @@ PYEOF
 # from the clone, so it is empty when the caller has not cloned yet.
 list_source_skills() {
   local source_root="$1"
-  local dir name denied
+  local dir name
   for dir in "$source_root"/*/; do
     [ -d "$dir" ] || continue
     name="$(basename "$dir")"
     [ "$name" = "_smooth-devex-shared" ] && continue
-    denied=0
-    for d in "${DENY_LIST[@]}"; do
-      [ "$name" = "$d" ] && denied=1 && break
-    done
-    [ "$denied" = 1 ] && continue
+    is_owned_skill "$name" || continue
     if [ -f "$dir/SKILL.md" ]; then
       printf '%s\n' "$name"
     fi
@@ -289,15 +320,10 @@ for s in data.get('skills', []):
   if [ -n "$installed_names" ]; then
     while IFS= read -r name; do
       [ -n "$name" ] || continue
-      # Belt-and-braces: deny list filtering happens in build_installation_json, so a denied skill
-      # never appears in the manifest in the first place. Re-check here in case the caller hand-wrote
-      # the manifest and put a denied name back in with installed:true.
-      local denied=0
-      local d
-      for d in "${DENY_LIST[@]}"; do
-        [ "$name" = "$d" ] && denied=1 && break
-      done
-      [ "$denied" = 1 ] && { log "Skipping denied skill: $name"; continue; }
+      # Belt-and-braces: the manifest already excluded unowned skills (built from the owned
+      # intersection). Re-check here in case the caller hand-wrote the manifest and put an unowned
+      # name back in with installed:true. Same rejection shape the source repo's PR #245 added.
+      is_owned_skill "$name" || { log "Skipping unowned skill: $name"; continue; }
       if [ -d "$INSTALL_TMP/repo/.agents/skills/$name" ]; then
         rm -rf "$skills_root/$name"
         cp -R "$INSTALL_TMP/repo/.agents/skills/$name" "$skills_root/$name"

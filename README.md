@@ -173,6 +173,16 @@ State lives in `<your-repo>/.agents/skills/_smooth-devex-shared/installation.jso
 installer will leave it on disk but stop overwriting it on every run. Full contract and operator
 documentation: [`scripts/SKILLS_INSTALLER.md`](scripts/SKILLS_INSTALLER.md).
 
+### Owned set
+
+The installer ships **exactly six** skills: `ai-asset-sync`, `ai-template-sync`, `ai-terse`,
+`create-hld`, `create-worktask`, `manage-rule-system`. Anything else in this template's
+`.agents/skills/` — the `agile-github-*` pair, `context-load-*`, `git-commit*` / `git-sync`,
+`ai-brain-dump`, `ai-understanding` — is treated as **local** to this template and never enters a
+consumer's manifest. Skills owned by other repositories (the seven `mimisbrunnr-*` skills plus
+`ai-review`, `git-commit-review-push`, etc., owned by `smooth-ai-product-context-memory`) are not
+installed here either — install them with that repository's own installer.
+
 ### Scope
 
 The installer ships only `.agents/skills/`. It does **not** carry:
@@ -192,15 +202,6 @@ The installer accepts `.agents/skills/`, `.claude/skills/`, or `.codex/skills/` 
 A consumer that picks `.claude/skills/` or `.codex/skills/` as its root must create the canonical
 symlink (`.claude/skills -> .agents/skills` / `.codex/skills -> .agents/skills`) for the skill
 `SKILL.md` files to find their `scripts/` siblings at the canonical path.
-
-The installer owns only this template's skills. Skills from other repositories (for example
-`smooth-ai-product-context-memory`'s `mimisbrunnr-*` set) are not installed here — install them with
-that repository's own installer.
-
-`ai-brain-dump` and `ai-understanding` ship in this repository's `.agents/skills/` but are on the
-installer's hardcoded deny list: one captures in-conversation content, the other exports session state
-to `.context/`. Both are session-scoped — shipping either implicitly into every consumer install
-would surprise the operator. Copy them manually if you want them.
 
 ---
 
