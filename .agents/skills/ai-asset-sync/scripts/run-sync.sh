@@ -472,6 +472,15 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
     if [ -n "$(git -C "$REPO_ROOT" status --porcelain -- "$phys")" ]; then
       die "entry path '${path}' (physical: ${phys}) has uncommitted changes — commit/stash before syncing"
     fi
+    # Warn about ignored files inside this entry path BEFORE the destructive rm -rf
+    # below. A clean `git status` excludes them, so the overwrite would silently
+    # delete assets the operator had on .gitignore. Scoped to this entry path
+    # (not the whole repo) so the warning matches the actual replacement.
+    ignored_here="$(git -C "$REPO_ROOT" ls-files -o -i --exclude-standard -- "$phys" 2>/dev/null || true)"
+    if [ -n "$ignored_here" ]; then
+      log "warn: ignored files under entry path '${phys}' would be deleted by an overwrite sync:"
+      log "$ignored_here"
+    fi
   done 3<"${REPORT_DIR}/work-list.txt"
 fi
 

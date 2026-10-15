@@ -63,20 +63,26 @@ log() { echo "install-skills: $*" >&2; }
 
 # The owned set is the single source of truth for what this installer carries across. Mirrors
 # $script:OwnedList in install-skills.ps1 byte-for-byte (the harness compares the two).
+#
+# A test-only override SKILLS_TEST_OWNED_EXTRA extends the owned list with synthetic names so the
+# harness can exercise add/drop cases without planting real source-owned names. Production
+# installers never set this. The override is parsed once and merged into a single comparison
+# surface, so the gate is one case statement, not two loops that drift on every new gate.
 is_owned_skill() {
-  local name="$1" o
-  for o in "${OWNED_LIST[@]}"; do
-    [ "$name" = "$o" ] && return 0
-  done
-  # Test-only: SKILLS_TEST_OWNED_EXTRA is set by scripts/test-install-skills.sh to extend the
-  # owned list with synthetic names so the harness can exercise add/drop cases without planting
-  # real source-owned names. Production installers never set this.
-  if [ -n "${SKILLS_TEST_OWNED_EXTRA:-}" ]; then
-    for o in ${SKILLS_TEST_OWNED_EXTRA}; do
-      [ "$name" = "$o" ] && return 0
-    done
-  fi
+  local name="$1"
+  case " $(owned_set) " in
+    *" $name "*) return 0 ;;
+  esac
   return 1
+}
+
+# owned_set prints the production owned list plus any test-only extras, one space-separated
+# line. The caller is `is_owned_skill` above, which anchors the value on both sides with spaces
+# so partial-token matches (e.g. `ai-` against `ai-terse`) cannot pass.
+owned_set() {
+  local out="${OWNED_LIST[*]}"
+  [ -n "${SKILLS_TEST_OWNED_EXTRA:-}" ] && out="$out ${SKILLS_TEST_OWNED_EXTRA}"
+  printf '%s' "$out"
 }
 
 # ---------------------------------------------------------------------------
@@ -84,10 +90,13 @@ is_owned_skill() {
 # ---------------------------------------------------------------------------
 
 find_skills_root() {
+  # Returns an absolute path. The manifest lives at <root>/_smooth-devex-shared/installation.json,
+  # and a later `cd` would silently change what that path resolves to. Resolving once at discovery
+  # keeps every downstream join against the same root.
   local dir
   for dir in ".agents/skills" ".claude/skills" ".codex/skills"; do
     if [ -d "$dir" ]; then
-      printf '%s\n' "$dir"
+      printf '%s\n' "$(cd "$dir" && pwd)"
       return 0
     fi
   done
@@ -95,13 +104,16 @@ find_skills_root() {
 }
 
 # ---------------------------------------------------------------------------
-# 2. List skills on disk (dirs with SKILL.md, excluding _smooth-devex-shared)
+# 2. List skills (dirs with SKILL.md, excluding the shared folder)
 # ---------------------------------------------------------------------------
 
-list_disk_skills() {
-  local skills_root="$1"
-  local dir name
-  for dir in "$skills_root"/*/; do
+# One function for both the disk and the clone source: the only thing they differ on
+# is which directory is the root, and the owned-set gate is the same either way. The
+# previous duplication (list_disk_skills / list_source_skills) was a copy-paste that
+# drifted on every new gate, so the test had to cover two near-identical shapes.
+list_skills() {
+  local root="$1" dir name
+  for dir in "$root"/*/; do
     [ -d "$dir" ] || continue
     name="$(basename "$dir")"
     [ "$name" = "_smooth-devex-shared" ] && continue
@@ -158,7 +170,7 @@ build_installation_json() {
   local skills_root="$1" existing_json="$2" source_skills_json="$3"
   local disk_skills_json
 
-  disk_skills_json="$(list_disk_skills "$skills_root" | python3 -c "
+  disk_skills_json="$(list_skills "$skills_root" | python3 -c "
 import json, sys
 skills = sorted(line.strip() for line in sys.stdin if line.strip())
 print(json.dumps(skills))
@@ -213,21 +225,7 @@ print(json.dumps(data))
 PYEOF
 }
 
-# The skills the clone source offers: every folder carrying a SKILL.md, minus the shared folder. Read
-# from the clone, so it is empty when the caller has not cloned yet.
-list_source_skills() {
-  local source_root="$1"
-  local dir name
-  for dir in "$source_root"/*/; do
-    [ -d "$dir" ] || continue
-    name="$(basename "$dir")"
-    [ "$name" = "_smooth-devex-shared" ] && continue
-    is_owned_skill "$name" || continue
-    if [ -f "$dir/SKILL.md" ]; then
-      printf '%s\n' "$name"
-    fi
-  done
-}
+# The skills the clone source offers. (see list_skills above)
 
 # sweep_stale_entries DEST SOURCE — remove from DEST everything SOURCE does not have, recursively.
 #
@@ -384,7 +382,7 @@ main() {
 
   log "Syncing installation.json…"
   new_json="$(build_installation_json "$skills_root" "$existing_json" \
-    "$(list_source_skills "$INSTALL_TMP/repo/.agents/skills" | python3 -c "
+    "$(list_skills "$INSTALL_TMP/repo/.agents/skills" | python3 -c "
 import json, sys
 print(json.dumps(sorted(line.strip() for line in sys.stdin if line.strip())))
 ")")"
