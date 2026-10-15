@@ -74,20 +74,28 @@ $script:OwnedList = @(
 
 # Mirror of is_owned_skill in install-skills.sh. The harness compares the two lists byte-for-byte;
 # both must agree on which names are installable.
+#
+# A test-only override SKILLS_TEST_OWNED_EXTRA extends the owned list with synthetic names so the
+# harness can exercise add/drop cases without planting real source-owned names. Production
+# installers never set this. The override is merged into a single comparison surface, so the
+# gate is one branch, not two loops that drift on every new gate.
 function Test-OwnedSkill {
     param([string] $Name)
-    foreach ($o in $script:OwnedList) {
-        if ($Name -ceq $o) { return $true }
-    }
-    # Test-only: SKILLS_TEST_OWNED_EXTRA is set by scripts/test-install-skills.sh to extend the
-    # owned list with synthetic names so the harness can exercise add/drop cases without planting
-    # real source-owned names. Production installers never set this.
-    if ($null -ne $env:SKILLS_TEST_OWNED_EXTRA -and $env:SKILLS_TEST_OWNED_EXTRA -ne '') {
-        foreach ($o in ($env:SKILLS_TEST_OWNED_EXTRA -split '\s+')) {
-            if ($Name -ceq $o) { return $true }
-        }
+    $set = Get-OwnedSet
+    # Anchor on both sides with spaces so partial-token matches (e.g. `ai-` against `ai-terse`)
+    # cannot pass.
+    if ($set -match ("(^| )([\s\S]*\s)?" + [regex]::Escape($Name) + "(\s|$)")) {
+        return $true
     }
     return $false
+}
+
+function Get-OwnedSet {
+    $out = $script:OwnedList -join ' '
+    if ($null -ne $env:SKILLS_TEST_OWNED_EXTRA -and $env:SKILLS_TEST_OWNED_EXTRA -ne '') {
+        $out = "$out $($env:SKILLS_TEST_OWNED_EXTRA)"
+    }
+    return $out
 }
 
 if (Get-Variable -Name PSNativeCommandArgumentPassing -ErrorAction SilentlyContinue) {
@@ -104,6 +112,9 @@ function Fail { param([string] $Message) [Console]::Error.WriteLine("install-ski
 # ---------------------------------------------------------------------------
 
 function Find-SkillsRoot {
+    # Returns an absolute path. The manifest lives at <root>/_smooth-devex-shared/installation.json,
+    # and a later `Set-Location` would silently change what that path resolves to. Resolving once
+    # at discovery keeps every downstream join against the same root.
     foreach ($dir in @('.agents/skills', '.claude/skills', '.codex/skills')) {
         if (Test-Path -LiteralPath $dir -PathType Container) {
             return (Resolve-Path -LiteralPath $dir).Path
@@ -125,6 +136,7 @@ function Get-DiskSkills {
         Select-Object -ExpandProperty Name |
         Sort-Object)
 }
+# See Get-Skills below — Get-DiskSkills / Get-CatalogSkills were the duplicated pair.
 
 # ---------------------------------------------------------------------------
 # 3. Manifest read / build
@@ -154,7 +166,16 @@ function Read-InstallationJson {
 }
 
 function Get-CatalogSkills {
-    # Every folder carrying a SKILL.md, minus the shared folder, intersected with the owned set.
+    # Kept as a wrapper for clarity at the call sites; the body is Get-Skills. See Get-Skills below.
+    param([string] $Root)
+    Get-Skills -Root $Root
+}
+
+function Get-Skills {
+    # One function for both disk and clone-source: the only thing they differ on is which
+    # directory is the root, and the owned-set gate is the same either way. The previous
+    # duplication (Get-DiskSkills / Get-CatalogSkills) was a copy-paste that drifted on
+    # every new gate, so the test had to cover two near-identical shapes.
     param([string] $Root)
     if (-not (Test-Path -LiteralPath $Root -PathType Container)) { return @() }
     @(Get-ChildItem -LiteralPath $Root -Directory |
