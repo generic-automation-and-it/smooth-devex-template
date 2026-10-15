@@ -82,9 +82,10 @@ $script:OwnedList = @(
 function Test-OwnedSkill {
     param([string] $Name)
     $set = Get-OwnedSet
-    # Anchor on both sides with spaces so partial-token matches (e.g. `ai-` against `ai-terse`)
-    # cannot pass.
-    if ($set -match ("(^| )([\s\S]*\s)?" + [regex]::Escape($Name) + "(\s|$)")) {
+    # `-cmatch` is case-SENSITIVE — the owned set is an exact-name allowlist, and a folder
+    # like `AI-TERSE` must not pass on a case-insensitive filesystem. Anchor on both sides with
+    # spaces so partial-token matches (e.g. `ai-` against `ai-terse`) cannot pass.
+    if ($set -cmatch ("(^| )([\s\S]*\s)?" + [regex]::Escape($Name) + "(\s|$)")) {
         return $true
     }
     return $false

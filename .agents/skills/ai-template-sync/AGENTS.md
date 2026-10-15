@@ -10,6 +10,10 @@ Read [`SKILL.md`](./SKILL.md) first — phases, flags, Sections A–E and guardr
   added to one lands in the other in the same change. Match behaviour, not syntax: `.ps1` ends
   rules-only with `return` inside `try` so `finally` removes the temp clone (`.sh` uses `exit 0` plus an
   `EXIT` trap).
+- **The `.github/instructions` copy + `.agents/rules` symlink run unconditionally** for every tool
+  selection. The rules layout is shared by Claude/Cursor/Codex/Copilot via the `.agents` tree, so it
+  cannot be scoped to a single tool. The pre-flight (refuse if `.agents/rules` is a real dir) fires
+  for Claude-only, Codex-only, Copilot-only, and full syncs alike.
 - **Section D under `--overwrite global` is the one place UPSERT breaks.** Both scripts delete
   `.github/instructions` before copying the template's, dropping landing-only rules — including rules
   SKILL.md Phase 2 just moved there. `--rules-only` merges instead (no deletes). Don't copy the
