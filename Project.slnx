@@ -27,6 +27,7 @@
     <File Path=".agents/AI_DEVELOPMENT_AGENTS.md" />
     <File Path=".agents/hooks.json" />
     <File Path=".agents/launch.json" />
+    <File Path=".agents/opencode.json" />
     <File Path=".agents/settings.json" />
   </Folder>
   <Folder Name="/.agents/hooks/">
@@ -38,6 +39,7 @@
     <File Path=".agents/hooks/worktask-skill-trigger.sh" />
   </Folder>
   <Folder Name="/.agents/rules/">
+    <File Path=".agents/rules/AGENTS.md" />
     <File Path=".agents/rules/ai-workflow-rules.instructions.md" />
     <File Path=".agents/rules/clean-code.instructions.md" />
     <File Path=".agents/rules/code-review-standards.instructions.md" />
@@ -188,4 +190,5 @@
     <File Path=".dockerignore" />
   </Folder>
   <File Path="AGENTS.md" />
+  <File Path="opencode.json" />
 </Solution>

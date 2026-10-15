@@ -91,12 +91,12 @@ fi
 
 # --- code-review-graph -------------------------------------------------------
 # install/build are repo-scoped, so they run here rather than in the snapshot.
-# --no-instructions is mandatory everywhere: without it `install` appends to
-# CLAUDE.md, a committed symlink to AGENTS.md. claude-code needs --no-skills
+# --no-instructions is mandatory everywhere: without it `install` writes a
+# CLAUDE.md that Claude Code loads on top of AGENTS.md. claude-code needs --no-skills
 # --no-hooks too, because .claude is a symlink into tracked .agents/.
 if command -v code-review-graph >/dev/null 2>&1 && git -C . rev-parse --git-dir >/dev/null 2>&1; then
   # Untracked and repo-local, so they never show up in a workspace diff.
-  for generated in .code-review-graph/ .mcp.json opencode.jsonc; do
+  for generated in .code-review-graph/ .mcp.json; do
     grep -Fqx "$generated" .git/info/exclude 2>/dev/null ||
       echo "$generated" >>.git/info/exclude
   done

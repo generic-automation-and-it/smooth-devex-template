@@ -19,7 +19,7 @@
 #   - settings.json `env.CLAUDE_CODE_USE_POWERSHELL_TOOL` → Claude-only; omitted.
 
 # Root-context discovery: fall back to AGENTS.md (Codex's native doc file is the
-# same root context Claude reads via CLAUDE.md → AGENTS.md).
+# same root context Claude Code reads natively).
 project_doc_fallback_filenames = ["AGENTS.md"]
 
 # settings.json "defaultMode": "bypassPermissions" → run autonomously, no prompts.

@@ -28,8 +28,8 @@ This section describes the kit's repo-agnostic behavior. It ships with the kit i
   (`smooth-llm-imposter`) and a fixed host port (`127.0.0.1:5080` by default via `PORT`); two workspaces
   running `setup` or `restart-imposter` at the same time would race the same `docker rm -f` / `docker run`.
 - **Every `code-review-graph install --platform` call in `setup.sh` keeps `--no-instructions`.** Without it,
-  `install` appends an MCP-tools section to `CLAUDE.md`, which in this repository is a committed symlink to
-  `AGENTS.md` — the append would land in the tracked context file.
+  `install` writes an MCP-tools section to `CLAUDE.md`, which Claude Code loads on top of root `AGENTS.md`
+  (the repo has no `CLAUDE.md`; Claude Code reads `AGENTS.md` natively).
 - **Never hardcode `OPENCODE_API_KEY` / `OPENROUTER_API_KEY` here.** `imposter-container.sh` reads them from
   the workspace environment and fails fast (`:?`) if either is unset — that's Conductor's job to supply, not
   this script's.
@@ -153,9 +153,11 @@ This section describes the kit's repo-agnostic behavior. It ships with the kit i
   regardless of platform. If a workspace's snapshot doesn't have `uv` on `PATH`, the generated MCP configs are
   written successfully but the servers themselves cannot start — `code-review-graph build` still exits 0 in
   that case, so the graph looks built but no agent can reach it over MCP.
-- **Project-scoped MCP configs are hidden via `.git/info/exclude`, not `.gitignore`.** `setup.sh` seeds
-  `.mcp.json` (from `claude-code`) and `opencode.jsonc` (from `opencode`) into `.git/info/exclude` so they
-  never show up in a workspace diff, without editing the tracked `.gitignore`. `code-review-graph install`
+- **Project-scoped MCP configs are hidden via `.git/info/exclude`, not `.gitignore`** — except
+  `opencode.jsonc`. `setup.sh` seeds `.mcp.json` (from `claude-code`) into `.git/info/exclude` so it never
+  shows up in a workspace diff. `opencode.jsonc` (from `opencode`) is in the tracked `.gitignore` instead,
+  because the tracked OpenCode config is root `opencode.json` (→ `.agents/opencode.json`) and a committed
+  sibling `opencode.jsonc` would merge with it. `code-review-graph install`
   still appends `.code-review-graph/` to the tracked `.gitignore` directly (all platforms, predates this
   script) — that one line is expected to show up as a diff in every workspace.
 - **Conductor settings-layer asymmetry (verified from the published schemas).** The user schema
@@ -257,3 +259,5 @@ default as-is. To stop OpenCode session token usage, uncomment the two exports, 
 | 2026-08-01 | Two facts learned while fixing the release workflow, beyond the split itself: deleting a release **and** its tag does NOT free the version — GitHub reserves a tag name permanently once an immutable release has used it (`tag_name was used by an immutable release`), so that cleanup attempt on v0.0.1/v1.0.0 was wasted; and the fix is proven end to end — `v0.0.2` published with all three assets and the documented `curl … --ref v0.0.2` install verified in a scratch directory. | #108 |
 | 2026-08-01 | Trimmed comments across `install.sh`, the four kit scripts and the release workflow — 33-71% comment lines down to 13-17%. Rationale that belongs in this file was removed from the code rather than duplicated. Verified comments-only: the non-comment diff against `main` for `.conductor/scripts/` is empty. | — |
 | 2026-08-02 | Corrected the Linux-branch description in Key Behaviors: `dockerd` starts under `sudo -n setsid nohup`, not `sudo -n nohup` — matches the code and the Architecture Decisions row. | — |
+| 2026-10-15 | `opencode.jsonc` moved from `.git/info/exclude` seeding to tracked `.gitignore` | — |
+| 2026-10-15 | Root `CLAUDE.md` symlink removed; `--no-instructions` now guards against a generated `CLAUDE.md` | — |
