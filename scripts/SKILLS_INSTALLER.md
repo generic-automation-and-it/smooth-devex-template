@@ -41,10 +41,14 @@ never asked for is not an install. Set `SKILLS_ROOT` to install somewhere else.
 In this repository `.claude/skills` and `.codex/skills` are symlinks to `.agents/skills`, so all three
 paths resolve to the same tree and the first match is the real one.
 
-**2. Reconcile the manifest.** The catalogue is the **union** of the skills the clone source offers and
-the skills already on disk. Deriving it from disk alone would make a first install into an empty folder a
-no-op — nothing on disk means nothing to install, and the operator's very first run would leave them with
-an empty folder and a manifest listing nothing.
+**2. Reconcile the manifest — for the owned skills only.** The installer manages exactly six skills:
+`ai-asset-sync`, `ai-template-sync`, `ai-terse`, `create-hld`, `create-worktask`, `manage-rule-system`.
+The catalogue is the **owned union** of what the clone source offers and what is already on disk.
+Anything else in the target tree — local coding skills, operator experiments, the seven `mimisbrunnr-*`
+skills that belong to `smooth-ai-product-context-memory` and other repositories' skills — is left
+untouched and never enters the manifest. Deriving the catalogue from disk alone would make a first
+install into an empty folder a no-op — nothing on disk means nothing to install, and the operator's
+very first run would leave them with an empty folder and a manifest listing nothing.
 
 State lives in `<root>/_smooth-devex-shared/installation.json`:
 
@@ -53,7 +57,7 @@ State lives in `<root>/_smooth-devex-shared/installation.json`:
   "updated": "2026-10-15T13:10:22Z",
   "skills": [
     { "name": "ai-terse", "installed": true },
-    { "name": "git-sync", "installed": false }
+    { "name": "create-hld", "installed": false }
   ]
 }
 ```
@@ -63,34 +67,51 @@ with another one's state file.
 
 | Skill | Result |
 |---|---|
-| in the catalogue, new to the manifest | added as `installed: true` |
-| in the catalogue, already in the manifest | keeps its existing flag, `true` **or** `false` |
-| in the manifest, in neither the source nor disk | removed from the manifest |
-| in the deny list (see below) | **never** in the catalogue, **never** copied, even if the manifest is hand-edited |
+| owned, in the catalogue, new to the manifest | added as `installed: true` |
+| owned, in the catalogue, already in the manifest | keeps its existing flag, `true` **or** `false` |
+| in the manifest, no longer owned or on disk | removed from the manifest |
+| not owned (on disk, in the source, or hand-written into the manifest) | **never** listed, **never** copied, even if the manifest is hand-edited |
 | manifest will not parse | **run fails**, file left untouched |
-| no manifest at all | created from the catalogue, every entry `installed: true` |
+| no manifest at all | created from the owned catalogue, every entry `installed: true` |
+
+## Owned set
+
+The installer is scoped to a **positive owned list**, not a deny list. The owned set lives in
+`OWNED_LIST` (`install-skills.sh`) and `$script:OwnedList` (`install-skills.ps1`); the two must
+match byte-for-byte (the harness holds them to each other).
+
+| Skill | Why owned here |
+|---|---|
+| `ai-asset-sync` | Syncs AI assets across projects; core template mechanism |
+| `ai-template-sync` | Syncs this template into consumer repos; literal purpose of the template |
+| `ai-terse` | Token compression; generally useful across consumer projects |
+| `create-hld` | Design workflow authoring |
+| `create-worktask` | Task authoring workflow |
+| `manage-rule-system` | Rule lifecycle management |
+
+Everything else in this template's `.agents/skills/` is treated as **local** — `agile-github-*` may be
+claimed by a GitHub-specific installer; `context-load-*` and `git-commit*` / `git-sync` are local
+helpers; `ai-brain-dump` and `ai-understanding` are session-scoped or archival and excluded for the
+same reason as the prior deny list. Skills owned by other repositories (the seven `mimisbrunnr-*`
+skills plus `ai-review` from `smooth-ai-product-context-memory`) are not installed here either — install
+them with that repository's own installer.
 
 ## Deny list
 
-A small built-in list of skills the installer will **not** carry across, even when present in source.
-Interactive / session-scoped skills do not fit the implicit "ship in a template" install contract — an
-operator who did not ask for a personal braindump tool should not get one as a side effect.
+Session-scoped / archival skills are excluded as part of the owned set above — `ai-brain-dump` and
+`ai-understanding` are deliberately not in `OWNED_LIST` for the same reason the source repo's
+deny list kept them out: an operator who did not ask for a personal braindump or session-archiving
+tool does not get one as a side effect of the template install.
 
-The list is hardcoded inside each installer (`DENY_LIST` in `install-skills.sh`,
-`$script:DenyList` in `install-skills.ps1`):
-
-| Skill | Why |
-|---|---|
-| `ai-brain-dump` | Starts a listen-first session that captures in-conversation content. Installing it implicitly on every consumer repo would surprise the operator. Opt-in via manual copy. |
-| `ai-understanding` | Exports session-derived state into per-repo `.context/` folders. It is the consumer's own archival pipeline, not a skill the installer should silently plant alongside the read-only ones. |
-
-The exclusion is enforced **three times**: the source- and disk-side getters skip denied names; the
-manifest reconciliation refuses to add them; and the update step refuses to copy a denied folder even
+The exclusion is enforced **three times**: the source- and disk-side getters skip unowned names; the
+manifest reconciliation intersects against the owned set; and the update step refuses to copy an
+unowned folder even
 if the manifest was hand-edited. The harness covers the third case for every entry on the list.
 
-**3. Update only the `installed: true` skills.** The repo is shallow-cloned once and those folders are
-copied over the existing ones. A skill marked `false` is never touched, so a local edit inside one
-survives every run until you set its flag back.
+**3. Update only the owned skills marked `installed: true`.** The repo is shallow-cloned once and
+those folders are copied over the existing ones. A skill marked `false` is never touched, so a local
+edit inside one survives every run until you set its flag back. A skill outside the owned set is
+never copied even when a hand-edited manifest asks for it.
 
 **4. Refresh `_smooth-devex-shared`** (when the source ships one). That folder is not a skill and never
 appears in the manifest, but any installed skill that calls a shared script is broken without it — so

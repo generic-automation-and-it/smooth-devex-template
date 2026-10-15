@@ -39,12 +39,18 @@ repository, controlled by a per-skill `installed` flag in
 (such as `smooth-ai-product-context-memory`'s `mimisbrunnr-*` set) are not touched, and the shared-folder
 name is deliberately per-repo so a single tree cannot confuse two installers' state files.
 
-A small hardcoded **deny list** (`DENY_LIST` in `install-skills.sh`, `$script:DenyList` in
-`install-skills.ps1`) keeps two skills in this repository — `ai-brain-dump` and `ai-understanding` —
-out of every consumer install. Both are session-scoped or archival: one captures in-conversation
-content, the other exports session-derived state to per-repo `.context/` folders. Shipping either
-implicitly surprises the operator. The exclusion is enforced three times (catalogue, manifest, update
-step) and the harness covers the hand-edited-manifest case for both.
+A small hardcoded **owned set** (`OWNED_LIST` in `install-skills.sh`, `$script:OwnedList` in
+`install-skills.ps1`) scopes the installer to six template-purpose skills: `ai-asset-sync`,
+`ai-template-sync`, `ai-terse`, `create-hld`, `create-worktask`, `manage-rule-system`. Everything
+else in `.agents/skills/` is treated as local and never enters a consumer's manifest, even when a
+hand-edited manifest names it `installed: true` — the update loop refuses unowned names as well as
+the manifest builder. This is the same shape `smooth-ai-product-context-memory` PR #245 introduced;
+the unscoped installer pulled a target repo's local-only skills into its manifest as `installed: true`,
+and the owned-set gate stops that here.
+
+`SKILLS_TEST_OWNED_EXTRA` is a test-only env var the harness sets to extend the owned list with
+synthetic names (`alpha beta gamma delta epsilon`) so the harness can exercise add/drop cases
+without planting real source-owned names. Production installers never set it.
 
 ## Test References
 
