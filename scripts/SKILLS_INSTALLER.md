@@ -139,6 +139,40 @@ An `installed: true` skill is **replaced** on every run, so an edit inside one i
 install. That is the point of an updater, but it is a real hazard: either set the flag to `false` first,
 or move the change somewhere the installer does not own.
 
+A first run into an existing `.agents/skills/` **replaces every local skill folder** with the source's
+version — there is no confirmation prompt. Set `installed: false` in
+`_smooth-devex-shared/installation.json` for anything you want kept, before the first install, or
+back the folder up first.
+
+## Scope
+
+The installer ships only `.agents/skills/`. It does **not** carry:
+
+- `.agents/rules/` (rules referenced by skill `SKILL.md` frontmatter)
+- `.agents/templates/` (referenced by `create-worktask/SKILL.md`)
+- `.agents/hooks/` (referenced by some `setup/scripts/` flows)
+
+A consumer that runs the one-liner into an empty repo gets the skill folders but the cross-tree
+references inside `SKILL.md` files (`Bash(.agents/rules/.../SKILL.md:*)`, etc.) point at paths that
+do not exist. Skills whose `SKILL.md` references `.agents/rules/` or `.agents/templates/` need a
+manual copy of those files alongside the install.
+
+| Skill | Needs (manual copy) |
+|---|---|
+| `create-hld` | `.agents/rules/meta/` rules used by `hld-agents-rules.sh` |
+| `create-worktask` | `.agents/templates/AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md` |
+| `manage-rule-system` | the rules themselves if you want to manage them via this skill |
+| `git-commit-push-pr` | `.agents/templates/PR_*` if used |
+| `context-load-context` / `context-load-agents-context` | `.agents/rules/` for the context files to reference |
+
+## Supported roots
+
+The installer accepts `.agents/skills/`, `.claude/skills/`, or `.codex/skills/` as the skills root
+(see step 1 above). A consumer that picks `.claude/skills/` or `.codex/skills/` as its root must
+create the canonical symlink (`.claude/skills -> .agents/skills` /
+`.codex/skills -> .agents/skills`) for the skill `SKILL.md` files to find their `scripts/` siblings
+at the canonical path the skill `Bash(...)` allowlists expect.
+
 ## Testing
 
 ```bash

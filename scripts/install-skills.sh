@@ -240,14 +240,21 @@ clone_source() {
   # operator that passed the obvious-looking value got a run that died at the clone with the branch name
   # printed in its own error. An empty branch means "whatever the remote's default is", which is what
   # HEAD means everywhere else in this comment.
-  # A bare local path is normalised to file:// so --depth applies. git ignores --depth in a local clone
+  # A relative local path is normalised to file:// so --depth applies. git ignores --depth in a local clone
   # ("use file:// instead"), which is a quiet downgrade — the whole clone is taken instead of one commit —
   # and the clone fails outright when the local repository has no branch of that name, which is exactly the
   # detached-HEAD case this whole branch of the logic exists to handle.
+  #
+  # Only bare *relative* local paths get the prefix. Anything else — an https URL (scheme matches), an
+  # absolute local path (matches `/*`), an scp-style SSH remote (`git@host:owner/repo.git`, neither matches)
+  # — is passed through unchanged. The previous test (`*://* | /*`) matched the SSH case and rewrote it
+  # to `file://$PWD/git@host:owner/repo.git`, which then failed at git's "not a git repository". The new
+  # test re-checks existence so a missing relative path also falls through (the clone will then fail at
+  # the git call with the real reason, not a mangled URL).
   clone_url="$SKILLS_REPO"
   case "$clone_url" in
     *://* | /*) ;;
-    *) clone_url="file://$PWD/$clone_url" ;;
+    *) [ -d "$clone_url" ] && clone_url="file://$PWD/$clone_url" ;;
   esac
 
   if [ -n "$SKILLS_BRANCH" ]; then
@@ -271,28 +278,35 @@ for s in data.get('skills', []):
         print(s['name'])
 ")"
 
-  [ -n "$installed_names" ] || { log "No skills marked installed:true — nothing to update."; return 0; }
+  if [ -z "$installed_names" ]; then
+    # NOT a hard return: the shared-folder refresh below is independent of skill flags, and the
+    # contract says shared helpers must stay current even when no skill is installed:true. Fall
+    # through.
+    log "No skills marked installed:true — nothing to copy for skills."
+  fi
 
   local name
-  while IFS= read -r name; do
-    [ -n "$name" ] || continue
-    # Belt-and-braces: deny list filtering happens in build_installation_json, so a denied skill
-    # never appears in the manifest in the first place. Re-check here in case the caller hand-wrote
-    # the manifest and put a denied name back in with installed:true.
-    local denied=0
-    local d
-    for d in "${DENY_LIST[@]}"; do
-      [ "$name" = "$d" ] && denied=1 && break
-    done
-    [ "$denied" = 1 ] && { log "Skipping denied skill: $name"; continue; }
-    if [ -d "$INSTALL_TMP/repo/.agents/skills/$name" ]; then
-      rm -rf "$skills_root/$name"
-      cp -R "$INSTALL_TMP/repo/.agents/skills/$name" "$skills_root/$name"
-      log "Updated $name"
-    else
-      log "WARNING: $name not found in repo — left on disk untouched"
-    fi
-  done <<< "$installed_names"
+  if [ -n "$installed_names" ]; then
+    while IFS= read -r name; do
+      [ -n "$name" ] || continue
+      # Belt-and-braces: deny list filtering happens in build_installation_json, so a denied skill
+      # never appears in the manifest in the first place. Re-check here in case the caller hand-wrote
+      # the manifest and put a denied name back in with installed:true.
+      local denied=0
+      local d
+      for d in "${DENY_LIST[@]}"; do
+        [ "$name" = "$d" ] && denied=1 && break
+      done
+      [ "$denied" = 1 ] && { log "Skipping denied skill: $name"; continue; }
+      if [ -d "$INSTALL_TMP/repo/.agents/skills/$name" ]; then
+        rm -rf "$skills_root/$name"
+        cp -R "$INSTALL_TMP/repo/.agents/skills/$name" "$skills_root/$name"
+        log "Updated $name"
+      else
+        log "WARNING: $name not found in repo — left on disk untouched"
+      fi
+    done <<< "$installed_names"
+  fi
 
   # The shared folder is not a skill and is never in the manifest, but any installed skill that
   # references it is broken without it — so it refreshes on every run, independently of the flags.

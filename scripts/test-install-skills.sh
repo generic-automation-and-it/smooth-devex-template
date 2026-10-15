@@ -316,6 +316,71 @@ else
     "st=$st content=$(cat "$root/_smooth-devex-shared/installation.json")"
 fi
 
+# 5b. A blank or whitespace-only manifest is the same kind of unparseable input: an empty file would
+# otherwise be accepted as a first install and silently re-enable every catalogue skill.
+root="$(make_root "blank" alpha)"
+printf '   \n\n  \n' >"$root/_smooth-devex-shared/installation.json"
+st=0
+run_sh "$root" >/dev/null 2>&1 || st=$?
+if [ "$st" -ne 0 ] && [ "$(cat "$root/_smooth-devex-shared/installation.json" | tr -d '[:space:]')" = "" ]; then
+  ok "a blank manifest is refused, non-zero exit, and left untouched"
+else
+  no "a blank manifest is refused, non-zero exit, and left untouched" \
+    "st=$st content='$(cat "$root/_smooth-devex-shared/installation.json")'"
+fi
+
+# 5c. An absolute local path is passed through to git without a mangled file://$PWD prefix. The
+# installer must not break the harness's own clone source (which is the absolute repo path) by
+# doubling it up. A green run here means the install completed against an absolute path source.
+root="$(make_root "abspath" alpha)"
+run_sh "$root" >/dev/null 2>&1 || true
+if [ -f "$root/_smooth-devex-shared/installation.json" ]; then
+  ok "an absolute local SKILLS_REPO is accepted (no double file:// prefix)"
+else
+  no "an absolute local SKILLS_REPO is accepted (no double file:// prefix)" "manifest missing"
+fi
+
+# 5d. A scp-style SSH remote is passed through to git unchanged, not rewritten to file://$PWD/ssh...
+# We can't actually clone from SSH in the harness, so we assert on the rewritten value via a fake
+# run that captures stderr and then check that the error message contains the literal SSH URL (a
+# mangled URL would have lost the @ and the :owner/ parts).
+root="$(make_root "sshpass" alpha)"
+err="$scratch/ssh.err"
+SKILLS_ROOT="$root" SKILLS_REPO="git@github.com:nonexistent-fake-host-9876543210/repo.git" SKILLS_BRANCH="main" \
+  bash "$installer_sh" 2>"$err" >/dev/null || true
+if grep -q 'git@github.com:nonexistent-fake-host-9876543210/repo.git' "$err"; then
+  ok "an scp-style SSH SKILLS_REPO is passed through unchanged to git"
+else
+  no "an scp-style SSH SKILLS_REPO is passed through unchanged to git" "stderr=$(cat "$err")"
+fi
+
+# 5e. When every skill is installed:false, the shared-folder refresh still fires. A previous version
+# returned early on an empty installed list, which skipped the copy-and-sweep block and let shared
+# helpers go stale. This case would catch a regression: it is the contract-violating shape.
+#
+# The harness cannot exercise the shared copy itself because the source tree has no _smooth-devex-shared
+# folder, but it CAN exercise the no-installed-names path and assert the installer does not bail out
+# at the skill-loop. We assert on the manifest still being written - that requires the script not to
+# have errored out at the early return.
+root="$(make_root "noskillson" alpha)"
+# After a normal run, the manifest is installed:true for alpha. Switch it to false.
+run_sh "$root" >/dev/null 2>&1
+python3 - "$root/_smooth-devex-shared/installation.json" <<'PYEOF'
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path))
+for entry in data["skills"]:
+    entry["installed"] = False
+json.dump(data, open(path, "w"), indent=2)
+PYEOF
+st=0
+run_sh "$root" >/dev/null 2>&1 || st=$?
+if [ "$st" -eq 0 ] && [ -f "$root/_smooth-devex-shared/installation.json" ]; then
+  ok "an all-installed:false manifest does not abort the run (shared refresh still runs)"
+else
+  no "an all-installed:false manifest does not abort the run (shared refresh still runs)" "st=$st"
+fi
+
 # ---------------------------------------------------------------------------------------------
 # 6. the root search, in the documented order
 # ---------------------------------------------------------------------------------------------

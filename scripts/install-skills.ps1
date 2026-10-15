@@ -103,10 +103,18 @@ function Read-InstallationJson {
     # treating it as absent would rebuild the manifest with every skill enabled, silently re-adding
     # skills the operator had switched off - and it would do that on a file nobody could parse, which
     # is exactly the file that needs a human.
+    #
+    # ConvertFrom-Json on blank/whitespace input returns $null without throwing - the same trap as a
+    # missing file. A blank manifest would otherwise be accepted as a first install and every catalogue
+    # skill would silently default to installed:true, overwriting local folders.
     param([string] $Path)
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    $raw = Get-Content -LiteralPath $Path -Raw
+    if ([string]::IsNullOrWhiteSpace($raw)) {
+        Fail "$Path is empty or whitespace-only; fix or delete it - not treating it as a first install"
+    }
     try {
-        return (Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json)
+        return ($raw | ConvertFrom-Json)
     }
     catch {
         Fail "$Path is not valid JSON ($($_.Exception.Message)); fix or delete it - not treating it as a first install"
@@ -223,12 +231,20 @@ function Invoke-SourceClone {
     # - exactly what actions/checkout produces - and `git clone --branch HEAD` is not valid, because HEAD is
     # not a branch or tag name.
     #
-    # A bare local path is normalised to file:// so --depth applies. git ignores --depth in a local clone
-    # ("use file:// instead"), which is a quiet downgrade: the entire clone is taken instead of one commit,
-    # and the clone fails outright when the local repository has no branch of that name - the detached-HEAD
-    # case again, reported by git as "Remote branch main not found", naming neither the cause nor the path.
+    # A relative local directory is normalised to file:// so --depth applies. git ignores --depth in a
+    # local clone ("use file:// instead"), which is a quiet downgrade: the entire clone is taken instead
+    # of one commit, and the clone fails outright when the local repository has no branch of that name -
+    # the detached-HEAD case again, reported by git as "Remote branch main not found", naming neither the
+    # cause nor the path.
+    #
+    # Only bare *relative* local paths get the prefix. Anything else - an https URL (scheme matches), an
+    # absolute local path (matches `StartsWith('/')`), an scp-style SSH remote (`git@host:owner/repo.git`,
+    # neither matches) - is passed through unchanged. The previous test (`-notmatch '://' -and -not
+    # .StartsWith('/')`) matched the SSH case and rewrote it to `file:///$SSH_REMOTE`, which then failed
+    # at git's "not a git repository". The new test re-checks existence so a missing relative path also
+    # falls through (the clone will then fail at the git call with the real reason, not a mangled URL).
     $cloneUrl = $Repo -replace '\\', '/'
-    if ($cloneUrl -notmatch '^[a-zA-Z][a-zA-Z0-9+.-]*://' -and -not $cloneUrl.StartsWith('/')) {
+    if (-not ($cloneUrl -match '^[a-zA-Z][a-zA-Z0-9+.-]*://') -and -not $cloneUrl.StartsWith('/') -and (Test-Path -LiteralPath $cloneUrl -PathType Container)) {
         $cloneUrl = "file:///$cloneUrl"
     }
     if ($Branch) {
@@ -254,8 +270,10 @@ function Update-InstalledSkills {
     }
 
     if ($installedNames.Count -eq 0) {
-        Write-Info 'No skills marked installed:true - nothing to update.'
-        return
+        # NOT a hard return: the shared-folder refresh below is independent of skill flags, and the
+        # contract says shared helpers must stay current even when no skill is installed:true. Fall
+        # through.
+        Write-Info 'No skills marked installed:true - nothing to copy for skills.'
     }
 
     $repoSkills = Join-Path $script:TempRepo '.agents/skills'

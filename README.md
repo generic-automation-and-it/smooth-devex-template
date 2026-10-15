@@ -152,8 +152,8 @@ tests/
 
 To pull just the **agent skills** (`.agents/skills/`) from this template into an existing repository,
 without copying the rest of the template, run the one-command installer. The installer is per-skill
-opt-in, keeps an editable manifest, and never touches the calling repo's `src/`, `tests/`, or
-`.github/` directories.
+**opt-out** — new catalogue entries default to `installed:true` — and keeps an editable manifest. It
+never touches the calling repo's `src/`, `tests/`, or `.github/` directories.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash
@@ -163,10 +163,35 @@ curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-de
 irm https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.ps1 | iex
 ```
 
+> **Risk callout.** A first run into an existing `.agents/skills/` **replaces every local skill folder**
+> with the source's version — there is no confirmation prompt. Set `installed: false` in
+> `_smooth-devex-shared/installation.json` for anything you want kept, before the first install, or
+> back the folder up first.
+
 State lives in `<your-repo>/.agents/skills/_smooth-devex-shared/installation.json` (UTC stamp plus a
 `name` / `installed` pair per skill). Flip a skill off by setting its `installed` flag to `false`; the
 installer will leave it on disk but stop overwriting it on every run. Full contract and operator
 documentation: [`scripts/SKILLS_INSTALLER.md`](scripts/SKILLS_INSTALLER.md).
+
+### Scope
+
+The installer ships only `.agents/skills/`. It does **not** carry:
+
+- `.agents/rules/` (rules referenced by skill `SKILL.md` frontmatter)
+- `.agents/templates/` (referenced by `create-worktask/SKILL.md`)
+- `.agents/hooks/` (referenced by some `setup/scripts/` flows)
+
+A consumer that runs the one-liner into an empty repo gets the skill folders but the cross-tree
+references inside `SKILL.md` files (`Bash(.agents/rules/.../SKILL.md:*)`, etc.) point at paths that
+do not exist. Skills that need rules or templates need a manual copy of those files alongside the
+install. See `scripts/SKILLS_INSTALLER.md` for the per-skill dependency list.
+
+### Supported roots
+
+The installer accepts `.agents/skills/`, `.claude/skills/`, or `.codex/skills/` as the skills root.
+A consumer that picks `.claude/skills/` or `.codex/skills/` as its root must create the canonical
+symlink (`.claude/skills -> .agents/skills` / `.codex/skills -> .agents/skills`) for the skill
+`SKILL.md` files to find their `scripts/` siblings at the canonical path.
 
 The installer owns only this template's skills. Skills from other repositories (for example
 `smooth-ai-product-context-memory`'s `mimisbrunnr-*` set) are not installed here — install them with
