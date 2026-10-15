@@ -715,6 +715,15 @@ if [ -n "$UNSTAGED" ]; then
   log "$UNSTAGED"
 fi
 
+# A clean git status does not see ignored files; the asset replacement would erase
+# them anyway because `rm -rf` operates on the whole tree. Surface ignored entries
+# anywhere in the repo so a destructive sync is never silent.
+IGNORED="$(git ls-files -o -i --exclude-standard 2>/dev/null || true)"
+if [ -n "$IGNORED" ]; then
+  log "warn: ignored files would be deleted by an overwrite sync:"
+  log "$IGNORED"
+fi
+
 if git diff --cached --quiet; then
   log "nothing staged after add — no PR"
   exit 0

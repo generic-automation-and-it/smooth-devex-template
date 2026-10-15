@@ -49,6 +49,13 @@ elseif (-not $Template) {
   $Template = (git rev-parse --show-toplevel 2>$null)
   if (-not $Template) { $Template = (Get-Location).Path }
 }
+# Cleanup the cloned template on any exit path: a throw in the validation below (or
+# anywhere downstream) must not leave a temp checkout on disk. Try/finally was
+# the original intent; the throw before the original `try` block bypassed it.
+if ($CloneDir -and (Test-Path $CloneDir.FullName)) {
+  Remove-Item $CloneDir.FullName -Recurse -Force -ErrorAction SilentlyContinue
+  $CloneDir = $null
+}
 if (-not (Test-Path (Join-Path $Template ".agents"))) {
   throw "template does not look like the scaffold (no .agents/): $Template"
 }
