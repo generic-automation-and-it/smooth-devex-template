@@ -14,3 +14,4 @@
 | Date | Change | Ref |
 |:-----|:-------|:----|
 | 2026-06-12 | Initial version. | |
+| 2026-10-15 | Mode 2: analyse commit intent on both sides (`git log`/`git show`) before resolving | — |

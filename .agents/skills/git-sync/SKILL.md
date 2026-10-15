@@ -65,6 +65,11 @@ Please resolve conflicts and commit the merge.
    ```
 2. If it prints `MERGE_OK` — skip resolution; report the commit list; done.
 3. If it prints `MERGE_CONFLICTS` — for each conflicting file:
+   - Analyse the intent of both sides before resolving. The markers only show divergence;
+     read the commits that produced it. `git log HEAD..origin/main -- <file>` lists commits coming
+     FROM main, `git log origin/main..HEAD -- <file>` lists commits from our branch, and
+     `git show <sha>` reveals a specific commit's message and diff — use these to understand WHY
+     each side changed the code, then resolve to the shared intent.
    - Read it and understand both sides
    - Resolve by keeping the intent of both branches
    - Prefer our branch's structure/style while incorporating new content from main
@@ -86,6 +91,11 @@ Please resolve conflicts and commit the merge.
 
 When resolving conflicts, use this priority order:
 
+0. **Understand the intent of both sides first.** The conflict markers show *what* diverged, not
+   *why*. Read the conflicting commits on both sides — `git log HEAD..origin/main -- <file>` for
+   commits coming FROM main, `git log origin/main..HEAD -- <file>` for commits from our branch, and
+   `git show <sha>` for the message/diff of each — and resolve to each side's intent, not the
+   literal text.
 1. **Keep code logic from our branch** (the feature/fix you're working on)
 2. **Incorporate structure changes from main** (refactoring, reorganization)
 3. **Merge both sections** when both are valuable (e.g., different features modifying the same file)
