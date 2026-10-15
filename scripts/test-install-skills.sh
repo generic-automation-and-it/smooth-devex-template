@@ -10,10 +10,14 @@
 # it resolves, and every case forces that root with SKILLS_ROOT, so a red run cannot touch the checkout's
 # own .agents/skills.
 #
-# The PowerShell port (`install-skills.ps1`) is **not exercised here.** It is a hand-translated mirror
-# of the bash port - same contract, same control flow - and its defects are the ones a careful read
-# catches. A two-port harness doubles the maintenance surface for a contract that exists to be read,
-# not to be redundantly proven on platforms the gate does not run.
+# Cross-port parity: the bash OWNED_LIST and the ps1 $script:OwnedList must agree byte-for-byte.
+# The harness does a static grep+diff comparison so a divergent PowerShell declaration fails the
+# bash-only gate before the ps1 port is run locally.
+#
+# The PowerShell port (`install-skills.ps1`) is **not exercised at runtime** by this harness. It is a
+# hand-translated mirror of the bash port - same contract, same control flow - and its defects are the
+# ones a careful read catches. A two-port harness doubles the maintenance surface for a contract that
+# exists to be read, not to be redundantly proven on platforms the gate does not run.
 #
 # Repo-specific notes (smooth-devex-template, where this lives):
 #   - The shared folder is `_smooth-devex-shared` (per-repo, never `_mimisbrunnr-shared`).
@@ -23,9 +27,9 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 installer_sh="$repo_root/scripts/install-skills.sh"
-# installer_ps1 is referenced in the README and gate documentation as the Windows port; existence is
-# part of the contract. The harness does not exercise it.
-[ -f "$repo_root/scripts/install-skills.ps1" ] || { echo "FAIL: scripts/install-skills.ps1 missing" >&2; exit 1; }
+installer_ps1="$repo_root/scripts/install-skills.ps1"
+[ -f "$installer_ps1" ] || { echo "FAIL: scripts/install-skills.ps1 missing" >&2; exit 1; }
+
 source_repo="$repo_root"
 # Empty unless HEAD really is a branch. `git rev-parse --abbrev-ref HEAD` answers the literal string
 # "HEAD" in a detached checkout - which is what actions/checkout produces - and that is not a valid
@@ -50,6 +54,31 @@ no() {
   [ -n "${2:-}" ] && echo "       $2"
   return 0
 }
+
+# Static parity check: bash OWNED_LIST vs ps1 $script:OwnedList. The two must agree byte-for-byte
+# (after sorting), or a divergent PowerShell declaration would pass this harness while shipping the
+# wrong owned set. This is the only PowerShell-facing check on the bash-only gate; it is fast and
+# needs no pwsh.
+#
+# Extract each port's owned set by anchoring on the OWNED_LIST declaration in bash and the literal
+# block immediately under `$script:OwnedList = @(` in ps1. A loose grep would pick up function names
+# and format strings elsewhere in the ps1 file.
+bash_owned="$(awk '/^OWNED_LIST=\($/,/^\)$/' "$installer_sh" \
+  | grep -oE "^[[:space:]]+'?[a-z][a-z0-9-]+'?[[:space:]]*\$" \
+  | grep -oE "'?[a-z][a-z0-9-]+'?" | tr -d "'" | sort -u)"
+ps1_owned="$(awk '/\$script:OwnedList = @\($/,/^\)$/' "$installer_ps1" \
+  | sed 's/^[[:space:]]*//' \
+  | grep -oE "^'[a-z][a-z0-9-]+'" \
+  | tr -d "'" | sort -u)"
+if [ "$bash_owned" = "$ps1_owned" ] && [ -n "$bash_owned" ]; then
+  joined="$(printf '%s\n' "$bash_owned" | paste -sd ',' -)"
+  ok "cross-port: bash OWNED_LIST and ps1 \$script:OwnedList agree ($joined)"
+else
+  bash_joined="$(printf '%s\n' "$bash_owned" | paste -sd ',' -)"
+  ps1_joined="$(printf '%s\n' "$ps1_owned" | paste -sd ',' -)"
+  no "cross-port: bash OWNED_LIST and ps1 \$script:OwnedList agree" \
+    "bash='$bash_joined' ps1='$ps1_joined'"
+fi
 
 # A fresh scratch skills root carrying $2 named skills, one SKILL.md each. Echoes the root.
 make_root() {
@@ -328,9 +357,10 @@ case " $(manifest_names "$root") " in
   *) ok "an unowned source skill on disk is not listed in the manifest" ;;
 esac
 
-# 4c. A hand-edited manifest naming an unowned skill installed:true is refused at the update step.
-# The catalogue already excluded it; the update-loop guard is defence-in-depth so a hand edit
-# cannot smuggle a foreign skill onto disk.
+# 4c. A hand-edited manifest naming an unowned skill installed:true is refused at the reconcile step.
+# The catalogue (built from owned source ∪ owned disk) drops the unowned entry before update runs, so
+# the next run never tries to copy it. This pins the reconciliation-side defence. Case 4d is the
+# separate update-loop guard check.
 root="$(make_root "update-unowned-edit" alpha)"
 run_sh "$root" >/dev/null 2>&1
 python3 - "$root/_smooth-devex-shared/installation.json" <<'PYEOF'
@@ -342,9 +372,47 @@ json.dump(data, open(path, "w"), indent=2)
 PYEOF
 run_sh "$root" >/dev/null 2>&1
 if [ ! -d "$root/agile-github-breakdown" ]; then
-  ok "hand-edited manifest cannot install an unowned skill (update-loop guard)"
+  ok "reconcile: a hand-edited manifest's unowned entry is dropped, not copied"
 else
-  no "hand-edited manifest cannot install an unowned skill" "agile-github-breakdown/ landed"
+  no "reconcile: a hand-edited manifest's unowned entry is dropped, not copied" "agile-github-breakdown/ landed"
+fi
+
+# 4d. Direct update-loop guard check. The normal entry point rebuilds the manifest before updating,
+# so the reconcile step alone catches a hand-edited unowned entry (case 4c above). The update loop's
+# own guard is defence-in-depth: if the rebuild is skipped, the updater must still refuse to copy
+# unowned names. SKILLS_TEST_SKIP_RECONCILE=1 takes the direct path: no rebuild, no clone, run only
+# the update step against the existing manifest.
+#
+# The test plants operator-local content on disk AND plants different (source-like) content in
+# INSTALL_TMP, so removing the guard makes the test fail (source content overwrites operator). With
+# the guard, operator content survives intact.
+#
+# This case fails when the update-loop guard is deleted - the assertion is the regression test.
+root="$(make_root "update-guard" alpha)"
+mkdir -p "$root/agile-github-breakdown"
+printf 'operator-local content\n' >"$root/agile-github-breakdown/SKILL.md"
+run_sh "$root" >/dev/null 2>&1
+python3 - "$root/_smooth-devex-shared/installation.json" <<'PYEOF'
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path))
+data["skills"].append({"name": "agile-github-breakdown", "installed": True})
+json.dump(data, open(path, "w"), indent=2)
+PYEOF
+# Set up the synthetic source with DIFFERENT content for the unowned skill.
+INSTALL_TMP="$(mktemp -d)"
+mkdir -p "$INSTALL_TMP/repo/.agents/skills"
+mkdir -p "$INSTALL_TMP/repo/.agents/skills/agile-github-breakdown"
+printf 'upstream-source content\n' >"$INSTALL_TMP/repo/.agents/skills/agile-github-breakdown/SKILL.md"
+SKILLS_ROOT="$root" SKILLS_TEST_OWNED_EXTRA="alpha beta gamma delta epsilon" \
+  SKILLS_TEST_SKIP_RECONCILE=1 INSTALL_TMP="$INSTALL_TMP" \
+  bash "$installer_sh" >/dev/null 2>&1 || true
+rm -rf "$INSTALL_TMP"
+if [ "$(cat "$root/agile-github-breakdown/SKILL.md")" = "operator-local content" ]; then
+  ok "update-guard: a hand-edited unowned entry is refused by the updater loop (operator content preserved)"
+else
+  no "update-guard: a hand-edited unowned entry is refused by the updater loop" \
+    "SKILL.md content is now: $(cat "$root/agile-github-breakdown/SKILL.md")"
 fi
 
 # ---------------------------------------------------------------------------------------------

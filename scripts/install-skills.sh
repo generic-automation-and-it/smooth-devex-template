@@ -398,4 +398,32 @@ print(json.dumps(sorted(line.strip() for line in sys.stdin if line.strip())))
   log "Done. State: $json_path"
 }
 
-main "$@"
+# Test-only entry point. SKILLS_TEST_SKIP_RECONCILE=1 lets the harness exercise the update-loop guard
+# directly with a hand-crafted manifest: it skips the manifest rebuild AND the clone step. The
+# harness is responsible for setting INSTALL_TMP/repo/.agents/skills/ with whatever source it wants
+# the test to see; the installer does NOT mirror from disk (mirroring would defeat the test by
+# making disk and source identical for the unowned skill). Production installers never set this.
+#
+# The flag is needed because the reconcile step drops any unowned entries from the manifest BEFORE
+# update runs, so a hand-edited manifest cannot reach the guard through the normal entry point. The
+# direct path proves the guard is what catches the entry, not the reconcile.
+main_skip_reconcile() {
+  local skills_root="$SKILLS_ROOT"
+  [ -d "$skills_root" ] || die "SKILLS_ROOT '$skills_root' does not exist (required for uninstall)"
+  json_path="$skills_root/_smooth-devex-shared/installation.json"
+  existing_json="$(json_read "$json_path")" \
+    || die "cannot read $json_path — fix or delete it, then re-run"
+  # The test sets INSTALL_TMP externally so disk and source can differ; verify it exists.
+  [ -n "${INSTALL_TMP:-}" ] || die "INSTALL_TMP must be set externally for skip-reconcile mode"
+  [ -d "$INSTALL_TMP/repo/.agents/skills" ] || die "INSTALL_TMP/repo/.agents/skills must exist externally"
+  trap 'rm -rf "${INSTALL_TMP:-}"' EXIT INT TERM HUP
+  log "Updating installed skills (skip-reconcile mode)…"
+  update_installed_skills "$existing_json" "$skills_root"
+  log "Done. State (untouched): $json_path"
+}
+
+if [ "${SKILLS_TEST_SKIP_RECONCILE:-}" = "1" ]; then
+  main_skip_reconcile
+else
+  main "$@"
+fi
