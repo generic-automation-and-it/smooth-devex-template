@@ -27,6 +27,7 @@ This is a unified AI development experience folder that centralizes skills, prom
 | `.agents/rules/` | Enforced AI development rules (workflow rules, coding standards) |
 | `.agents/settings.json` | Claude Code config — tool permissions, compile/test commands, hook registrations; Claude hooks must be registered here or they silently never fire (#32) |
 | `.agents/config.toml` | OpenAI Codex config (read via the `.codex` symlink) — approval/sandbox policy, root-doc fallback, web search; Codex has no per-command ACLs |
+| `.agents/opencode.json` | OpenCode v2 project config (read via root `opencode.json` symlink) — `instructions` globs load every `.github/instructions/**` rule (OpenCode ignores `applyTo`, so all rules apply every session), `permissions` (ordered, **last match wins**), deny list in `experimental.policies` as `action: "permission"` + `shell:<cmd>` (`tool.use` is documented but not implemented). Mirror `settings.json` permission edits here. **Unverified delivery:** on 2.0.29 `opencode run --standalone` still ignores `instructions` (relative and absolute entries; `AGENTS.md` control loads) — do not assume rules reach OpenCode until a token probe passes |
 | `.agents/hooks.json` | Codex hook registrations (read via `.codex/hooks.json`); project and hook trust are required before they run |
 | `.agents/skills/` | Executable skills (multi-file workflows) — flat dirs, category-prefixed folder names |
 | `.agents/skills/agile-github-breakdown/` | Turn a braindump or existing Feature into GitHub Feature + Task issues |
@@ -47,7 +48,7 @@ This is a unified AI development experience folder that centralizes skills, prom
 | `.claude` → `.agents` | Symbolic link for Claude Code compatibility |
 | `.codex` → `.agents` | Symbolic link for OpenAI Codex compatibility |
 | `.cursor` → `.agents` | Symbolic link for Cursor AI compatibility |
-| `CLAUDE.md` → `AGENTS.md` | Symbolic link alias for Claude-compatible root context discovery |
+| `opencode.json` → `.agents/opencode.json` | Symbolic link for OpenCode; not `.opencode` → `.agents`, which would also load `.agents/{agents,commands,skills,plugins}`. Sibling `opencode.jsonc` from `code-review-graph install --platform opencode` is gitignored and merges in |
 | `GEMINI.md` → `AGENTS.md` | Symbolic link alias for Gemini-compatible root context discovery |
 | `.github/instructions` → `../.agents/rules` | Symbolic link exposing rule files at `.github/instructions/**.instructions.md` for GitHub Copilot path-specific instructions |
 
@@ -55,10 +56,11 @@ This is a unified AI development experience folder that centralizes skills, prom
 
 | Tool | Access Method | Status |
 | :---- | :---- | :---- |
-| **Claude Code** | Via `.claude` symlink | ✅ Active |
+| **Claude Code** | Via `.claude` symlink; root `AGENTS.md` read natively (no `CLAUDE.md`) | ✅ Active |
 | **GitHub Copilot** | Reads `.github/instructions/` directly — a **real directory** (path-specific `*.instructions.md`); root `AGENTS.md` for repo-wide context | ✅ Active |
 | **Cursor AI** | Via `.cursor` symlink | ✅ Active |
 | **OpenAI Codex** | Via `.codex` symlink | ✅ Active |
+| **OpenCode (v2)** | Via root `opencode.json` symlink | ✅ Active |
 | **Gemini** | Via `GEMINI.md` symlink | ✅ Compatible |
 | **Aider** | Direct `.agents` access (CLI) | ✅ Compatible |
 
@@ -115,15 +117,16 @@ This is a unified AI development experience folder that centralizes skills, prom
 
 ## 📊 Setup Instructions
 
-**The rule files physically live in `.github/instructions/` (a real, committed directory). Symlinks (`.claude`, `.codex`, `.cursor`, `CLAUDE.md`, `GEMINI.md`, and `.agents/rules → ../.github/instructions`) are committed to git and available immediately after clone. GitHub Copilot reads path-specific rules natively from `.github/instructions/**.instructions.md` (no symlink resolution required) and repo-wide context from root `AGENTS.md`, so no setup script is required.**
+**The rule files physically live in `.github/instructions/` (a real, committed directory). Symlinks (`.claude`, `.codex`, `.cursor`, `opencode.json`, `GEMINI.md`, and `.agents/rules → ../.github/instructions`) are committed to git and available immediately after clone. GitHub Copilot reads path-specific rules natively from `.github/instructions/**.instructions.md` (no symlink resolution required) and repo-wide context from root `AGENTS.md`, so no setup script is required.**
 
 ```bash
 # Verify links are present after clone
-ls -la | grep -E '(\.claude|\.codex|\.cursor)'
+ls -la | grep -E '(\.claude|\.codex|\.cursor|opencode\.json)'
 # Expected output:
 # lrwxr-xr-x ... .claude -> .agents
 # lrwxr-xr-x ... .codex -> .agents
 # lrwxr-xr-x ... .cursor -> .agents
+# lrwxr-xr-x ... opencode.json -> .agents/opencode.json
 ```
 
 **Optional: Run setup script to recreate symlink aliases if needed:**
@@ -145,3 +148,5 @@ ls -la | grep -E '(\.claude|\.codex|\.cursor)'
 | 2026-09-20 | Replaced the `worktask-create.sh` UserPromptSubmit hook with the `create-worktask` skill; hook deleted and its `settings.json` registration removed. At the time, the repo's Codex config documented no hook support. | |
 | 2026-09-27 | Added a shared, context-only `UserPromptSubmit` router for imperative worktask requests in Claude Code `settings.json` and Codex `hooks.json`. The skill remains directly invocable and owns the worktask workflow; Codex project and hook trust are required. | |
 | 2026-10-07 | `agentmd-create-update.sh`, `knowledge-rule-enforce.sh` print the AGENTS.md quality rule; no embedded copy. "create agents.md" (no article) now triggers | |
+| 2026-10-15 | OpenCode v2 config `.agents/opencode.json` via root `opencode.json` symlink: `instructions` (all rules), permissions, `experimental.policies` deny list — ported from smooth-ai-product-context-memory#236; root `opencode.jsonc` gitignored | — |
+| 2026-10-15 | Root `CLAUDE.md` symlink removed — Claude Code reads `AGENTS.md` natively; setup and `ai-template-sync` no longer create it | — |

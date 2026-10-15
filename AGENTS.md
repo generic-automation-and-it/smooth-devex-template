@@ -41,7 +41,7 @@ Planned work is tracked as worktasks under `.context/work-tasks/` (gitignored, l
 
 ## Rules
 
-All rules live under `.agents/rules/` and auto-load every session; per-file applicability is scoped via frontmatter. Categories: flat (cross-cutting), `git/`, `meta/`, `skills/`, `backend/` (`**/*.cs`). Exception: Claude defers prompt-scoped rules via `UserPromptSubmit` hook — see `.agents/rules/meta/rules.instructions.md`.
+Read [`.github/instructions/AGENTS.md`](.github/instructions/AGENTS.md) — rule index and when each applies.
 
 ## Build / Test Commands
 
