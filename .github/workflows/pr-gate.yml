@@ -8,6 +8,7 @@ on:
       - Directory.Packages.props
       - src/**
       - tests/**
+      - scripts/**
       - .github/actions/**
       - .github/workflows/pr-gate.yml
   pull_request:
@@ -17,6 +18,7 @@ on:
       - Directory.Packages.props
       - src/**
       - tests/**
+      - scripts/**
       - .github/actions/**
       - .github/workflows/pr-gate.yml
   workflow_dispatch:
@@ -40,6 +42,9 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Test skills installer
+        run: bash scripts/test-install-skills.sh
 
       - name: Restore
         run: dotnet restore
