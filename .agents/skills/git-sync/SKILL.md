@@ -32,8 +32,7 @@ failure such as a dirty tree, missing ref, or failing hook (exit 2). The merge
 3. If it prints `MERGE_CONFLICTS` — list the conflicting files and **STOP**. Do NOT auto-resolve;
    the user handles them manually (the files are left *unmerged* in the working tree, with conflict
    markers — they must be resolved and staged before the merge can be committed).
-4. If it prints `MERGE_ERROR` — the merge failed for a non-conflict reason (dirty tree, missing ref,
-   failing hook). Report the script output and **STOP**; do not treat it as a conflict.
+4. If it prints `MERGE_ERROR` — follow [On MERGE_ERROR](#on-merge_error-dirty-tree-commit-then-retry).
 
 **Usage:**
 ```
@@ -76,8 +75,8 @@ Please resolve conflicts and commit the merge.
    - Stage the resolved files
    - Commit the merge resolution with message: `Merge main into <current-branch>`
    - Run `git log --oneline -5` to show the result
-4. If it prints `MERGE_ERROR` — a non-conflict failure (dirty tree, missing ref, failing hook).
-   Do NOT attempt resolution; report the script output and **STOP**.
+4. If it prints `MERGE_ERROR` — follow [On MERGE_ERROR](#on-merge_error-dirty-tree-commit-then-retry).
+   Only a repeated MERGE_ERROR after the retry ends the run here.
 
 **Usage:**
 ```
@@ -105,6 +104,18 @@ When resolving conflicts, use this priority order:
 
 - No arguments (default): Safe sync mode (stop on conflicts)
 - `--fix` or `--auto-resolve`: Auto-resolve conflicts mode
+
+## On MERGE_ERROR (dirty tree): commit, then retry
+
+A dirty tree is a precondition, not a verdict — commit it and try the merge again:
+
+1. If the script output shows uncommitted changes blocking the merge, invoke the **git-commit**
+   skill as a sub-agent at its frontmatter `effort` (`low`), on the session's model (invocation
+   pattern: `.agents/skills/README.md` → Sub-skill invocation). If `--autonomous` was passed,
+   forward it; otherwise git-commit asks when grouping is unclear.
+2. Re-run `scripts/safe-sync.sh` and handle the new result from the top of the mode's workflow.
+3. If MERGE_ERROR returns for a non-dirty reason (missing ref, failing hook) — or returns at all
+   a second time — report the script output and **STOP**. One retry only; never loop.
 
 ## When to Use Each Mode
 
