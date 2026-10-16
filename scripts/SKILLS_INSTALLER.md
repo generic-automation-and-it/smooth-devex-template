@@ -6,7 +6,7 @@ Codex and Copilot discover.
 | Script | Platform | Interpreter |
 |---|---|---|
 | [`install-skills.sh`](install-skills.sh) | macOS, Linux | bash, `git`, `python3` |
-| [`install-skills.ps1`](install-skills.ps1) | Windows, or anywhere `pwsh` 7 runs | PowerShell 7.0 or later, `git` |
+| [`install-skills.ps1`](install-skills.ps1) | Windows, or anywhere `pwsh` 7.2+ runs | PowerShell 7.2 or later (symlink resolution needs .NET 6), `git` |
 
 The bash script needs `python3` only to read and write the manifest JSON; most skills shipped here use
 Python or Node tooling, so it is rarely a fresh dependency. The PowerShell port has no such dependency —
@@ -42,8 +42,10 @@ Both take the same three environment overrides, so a local clone or a fork works
 **1. Find the agent root, in this order.** `.agents` → `.claude` → `.codex`. The
 first that exists is used. If none exists the run **fails and creates nothing** — a folder the operator
 never asked for is not an install. The skills root is `<agent-root>/skills` (override with `SKILLS_ROOT`,
-whose parent directory then counts as the agent root). If the agent root has no `skills/` directory
-the run fails the same way.
+whose parent directory then counts as the agent root). Once an agent root is found, the installer
+creates any missing category folder it needs — `<agent-root>/skills/`, `<agent-root>/hooks/`,
+`<agent-root>/rules/` — for the categories that run; a rules-only or hooks-only run creates no
+`skills/`.
 
 In this repository `.claude` and `.codex` are symlinks to `.agents`, so all paths resolve to the
 same tree and the first match is the real one.
@@ -80,6 +82,10 @@ with another one's state file.
 | not owned (on disk, in the source, or hand-written into the manifest) | **never** listed, **never** copied, even if the manifest is hand-edited |
 | manifest will not parse | **run fails**, file left untouched |
 | no manifest at all | created from the owned catalogue, every entry `installed: true` |
+
+**Tests never ship.** Test folders (`test/`, `tests/`, `__tests__/`) and test files (`test_*`,
+`*_test.*`, `*.test.*`, `*.Tests.ps1`) are pruned from every copied skill and from the shared payload:
+they exercise the template, not the consumer.
 
 ## Owned set
 
@@ -123,7 +129,10 @@ never copied even when a hand-edited manifest asks for it. Skipped entirely unle
 switches).
 
 **4. Update the owned rules (`-r`).** The four `OWNED_RULES` files copy from the source's
-`.github/instructions/` into `<repo>/.github/instructions/`, preserving relative paths:
+`.github/instructions/` into `<agent-root>/rules/`, preserving relative paths. When `rules` is the
+operator's own symlink (e.g. `rules → ../.github/instructions`, so Copilot reads the same files),
+the files are written through it — a dangling link gets its target created. Otherwise `rules/` is a
+real folder:
 
 | Owned rule | Why |
 |---|---|
@@ -135,14 +144,12 @@ switches).
 The template's own `AGENTS.md` index is **never copied** — it catalogues rules that don't ship
 (dangling refs on a fresh install) and would clobber an existing consumer index. Instead the run
 writes a generated subset index: missing index → created; installer-generated index → refreshed;
-an existing operator index → the subset section is appended once, never rewritten. Overwrite,
-never delete — an operator's own rules are never swept. Skipped entirely unless `-r` (or no
-switches).
+an existing operator index → the subset section is appended once, never rewritten.
 
 Overwrite, never delete — an operator's own rules are never swept. Everything else in
 `.github/instructions/` (backend/\*, skills/\*, clean-code, solid-principles, …) stays local.
-The run also ensures the `<agent-root>/rules → ../.github/instructions` topology symlink when
-nothing is there; a real directory is never replaced. Skipped entirely unless `-r` (or no switches).
+The installer never creates the `rules → ../.github/instructions` link itself — that topology is the
+operator's choice. Skipped entirely unless `-r` (or no switches).
 
 **5. Update the owned hooks (`-h`).** The two `OWNED_HOOKS` files copy from the source's
 `.agents/hooks/` into `<agent-root>/hooks/`, kept executable (exec bit preserved per owned file,
@@ -165,6 +172,15 @@ Every top-level payload entry is then linked back to its canonical `<agent-root>
 (e.g. `<agent-root>/setup` → `_smooth-devex-shared/setup`), so the `.agents/setup/...` references
 in `SKILL.md` files keep working. An existing real file or directory at a link path is never
 replaced — the run reports it and moves on.
+
+**WET copies.** Template skills, rules and hooks may share files DRY through symlinks. Every copy
+the installer makes resolves them: a symlink whose target lies inside the clone is copied as the
+file or folder it points at, so each installed skill folder is self-contained — importable on its
+own, e.g. into Claude Desktop. A link pointing outside the clone, or dangling, is not the installer's
+to resolve and is copied as the link; a link cycle (a link to its own ancestor, or to a target
+already being expanded) is copied as the link too, so the run always terminates. The canonical
+`<agent-root>/setup` / `templates` links the installer creates (step 6) are not part of any skill
+folder and stay links.
 
 **Symlink support.** The temp clone forces `-c core.symlinks=true` so committed symlinks in the
 source check out as links even under a Windows-default git (otherwise the payload copy would copy
@@ -221,7 +237,7 @@ back the folder up first.
 ## Scope
 
 The installer ships `.agents/skills/` (owned set only), the owned `.github/instructions/` rule
-subset, the owned `.agents/hooks/` subset, plus the cross-cutting, repo-owned
+subset (into `<agent-root>/rules/`), the owned `.agents/hooks/` subset, plus the cross-cutting, repo-owned
 `.agents/_smooth-devex-shared/` payload (currently `setup/scripts/` + `templates/`). It does **not**
 carry anything else: template-domain rules, local skills, and unowned hooks stay in this repo.
 
@@ -258,7 +274,7 @@ and payload purposes.
 bash scripts/test-install-skills.sh
 ```
 
-48 cases against the bash port, no network and no container engine needed: the clone source is the
+54 cases against the bash port, no network and no container engine needed: the clone source is the
 checkout itself (`SKILLS_REPO` pointed at the repo, `SKILLS_BRANCH` at the current branch), so a harness
 that reached GitHub would be red for reasons unrelated to the code. Runs in the PR gate. The shared
 payload, canonical links, stale-entry sweep, legacy-manifest ignore, and real-dir-at-link-path cases

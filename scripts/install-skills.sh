@@ -8,7 +8,8 @@
 #   1. Finds the agent root in order: .agents → .claude → .codex, and errors
 #      when none exists. It never creates one: a folder the operator did not ask for is not an install.
 #      The skills root is <agent-root>/skills (override with SKILLS_ROOT, whose parent then counts
-#      as the agent root for state purposes).
+#      as the agent root for state purposes). Once an agent root is found, missing skills/, hooks/
+#      and rules/ folders under it are created for the categories that run.
 #   2. Category switches -r (rules), -s (skills), -h (hooks) select what this run installs.
 #      No switches means everything is on. Switches filter the run only; nothing is persisted.
 #   3. Skills: reads <agent-root>/_smooth-devex-shared/installation.json.
@@ -19,11 +20,12 @@
 #      A legacy manifest at the old <skills-root>/_smooth-devex-shared/installation.json location
 #      is ignored (fresh start): it is reported on stderr and otherwise left untouched.
 #   4. Updates only the skills marked installed:true, cloning the repo once and copying those folders
-#      (plus the shared payload, if the source ships one) out of it.
+#      (plus the shared payload, if the source ships one) out of it. Test files (see prune_tests)
+#      are never copied: they exercise the template, not the consumer.
 #   5. Rules (-r): copies the owned rule files (see OWNED_RULES) from the source's
-#      .github/instructions/ into <repo>/.github/instructions/, preserving relative paths.
-#      Overwrites, never deletes: an operator's own rules are never swept. Ensures the
-#      <agent-root>/rules → ../.github/instructions topology symlink when nothing is there.
+#      .github/instructions/ into <agent-root>/rules/, preserving relative paths. A consumer whose
+#      rules is a symlink (e.g. → ../.github/instructions) gets the files written through it.
+#      Overwrites, never deletes: an operator's own rules are never swept.
 #   6. Hooks (-h): copies the owned hook files (see OWNED_HOOKS) from the source's .agents/hooks/
 #      into <agent-root>/hooks/. Overwrites, never deletes. Hook *registration* (settings.json)
 #      is deliberately out of scope — the consumer wires what it wants.
@@ -31,6 +33,9 @@
 #      (e.g. <agent-root>/setup → _smooth-devex-shared/setup), so SKILL.md references to the
 #      canonical paths keep working. An existing real file or directory at the link path is
 #      never replaced: it is reported and skipped.
+#   Every copy is WET (see copy_wet): a symlink whose target stays inside the clone is copied as
+#   the content it points at, so installed skills, rules and hooks are self-contained (importable
+#   into Claude Desktop). A link pointing outside the clone, or dangling, is copied as the link.
 #   The temp clone forces `-c core.symlinks=true`; the consumer repo gets
 #   `core.symlinks=true` best-effort (silently skipped outside git). See SKILLS_INSTALLER.md.
 #   8. Writes the updated installation.json back with a fresh UTC timestamp — after the update, so
@@ -329,10 +334,75 @@ sweep_stale_entries() {
     [ "$name" = "installation.json" ] && continue
     if [ -d "$source/$name" ] && [ -d "$entry" ]; then
       sweep_stale_entries "$entry" "$source/$name"
-    elif [ ! -e "$source/$name" ]; then
+    elif [ ! -e "$source/$name" ] && [ ! -L "$source/$name" ]; then
       rm -rf "$entry"
     fi
   done
+}
+
+# realpath_of PATH — canonical absolute path with every link resolved; works for a dangling link
+# too. python3 because BSD and GNU realpath disagree on flags and on missing targets.
+realpath_of() {
+  python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1"
+}
+
+# copy_wet SRC DEST — copy SRC to DEST, replacing DRY symlinks with the content they point at.
+#
+# Template skills, rules and hooks may share files through symlinks; a consumer that imports one
+# skill folder on its own (Claude Desktop) has nothing for those links to point at. A link whose
+# target resolves inside the clone is therefore materialised. A link outside the clone, or a
+# dangling one, is not ours to resolve and is copied as the link. A link to its own ancestor, or to
+# a target already being expanded (WET_STACK), is a cycle and is copied as the link too. Both globals
+# are reset here so an inherited CLONE_ROOT cannot widen what counts as inside the clone.
+WET_STACK=""
+CLONE_ROOT=""
+copy_wet() {
+  local src="$1" dest="$2" resolved parent entry
+  : "${CLONE_ROOT:=$(realpath_of "$INSTALL_TMP/repo")}"
+  if [ -L "$src" ]; then
+    resolved="$(realpath_of "$src")"
+    parent="$(realpath_of "$(dirname "$src")")"
+    case "$resolved/" in
+      "$CLONE_ROOT"/*)
+        case "$WET_STACK|$parent/" in
+          *"|$resolved|"* | *"|$resolved/"*) ;;
+          *)
+            if [ -e "$resolved" ]; then
+              local saved="$WET_STACK"
+              WET_STACK="$WET_STACK|$resolved|"
+              copy_wet "$resolved" "$dest"
+              WET_STACK="$saved"
+              return 0
+            fi
+            ;;
+        esac
+        ;;
+    esac
+    rm -rf "$dest"
+    cp -P "$src" "$dest"
+    log "Kept link $dest -> $(readlink "$src") (outside the source, dangling, or cyclic)"
+    return 0
+  fi
+  if [ -d "$src" ]; then
+    if [ -L "$dest" ] || { [ -e "$dest" ] && [ ! -d "$dest" ]; }; then rm -rf "$dest"; fi
+    mkdir -p "$dest"
+    for entry in "$src"/* "$src"/.[!.]*; do
+      [ -e "$entry" ] || [ -L "$entry" ] || continue
+      copy_wet "$entry" "$dest/$(basename "$entry")"
+    done
+  else
+    rm -rf "$dest"
+    cp -p "$src" "$dest"
+  fi
+}
+
+# prune_tests DIR — delete test files and test folders from a freshly copied tree.
+#
+# Tests ship in the template so the template can run them; a consumer gets the skill, not its test
+# suite. Mirrors Remove-Tests in install-skills.ps1.
+prune_tests() {
+  find "$1" \( -type d \( -name test -o -name tests -o -name __tests__ \) \) -prune -exec rm -rf {} + 2>/dev/null || true
+  find "$1" -type f \( -name 'test_*' -o -name '*_test.*' -o -name '*.test.*' -o -name '*.Tests.ps1' \) -exec rm -f {} + 2>/dev/null || true
 }
 
 # ---------------------------------------------------------------------------
@@ -455,7 +525,8 @@ for s in data.get('skills', []):
       is_owned_skill "$name" || { log "Skipping unowned skill: $name"; continue; }
       if [ -d "$INSTALL_TMP/repo/.agents/skills/$name" ]; then
         rm -rf "$skills_root/$name"
-        cp -R "$INSTALL_TMP/repo/.agents/skills/$name" "$skills_root/$name"
+        copy_wet "$INSTALL_TMP/repo/.agents/skills/$name" "$skills_root/$name"
+        prune_tests "$skills_root/$name"
         log "Updated $name"
       else
         log "WARNING: $name not found in repo — left on disk untouched"
@@ -476,8 +547,8 @@ for s in data.get('skills', []):
   local shared_source="$INSTALL_TMP/repo/.agents/_smooth-devex-shared"
   if [ -d "$shared_source" ]; then
     local shared_dest="$shared_dir"
-    mkdir -p "$shared_dest"
-    cp -R "$shared_source/." "$shared_dest"
+    copy_wet "$shared_source" "$shared_dest"
+    prune_tests "$shared_dest"
     # Recursive, and that recursion is the point: a top-level-only sweep keeps every entry the source
     # still has *as a folder* while leaving the files inside it that the source dropped, which is where
     # a retired script actually goes.
@@ -523,7 +594,7 @@ write_rules_index() {
       printf 'Rule index for the files the skills installer shipped. The template full index\n'
       printf 'lives upstream; only the files below are present here.\n\n'
       printf '## Key Behaviors\n\n%s\n' "$table"
-      printf '\nFile = `<name>.instructions.md` in `.github/instructions/`.\n'
+      printf '\nFile = `<name>.instructions.md` in this folder.\n'
     } > "$index"
     log "Wrote generated rules index $index"
   elif [ "$(head -n 1 "$index")" = "# AGENTS.md - Rules (installed subset)" ]; then
@@ -533,7 +604,7 @@ write_rules_index() {
       printf 'Rule index for the files the skills installer shipped. The template full index\n'
       printf 'lives upstream; only the files below are present here.\n\n'
       printf '## Key Behaviors\n\n%s\n' "$table"
-      printf '\nFile = `<name>.instructions.md` in `.github/instructions/`.\n'
+      printf '\nFile = `<name>.instructions.md` in this folder.\n'
     } > "$index"
     log "Refreshed generated rules index $index"
   elif grep -q "installer-owned-rules-subset" "$index"; then
@@ -548,31 +619,25 @@ write_rules_index() {
 
 install_rules() {
   local agent_root="$1"
-  local repo_root source_rules dest_rules rel
-  # The agent root is a direct child of the repo root (.agents, .claude, .codex all are).
-  repo_root="$(dirname "$agent_root")"
+  local source_rules dest_rules rel
   source_rules="$INSTALL_TMP/repo/.github/instructions"
-  dest_rules="$repo_root/.github/instructions"
+  dest_rules="$agent_root/rules"
   if [ ! -d "$source_rules" ]; then
     log "No .github/instructions in source — nothing to install for rules"
     return 0
   fi
-  mkdir -p "$dest_rules"
+  # Resolved, not created as-is: an operator's rules → ../.github/instructions link is how the
+  # files reach Copilot, so writes go through it — and a dangling one gets its target created.
+  mkdir -p "$(realpath_of "$dest_rules")"
   for rel in "${OWNED_RULES[@]}"; do
     if [ -f "$source_rules/$rel" ]; then
       mkdir -p "$(dirname "$dest_rules/$rel")"
-      cp "$source_rules/$rel" "$dest_rules/$rel"
+      copy_wet "$source_rules/$rel" "$dest_rules/$rel"
       log "Updated rule $rel"
     else
       log "WARNING: rule $rel not found in repo — left on disk untouched"
     fi
   done
-  # Topology: <agent-root>/rules → ../.github/instructions, but only when nothing is there.
-  # A real directory is an operator's own rules — never replaced, never merged into.
-  if [ ! -e "$agent_root/rules" ] && [ ! -L "$agent_root/rules" ]; then
-    ln -s ../.github/instructions "$agent_root/rules"
-    log "Linked $agent_root/rules -> ../.github/instructions"
-  fi
   write_rules_index "$dest_rules"
 }
 
@@ -585,10 +650,10 @@ install_hooks() {
     log "No .agents/hooks in source — nothing to install for hooks"
     return 0
   fi
-  mkdir -p "$dest_hooks"
+  mkdir -p "$(realpath_of "$dest_hooks")"
   for name in "${OWNED_HOOKS[@]}"; do
     if [ -e "$source_hooks/$name" ]; then
-      cp -R "$source_hooks/$name" "$dest_hooks/$name"
+      copy_wet "$source_hooks/$name" "$dest_hooks/$name"
       # Exec bit per owned file only: a wildcard chmod would also flip operator-owned
       # scripts sharing the directory. Preserve the source bit, don't invent one.
       case "$name" in
@@ -622,10 +687,11 @@ main() {
     agent_root="$(find_agent_root)" \
       || die "no agent directory found — expected one of .agents, .claude, .codex (create one, or set SKILLS_ROOT)"
     skills_root="$agent_root/skills"
-    # The skills directory is only required when the skills category runs: a rules-only or
-    # hooks-only run must work in a tree that has no skills at all.
-    if [ "$DO_SKILLS" = "1" ]; then
-      [ -d "$skills_root" ] || die "no skills directory found — expected $skills_root (create it, or set SKILLS_ROOT)"
+    # The agent root is the operator's opt-in; the skills folder under it is ours to create, and
+    # only when the skills category runs — a rules-only or hooks-only run leaves no empty skills/.
+    if [ "$DO_SKILLS" = "1" ] && [ ! -d "$skills_root" ]; then
+      mkdir -p "$skills_root"
+      log "Created $skills_root"
     fi
   fi
 
