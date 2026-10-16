@@ -55,7 +55,7 @@ without planting real source-owned names. Production installers never set it.
 ## Test References
 
 The harness is wired into `.github/workflows/pr-gate.yml` (`Test skills installer`). It deliberately
-exercises the manifest reconciliation and the root search; the clone/copy path is exercised against the
+exercises the manifest reconciliation, the agent-root search, and the shared-payload refresh; the clone/copy path is exercised against the
 checkout itself (`SKILLS_REPO` pointed at this repo, `SKILLS_BRANCH` at the current branch), so no
 network is involved and a red run is about the code under test, not GitHub availability.
 
@@ -65,14 +65,15 @@ Two known gaps:
   `install-skills.sh` — same contract, same control flow — and the contract exists to be read, not
   to be redundantly proven on a platform the gate does not run. Reading the two scripts side by
   side is the test.
-- **The shared-folder refresh path is not exercised** — this repository does not ship a
-  `_smooth-devex-shared/` folder in `.agents/skills/`, so the source-side copy is a no-op. The code
-  is symmetric with the bash port, but a green harness does not prove the shared-folder copy works
-  end-to-end on this tree. Add a `_smooth-devex-shared/` folder to source and a refresh-folder case
-  back to the harness if a shared payload ever needs to ship.
+- **The `_smooth-devex-shared/` payload is scoped, not comprehensive.** Only cross-cutting,
+  repo-owned items live there (`setup/scripts/`, `templates/`). Skills have their own category;
+  rules and hooks each have an owned allowlist (`OWNED_RULES`, `OWNED_HOOKS`) — template-domain
+  files stay local by default.
 
 ## Changelog
 
 | Date | Change | Ref |
 | :---- | :---- | :---- |
 | 2026-10-15 | Initial: `install-skills.{sh,ps1}` + harness + docs | — |
+| 2026-10-16 | Agent-root layout: manifest + cross-cutting payload at `<agent-root>/_smooth-devex-shared/` (ships `setup/scripts/`, `templates/`), canonical symlinks, legacy-manifest fresh start; harness covers refresh/sweep/links/legacy | — |
+| 2026-10-16 | Category switches `-r -s -h` (default all-on): `OWNED_RULES` (5 files) + rules topology link, `OWNED_HOOKS` (3 files, exec bit); harness covers categories, unowned, real-dir, bad flag; README one-liners spell the default | — |
