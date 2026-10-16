@@ -82,3 +82,4 @@ Two known gaps:
 | 2026-10-16 | Category switches `-r -s -h` (default all-on): `OWNED_RULES` (5 files) + rules topology link, `OWNED_HOOKS` (3 files, exec bit); harness covers categories, unowned, real-dir, bad flag; README one-liners spell the default | — |
 | 2026-10-16 | Symlink support: temp clone forces `-c core.symlinks=true`, consumer repo marked best-effort; ps1 junction fallback documented as degraded | — |
 | 2026-10-16 | `ai-ralph-loop` added to the owned set (seven skills) | #104 |
+| 2026-10-16 | README installer one-liners moved to `Getting Started → Install into an existing repository` (before one-time setup); single copy, lower section links to it — keep new commands there | — |

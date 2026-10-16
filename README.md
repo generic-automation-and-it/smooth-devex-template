@@ -47,6 +47,23 @@
 - **.NET 10 SDK**
 - A container runtime — Docker Desktop, Rancher Desktop, Colima, or Podman (for PostgreSQL via Aspire)
 
+### Install into an existing repository
+
+Pull the owned skills, rules and hooks from this template into another repo — run from that repo's root:
+
+```bash
+# Mac/Linux
+curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -r -s -h
+```
+
+```powershell
+# Windows
+$script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.ps1)); & $script -r -s -h
+```
+
+`-r` rules, `-s` skills, `-h` hooks. A first run **replaces existing local skill folders** — read
+[Use it in another repository](#use-it-in-another-repository) before running.
+
 ### One-time AI-agent setup
 
 The repository drives four AI coding agents from a single `.agents/` directory via symlinks (`.claude`, `.codex`, `.cursor` → `.agents`, `opencode.json` → `.agents/opencode.json`, and `GEMINI.md` → `AGENTS.md`). Run the setup script once after cloning so the agents can discover skills, hooks, and rules:
@@ -158,13 +175,7 @@ never touches the calling repo's `src/` or `tests/` directories; with the defaul
 skills, the shared payload, the five owned rules under `.github/instructions/`, and the three owned
 hooks.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -r -s -h
-```
-
-```powershell
-$script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.ps1)); & $script -r -s -h
-```
+Commands: [Install into an existing repository](#install-into-an-existing-repository).
 
 `-r` rules, `-s` skills, `-h` hooks — no switches means everything is on, so `-r -s -h` spells the
 default out loud. Narrow with any subset (`-s` for skills only).
