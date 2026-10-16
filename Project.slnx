@@ -24,7 +24,7 @@
     <Project Path="tests/Project.Host.IntegrationTest/Project.Host.IntegrationTest.csproj" />
   </Folder>
   <Folder Name="/.agents/">
-    <File Path=".agents/AI_DEVELOPMENT_AGENTS.md" />
+    <File Path=".agents/AGENTS.md" />
     <File Path=".agents/hooks.json" />
     <File Path=".agents/launch.json" />
     <File Path=".agents/opencode.json" />
