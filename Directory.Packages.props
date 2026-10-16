@@ -54,7 +54,7 @@
   <!-- Transitive pin: Aspire.Hosting.Testing pulls MessagePack 2.5.192, which has known
        vulnerabilities (NU1902/NU1903, warning-as-error). Pin the patched 2.5 line. -->
   <ItemGroup>
-    <PackageVersion Include="MessagePack" Version="2.5.302" />
+    <PackageVersion Include="MessagePack" Version="2.5.307" />
   </ItemGroup>
   <!-- Test packages -->
   <ItemGroup>

@@ -41,8 +41,8 @@ never asked for is not an install. Set `SKILLS_ROOT` to install somewhere else.
 In this repository `.claude/skills` and `.codex/skills` are symlinks to `.agents/skills`, so all three
 paths resolve to the same tree and the first match is the real one.
 
-**2. Reconcile the manifest — for the owned skills only.** The installer manages exactly six skills:
-`ai-asset-sync`, `ai-template-sync`, `ai-terse`, `create-hld`, `create-worktask`, `manage-rule-system`.
+**2. Reconcile the manifest — for the owned skills only.** The installer manages exactly seven skills:
+`ai-asset-sync`, `ai-ralph-loop`, `ai-template-sync`, `ai-terse`, `create-hld`, `create-worktask`, `manage-rule-system`.
 The catalogue is the **owned union** of what the clone source offers and what is already on disk.
 Anything else in the target tree — local coding skills, operator experiments, the seven `mimisbrunnr-*`
 skills that belong to `smooth-ai-product-context-memory` and other repositories' skills — is left
@@ -84,6 +84,7 @@ match byte-for-byte (the harness holds them to each other).
 |---|---|
 | `ai-asset-sync` | Syncs AI assets across projects; core template mechanism |
 | `ai-template-sync` | Syncs this template into consumer repos; literal purpose of the template |
+| `ai-ralph-loop` | Review → fix → verify loop over any branch diff; generally useful across consumer projects |
 | `ai-terse` | Token compression; generally useful across consumer projects |
 | `create-hld` | Design workflow authoring |
 | `create-worktask` | Task authoring workflow |
@@ -180,6 +181,7 @@ manual copy of those files alongside the install.
 
 | Skill | Needs (manual copy) |
 |---|---|
+| `ai-ralph-loop` | Optional — `context-load-agents-context` script (falls back to an ancestor walk), `.agents/rules/AGENTS.md` index, an `ai-understanding` store under `.context/understandings/` |
 | `create-hld` | `.agents/rules/meta/` rules used by `hld-agents-rules.sh` |
 | `create-worktask` | `.agents/templates/AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md` |
 | `manage-rule-system` | the rules themselves if you want to manage them via this skill |

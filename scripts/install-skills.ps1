@@ -58,13 +58,14 @@ $ErrorActionPreference = 'Stop'
 #
 # The owned set is deliberately small. This is a template repo, not a domain plugin; the few skills
 # worth carrying to a consumer are the ones that operate on the template's own shape (asset sync,
-# template sync, rule system) or that are useful in any consumer project (terse response, hld +
-# worktask authoring).
+# template sync, rule system) or that are useful in any consumer project (terse response, ralph
+# review-fix loop, hld + worktask authoring).
 #
 # If a skill you want to distribute lands here, add it to this list and to the harness's owned
 # set in test-install-skills.sh. Anything else stays local.
 $script:OwnedList = @(
     'ai-asset-sync'
+    'ai-ralph-loop'
     'ai-template-sync'
     'ai-terse'
     'create-hld'
