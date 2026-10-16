@@ -458,6 +458,40 @@ else
     "SKILL.md content is now: $(cat "$root/skills/agile-github-breakdown/SKILL.md")"
 fi
 
+# 4e. DRY symlinks are copied WET. A synthetic source (skip-reconcile path, so no commit is needed to
+# plant links) has a skill whose file and folder links point elsewhere in the clone, plus a link
+# outside the clone, a dangling link, and a cycle. In-clone links become real content; the rest are
+# copied as links, and the cycle terminates. CLONE_ROOT=/ is exported to prove an inherited value
+# cannot widen what counts as inside the clone (the outside link would otherwise be materialised).
+root="$(make_root "wet" alpha)"
+run_sh "$root" -s >/dev/null 2>&1
+INSTALL_TMP="$(mktemp -d)"
+wet_src="$INSTALL_TMP/repo/.agents/skills/alpha"
+mkdir -p "$wet_src" "$INSTALL_TMP/repo/.github/instructions/git" "$INSTALL_TMP/repo/.agents/templates"
+printf '# alpha\n' >"$wet_src/SKILL.md"
+printf 'policy\n' >"$INSTALL_TMP/repo/.github/instructions/git/git-policy.instructions.md"
+printf 'template\n' >"$INSTALL_TMP/repo/.agents/templates/T.md"
+ln -s ../../../.github/instructions/git/git-policy.instructions.md "$wet_src/git-policy.md"
+ln -s ../../templates "$wet_src/templates"
+ln -s /etc/hosts "$wet_src/outside"
+ln -s missing.md "$wet_src/dangling"
+ln -s . "$wet_src/self"
+CLONE_ROOT=/ SKILLS_ROOT="$root/skills" SKILLS_TEST_OWNED_EXTRA="alpha" \
+  SKILLS_TEST_SKIP_RECONCILE=1 INSTALL_TMP="$INSTALL_TMP" \
+  bash "$installer_sh" >/dev/null 2>&1 || true
+wet="$root/skills/alpha"
+if [ -f "$wet/git-policy.md" ] && [ ! -L "$wet/git-policy.md" ] && [ "$(cat "$wet/git-policy.md")" = "policy" ] \
+  && [ -d "$wet/templates" ] && [ ! -L "$wet/templates" ] && [ -f "$wet/templates/T.md" ]; then
+  ok "wet: in-clone file and folder links are copied as real content"
+else
+  no "wet: in-clone file and folder links are copied as real content" "a link survived or content is missing"
+fi
+if [ -L "$wet/outside" ] && [ -L "$wet/dangling" ] && [ -L "$wet/self" ]; then
+  ok "wet: outside, dangling and cyclic links are copied as links"
+else
+  no "wet: outside, dangling and cyclic links are copied as links" "one was materialised or dropped"
+fi
+
 # ---------------------------------------------------------------------------------------------
 # 5. a corrupt manifest is an error, not a first install
 # ---------------------------------------------------------------------------------------------
@@ -637,7 +671,7 @@ mkdir -p "$noskills/.agents"
 if ! run_in_dir_searched "$noskills"; then
   no "agent without skills: the run succeeds" "see the run above"
 elif [ -f "$noskills/.agents/skills/ai-terse/SKILL.md" ] && [ -d "$noskills/.agents/hooks" ] \
-  && [ -d "$noskills/.github/instructions" ]; then
+  && [ -d "$noskills/.agents/rules" ]; then
   ok "agent without skills: skills, hooks and rules folders are created"
 else
   no "agent without skills: skills, hooks and rules folders are created" "a category folder is missing"
@@ -667,34 +701,46 @@ fi
 root="$(make_root "cat-skills" alpha)"
 run_sh "$root" -s >/dev/null 2>&1
 if [ -f "$root/_smooth-devex-shared/installation.json" ] \
-  && [ ! -e "$root/../.github" ] && [ ! -e "$root/hooks" ]; then
+  && [ ! -e "$root/rules" ] && [ ! -e "$root/hooks" ]; then
   ok "-s only: skills install, no rules, no hooks"
 else
   no "-s only: skills install, no rules, no hooks" "rules or hooks leaked in"
 fi
 
-# 7b. -r only: the five owned rules land, topology symlink created, no skills, no manifest.
+# 7b. -r only: the owned rules land in <agent-root>/rules as a real folder (no topology link, no
+# .github/), no skills, no manifest.
 root="$(make_root "cat-rules" alpha)"
 run_sh "$root" -r >/dev/null 2>&1
 rules_ok=1
 for rel in code-review-standards.instructions.md git/git-policy.instructions.md \
   meta/knowledge-conventional-contexts-quality.instructions.md meta/rules.instructions.md; do
-  [ -f "$root/../.github/instructions/$rel" ] || rules_ok=0
+  [ -f "$root/rules/$rel" ] || rules_ok=0
 done
 # The template's own index is never copied: a generated subset index ships instead, with no
 # references to unshipped rules.
-if [ -f "$root/../.github/instructions/AGENTS.md" ] \
-  && grep -q "installed subset" "$root/../.github/instructions/AGENTS.md" \
-  && ! grep -q "backend/" "$root/../.github/instructions/AGENTS.md"; then
+if [ -f "$root/rules/AGENTS.md" ] \
+  && grep -q "installed subset" "$root/rules/AGENTS.md" \
+  && ! grep -q "backend/" "$root/rules/AGENTS.md"; then
   :
 else
   rules_ok=0
 fi
-if [ "$rules_ok" = "1" ] && [ -L "$root/rules" ] \
+if [ "$rules_ok" = "1" ] && [ ! -L "$root/rules" ] && [ ! -e "$root/../.github" ] \
   && [ ! -e "$root/skills/ai-terse" ] && [ ! -f "$root/_smooth-devex-shared/installation.json" ]; then
-  ok "-r only: owned rules land with topology link, no skills, no manifest"
+  ok "-r only: owned rules land in <agent-root>/rules, no skills, no manifest"
 else
-  no "-r only: owned rules land with topology link, no skills, no manifest" "rules_ok=$rules_ok"
+  no "-r only: owned rules land in <agent-root>/rules, no skills, no manifest" "rules_ok=$rules_ok"
+fi
+
+# 7b2. An operator's rules -> ../.github/instructions link is written through, not replaced —
+# including a dangling one, whose target gets created.
+root="$(make_root "cat-ruleslink" alpha)"
+ln -s ../.github/instructions "$root/rules"
+run_sh "$root" -r >/dev/null 2>&1
+if [ -L "$root/rules" ] && [ -f "$root/../.github/instructions/git/git-policy.instructions.md" ]; then
+  ok "-r: rules land through an operator's rules symlink (dangling target created)"
+else
+  no "-r: rules land through an operator's rules symlink (dangling target created)" "link replaced or files missing"
 fi
 
 # 7c. The two owned hooks land executable; unowned and operator files are untouched.
@@ -720,7 +766,7 @@ fi
 # 7d. -r -h combined: rules and hooks, still no skills and no manifest.
 root="$(make_root "cat-rules-hooks" alpha)"
 run_sh "$root" -r -h >/dev/null 2>&1
-if [ -f "$root/../.github/instructions/git/git-policy.instructions.md" ] \
+if [ -f "$root/rules/git/git-policy.instructions.md" ] \
   && [ -f "$root/hooks/worktask-skill-trigger.sh" ] \
   && [ ! -e "$root/skills/ai-terse" ] \
   && [ ! -f "$root/_smooth-devex-shared/installation.json" ]; then
@@ -733,38 +779,38 @@ fi
 # never delete, no sweep).
 root="$(make_root "cat-unowned" alpha)"
 run_sh "$root" -r >/dev/null 2>&1
-mkdir -p "$root/../.github/instructions/backend"
-printf 'operator rule\n' >"$root/../.github/instructions/backend/operator.instructions.md"
+mkdir -p "$root/rules/backend"
+printf 'operator rule\n' >"$root/rules/backend/operator.instructions.md"
 run_sh "$root" -r >/dev/null 2>&1
-if [ ! -e "$root/../.github/instructions/backend/api-mediator-validation.instructions.md" ] \
-  && [ "$(cat "$root/../.github/instructions/backend/operator.instructions.md")" = "operator rule" ]; then
+if [ ! -e "$root/rules/backend/api-mediator-validation.instructions.md" ] \
+  && [ "$(cat "$root/rules/backend/operator.instructions.md")" = "operator rule" ]; then
   ok "-r: unowned rules never copied, operator rules never swept"
 else
   no "-r: unowned rules never copied, operator rules never swept" "unowned landed or operator lost"
 fi
 
-# 7f. An existing real rules directory is kept (topology link skipped, files still update).
+# 7f. An existing real rules directory is kept and the owned files land in it.
 root="$(make_root "cat-realrules" alpha)"
-mkdir -p "$root/../.github/instructions"
 mkdir -p "$root/rules"
 printf 'operator index\n' >"$root/rules/AGENTS.md"
 run_sh "$root" -r >/dev/null 2>&1 || true
-if [ ! -L "$root/rules" ] && [ -d "$root/rules" ]; then
-  ok "-r: an existing real rules entry is never replaced"
+if [ ! -L "$root/rules" ] && [ -f "$root/rules/git/git-policy.instructions.md" ] \
+  && grep -q "operator index" "$root/rules/AGENTS.md"; then
+  ok "-r: an existing real rules folder is kept and receives the owned rules"
 else
-  no "-r: an existing real rules entry is never replaced" "real dir replaced by link"
+  no "-r: an existing real rules folder is kept and receives the owned rules" "replaced, or rules missing"
 fi
 
 # 7j. An existing consumer rules index is merged, not clobbered: the installed subset is
 # appended once, operator content survives, and a second run does not duplicate the section.
 root="$(make_root "cat-indexmerge" alpha)"
-mkdir -p "$root/../.github/instructions"
-printf '# AGENTS.md - Operator rules\n' >"$root/../.github/instructions/AGENTS.md"
+mkdir -p "$root/rules"
+printf '# AGENTS.md - Operator rules\n' >"$root/rules/AGENTS.md"
 run_sh "$root" -r >/dev/null 2>&1
 run_sh "$root" -r >/dev/null 2>&1
-if [ "$(grep -c "installer-owned-rules-subset" "$root/../.github/instructions/AGENTS.md")" = "1" ] \
-  && grep -q "Operator rules" "$root/../.github/instructions/AGENTS.md" \
-  && grep -q "code-review-standards" "$root/../.github/instructions/AGENTS.md"; then
+if [ "$(grep -c "installer-owned-rules-subset" "$root/rules/AGENTS.md")" = "1" ] \
+  && grep -q "Operator rules" "$root/rules/AGENTS.md" \
+  && grep -q "code-review-standards" "$root/rules/AGENTS.md"; then
   ok "-r: existing consumer index is appended once, never rewritten"
 else
   no "-r: existing consumer index is appended once, never rewritten" "clobbered or duplicated"
@@ -791,7 +837,7 @@ else
 fi
 
 # 7i. A relative SKILLS_ROOT resolves against the cwd: state lands beside skills, not inside
-# them, and rules land in the repo root — never nested under the skills dir.
+# them, and rules land beside skills in the agent root — never nested under the skills dir.
 relroot="$scratch/relroot"
 mkdir -p "$relroot/.agents/skills/alpha"
 printf '# alpha\n' >"$relroot/.agents/skills/alpha/SKILL.md"
@@ -799,7 +845,7 @@ printf '# alpha\n' >"$relroot/.agents/skills/alpha/SKILL.md"
   SKILLS_TEST_OWNED_EXTRA="alpha" bash "$installer_sh" -s -r ) >/dev/null 2>&1
 if [ -f "$relroot/.agents/_smooth-devex-shared/installation.json" ] \
   && [ ! -e "$relroot/.agents/skills/_smooth-devex-shared" ] \
-  && [ -f "$relroot/.github/instructions/git/git-policy.instructions.md" ]; then
+  && [ -f "$relroot/.agents/rules/git/git-policy.instructions.md" ]; then
   ok "relative SKILLS_ROOT resolves against the cwd"
 else
   no "relative SKILLS_ROOT resolves against the cwd" "state or rules nested inside skills/"
