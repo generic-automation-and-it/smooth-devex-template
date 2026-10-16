@@ -17,7 +17,13 @@
 Reuse in another repo. One command — ships owned set only (7 skills, 4 rules, 2 hooks). Details and owned-set table: [`docs/wiki/reuse.md`](docs/wiki/reuse.md).
 
 ```bash
+# Mac/Linux
 curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -r -s -h
+```
+
+```powershell
+# Windows
+$script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.ps1)); & $script -r -s -h
 ```
 
 ---
