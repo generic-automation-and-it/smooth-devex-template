@@ -15,14 +15,19 @@ Python or Node tooling, so it is rarely a fresh dependency. The PowerShell port 
 ## One-liners
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash
+curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -r -s -h
 ```
 
 ```powershell
-irm https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.ps1 | iex
+$script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.ps1)); & $script -r -s -h
 ```
 
-Or from a checkout: `scripts/install-skills.sh`, `./scripts/install-skills.ps1`.
+Or from a checkout: `scripts/install-skills.sh -r -s -h`, `./scripts/install-skills.ps1 -r -s -h`.
+
+Category switches: `-r` rules, `-s` skills, `-h` hooks. **No switches means everything is on** —
+`-r -s -h` spells the default out loud. Any switch narrows the run to exactly what was named
+(`-s` installs only skills, `-r -h` rules and hooks but no skills). Switches filter the run
+only; the manifest keeps no record of the selection.
 
 Both take the same three environment overrides, so a local clone or a fork works the same way:
 
@@ -34,12 +39,14 @@ Both take the same three environment overrides, so a local clone or a fork works
 
 ## What a run does
 
-**1. Find the skills root, in this order.** `.agents/skills` → `.claude/skills` → `.codex/skills`. The
+**1. Find the agent root, in this order.** `.agents` → `.claude` → `.codex`. The
 first that exists is used. If none exists the run **fails and creates nothing** — a folder the operator
-never asked for is not an install. Set `SKILLS_ROOT` to install somewhere else.
+never asked for is not an install. The skills root is `<agent-root>/skills` (override with `SKILLS_ROOT`,
+whose parent directory then counts as the agent root). If the agent root has no `skills/` directory
+the run fails the same way.
 
-In this repository `.claude/skills` and `.codex/skills` are symlinks to `.agents/skills`, so all three
-paths resolve to the same tree and the first match is the real one.
+In this repository `.claude` and `.codex` are symlinks to `.agents`, so all paths resolve to the
+same tree and the first match is the real one.
 
 **2. Reconcile the manifest — for the owned skills only.** The installer manages exactly seven skills:
 `ai-asset-sync`, `ai-ralph-loop`, `ai-template-sync`, `ai-terse`, `create-hld`, `create-worktask`, `manage-rule-system`.
@@ -50,7 +57,7 @@ untouched and never enters the manifest. Deriving the catalogue from disk alone 
 install into an empty folder a no-op — nothing on disk means nothing to install, and the operator's
 very first run would leave them with an empty folder and a manifest listing nothing.
 
-State lives in `<root>/_smooth-devex-shared/installation.json`:
+State lives in `<agent-root>/_smooth-devex-shared/installation.json`:
 
 ```json
 {
@@ -112,15 +119,60 @@ if the manifest was hand-edited. The harness covers the third case for every ent
 **3. Update only the owned skills marked `installed: true`.** The repo is shallow-cloned once and
 those folders are copied over the existing ones. A skill marked `false` is never touched, so a local
 edit inside one survives every run until you set its flag back. A skill outside the owned set is
-never copied even when a hand-edited manifest asks for it.
+never copied even when a hand-edited manifest asks for it. Skipped entirely unless `-s` (or no
+switches).
 
-**4. Refresh `_smooth-devex-shared`** (when the source ships one). That folder is not a skill and never
-appears in the manifest, but any installed skill that calls a shared script is broken without it — so
-it refreshes on every run, whatever the flags say. Its contents are reconciled rather than merged: an
-entry the source no longer has is removed, except `installation.json` itself, which is this script's own
-state.
+**4. Update the owned rules (`-r`).** The four `OWNED_RULES` files copy from the source's
+`.github/instructions/` into `<repo>/.github/instructions/`, preserving relative paths:
 
-**5. Write the manifest last**, stamped with the current UTC time. That ordering is deliberate — see
+| Owned rule | Why |
+|---|---|
+| `code-review-standards.instructions.md` | referenced by `create-worktask` |
+| `git/git-policy.instructions.md` | referenced by `ai-asset-sync`, `create-worktask` |
+| `meta/knowledge-conventional-contexts-quality.instructions.md` | referenced by `create-hld` |
+| `meta/rules.instructions.md` | rule lifecycle convention (`manage-rule-system`) |
+
+The template's own `AGENTS.md` index is **never copied** — it catalogues rules that don't ship
+(dangling refs on a fresh install) and would clobber an existing consumer index. Instead the run
+writes a generated subset index: missing index → created; installer-generated index → refreshed;
+an existing operator index → the subset section is appended once, never rewritten. Overwrite,
+never delete — an operator's own rules are never swept. Skipped entirely unless `-r` (or no
+switches).
+
+Overwrite, never delete — an operator's own rules are never swept. Everything else in
+`.github/instructions/` (backend/\*, skills/\*, clean-code, solid-principles, …) stays local.
+The run also ensures the `<agent-root>/rules → ../.github/instructions` topology symlink when
+nothing is there; a real directory is never replaced. Skipped entirely unless `-r` (or no switches).
+
+**5. Update the owned hooks (`-h`).** The two `OWNED_HOOKS` files copy from the source's
+`.agents/hooks/` into `<agent-root>/hooks/`, kept executable (exec bit preserved per owned file,
+never a wildcard over the directory). A hook is owned iff an owned skill's `SKILL.md` references
+it *and* its implementation ships with it (`manage-rule-system-context.sh`,
+`worktask-skill-trigger.sh`); `load-agents-context.sh` stays local because it delegates to an
+unowned skill that never ships — copying the wrapper alone would install a silently dead hook.
+Overwrite, never delete. Hook *registration* (`settings.json`) is deliberately out of scope —
+copy the wiring by hand for the hooks you want live. Skipped entirely unless `-h` (or no
+switches).
+
+**6. Refresh `_smooth-devex-shared`** (when the source ships one, and the skills category runs). That folder holds cross-cutting,
+repo-owned payload — currently `setup/scripts/` (the agent setup scripts every tool selection
+needs) and `templates/` (the `AGENTS.md` scaffolding and worktask templates several skills
+reference) — plus the installer's own `installation.json`. It is not a skill and never appears in the
+manifest, but any installed skill that calls a shared script is broken without it — so it refreshes
+on every run, whatever the flags say. Its contents are reconciled rather than merged: an entry the
+source no longer has is removed, except `installation.json` itself, which is this script's own state.
+Every top-level payload entry is then linked back to its canonical `<agent-root>` path
+(e.g. `<agent-root>/setup` → `_smooth-devex-shared/setup`), so the `.agents/setup/...` references
+in `SKILL.md` files keep working. An existing real file or directory at a link path is never
+replaced — the run reports it and moves on.
+
+**Symlink support.** The temp clone forces `-c core.symlinks=true` so committed symlinks in the
+source check out as links even under a Windows-default git (otherwise the payload copy would copy
+file-blobs instead of directories). The run also sets `core.symlinks=true` in the consumer repo
+(best-effort, silently skipped outside a git work tree) so created links record as links on the
+next commit — same as `.agents/setup/scripts` does.
+
+**7. Write the manifest last**, stamped with the current UTC time (skills category only). That ordering is deliberate — see
 [Write ordering](#write-ordering-is-load-bearing).
 
 ## Turning a skill off
@@ -131,7 +183,7 @@ Edit the manifest and re-run. The flag is read, never guessed:
 # one skill off
 python3 - <<'EOF'
 import json
-p = '.agents/skills/_smooth-devex-shared/installation.json'
+p = '.agents/_smooth-devex-shared/installation.json'
 d = json.load(open(p))
 for s in d['skills']:
     if s['name'] == 'git-sync':
@@ -168,33 +220,37 @@ back the folder up first.
 
 ## Scope
 
-The installer ships only `.agents/skills/`. It does **not** carry:
+The installer ships `.agents/skills/` (owned set only), the owned `.github/instructions/` rule
+subset, the owned `.agents/hooks/` subset, plus the cross-cutting, repo-owned
+`.agents/_smooth-devex-shared/` payload (currently `setup/scripts/` + `templates/`). It does **not**
+carry anything else: template-domain rules, local skills, and unowned hooks stay in this repo.
 
-- `.agents/rules/` (rules referenced by skill `SKILL.md` frontmatter)
-- `.agents/templates/` (referenced by `create-worktask/SKILL.md`)
-- `.agents/hooks/` (referenced by some `setup/scripts/` flows)
-
-A consumer that runs the one-liner into an empty repo gets the skill folders but the cross-tree
-references inside `SKILL.md` files (`Bash(.agents/rules/.../SKILL.md:*)`, etc.) point at paths that
-do not exist. Skills whose `SKILL.md` references `.agents/rules/` or `.agents/templates/` need a
-manual copy of those files alongside the install.
+A consumer that runs the one-liner into an empty repo gets the owned skills, rules, and hooks plus
+the shared payload, with canonical paths (`setup/`, `templates/`) linked back to
+`_smooth-devex-shared/`. Cross-tree references inside `SKILL.md` files that point at rules outside
+the owned set still need a manual copy of those files alongside the install.
 
 | Skill | Needs (manual copy) |
 |---|---|
 | `ai-ralph-loop` | Optional — `context-load-agents-context` script (falls back to an ancestor walk), `.agents/rules/AGENTS.md` index, an `ai-understanding` store under `.context/understandings/` |
 | `create-hld` | `.agents/rules/meta/` rules used by `hld-agents-rules.sh` |
-| `create-worktask` | `.agents/templates/AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md` |
 | `manage-rule-system` | the rules themselves if you want to manage them via this skill |
-| `git-commit-push-pr` | `.agents/templates/PR_*` if used |
 | `context-load-context` / `context-load-agents-context` | `.agents/rules/` for the context files to reference |
+
+## Layout move (2026-10): manifest and payload live at the agent root
+
+Previously the manifest lived at `<skills-root>/_smooth-devex-shared/installation.json` and the
+source shipped no shared payload. Now both live at `<agent-root>/_smooth-devex-shared/`, and the
+source ships the cross-cutting payload (`setup/scripts/`, `templates/`) there. A manifest at the old location
+is **ignored, not migrated** (fresh start) — the run logs a notice naming it. Delete the old
+`<skills-root>/_smooth-devex-shared/` directory once you have verified the new state.
 
 ## Supported roots
 
-The installer accepts `.agents/skills/`, `.claude/skills/`, or `.codex/skills/` as the skills root
-(see step 1 above). A consumer that picks `.claude/skills/` or `.codex/skills/` as its root must
-create the canonical symlink (`.claude/skills -> .agents/skills` /
-`.codex/skills -> .agents/skills`) for the skill `SKILL.md` files to find their `scripts/` siblings
-at the canonical path the skill `Bash(...)` allowlists expect.
+The installer accepts `.agents`, `.claude`, or `.codex` as the agent root (see step 1 above);
+skills live at `<agent-root>/skills`. A consumer whose skills live outside any agent directory can
+point `SKILLS_ROOT` at them directly — the parent directory then counts as the agent root for state
+and payload purposes.
 
 ## Testing
 
@@ -202,15 +258,16 @@ at the canonical path the skill `Bash(...)` allowlists expect.
 bash scripts/test-install-skills.sh
 ```
 
-19 cases against the bash port, no network and no container engine needed: the clone source is the
+48 cases against the bash port, no network and no container engine needed: the clone source is the
 checkout itself (`SKILLS_REPO` pointed at the repo, `SKILLS_BRANCH` at the current branch), so a harness
-that reached GitHub would be red for reasons unrelated to the code. Runs in the PR gate.
+that reached GitHub would be red for reasons unrelated to the code. Runs in the PR gate. The shared
+payload, canonical links, stale-entry sweep, legacy-manifest ignore, and real-dir-at-link-path cases
+all run against the source tree's real `.agents/_smooth-devex-shared/` payload.
 
 The PowerShell port is **not exercised here.** `install-skills.ps1` is a hand-translated mirror of
 `install-skills.sh` — same contract, same control flow — and its defects are the ones a careful read
 catches. A two-port harness doubles the maintenance surface for a contract that exists to be read, not
-to be redundantly proven on platforms the gate does not run.
-
-The harness also does not cover the shared-folder refresh path because this repository does not ship a
-`_smooth-devex-shared/` folder in source; the code path runs only when the source has one to copy, and
-is otherwise a no-op. See `scripts/AGENTS.md` for what that gap does and does not cover.
+to be redundantly proven on platforms the gate does not run. The PowerShell canonical-link step
+uses a junction fallback (symlinks need elevation or Developer Mode on Windows); the bash port uses
+plain symlinks. A junction is *not* a symlink — git would commit its target's contents as real
+files, so prefer Developer Mode/elevation and treat junctions as a degraded install.

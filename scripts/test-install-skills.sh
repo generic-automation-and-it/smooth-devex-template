@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # Harness for the bash skills installer (`install-skills.sh`).
 #
-# Scope: the manifest reconciliation and the root search. The clone/copy path is exercised against the
-# checkout itself as the clone source (SKILLS_REPO=the repo, SKILLS_BRANCH=the current branch), so no
-# network and no GitHub access is involved - a harness that reached the network would be red for reasons
-# that have nothing to do with the code under test.
+# Scope: the manifest reconciliation, the agent-root search, and the shared-payload refresh.
+# The clone/copy path is exercised against the checkout itself as the clone source
+# (SKILLS_REPO=the repo, SKILLS_BRANCH=the current branch), so no network and no GitHub access
+# is involved - a harness that reached the network would be red for reasons that have nothing to do
+# with the code under test.
 #
-# Every case runs in a scratch tree under $TMPDIR. The installer only ever writes inside the skills root
-# it resolves, and every case forces that root with SKILLS_ROOT, so a red run cannot touch the checkout's
-# own .agents/skills.
+# Every case runs in a scratch tree under $TMPDIR. The installer only ever writes inside the agent
+# root it resolves, and every case forces that root via SKILLS_ROOT (pointed at <agent>/skills, so
+# the shared dir under test is <agent>/_smooth-devex-shared), so a red run cannot touch the
+# checkout's own .agents tree.
 #
 # Cross-port parity: the bash OWNED_LIST and the ps1 $script:OwnedList must agree byte-for-byte.
 # The harness does a static grep+diff comparison so a divergent PowerShell declaration fails the
@@ -21,8 +23,8 @@
 #
 # Repo-specific notes (smooth-devex-template, where this lives):
 #   - The shared folder is `_smooth-devex-shared` (per-repo, never `_mimisbrunnr-shared`).
-#   - The source tree does NOT currently ship a `_smooth-devex-shared/` folder, so the harness skips
-#     the cases that depend on a shared-folder refresh. Add them back if a shared folder lands here.
+#   - The source tree ships `.agents/_smooth-devex-shared/` (cross-cutting, repo-owned payload:
+#     currently setup/scripts), so the refresh, symlink, and sweep cases run against the real thing.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -80,24 +82,53 @@ else
     "bash='$bash_joined' ps1='$ps1_joined'"
 fi
 
-# A fresh scratch skills root carrying $2 named skills, one SKILL.md each. Echoes the root.
+# Same byte-for-byte gate for the owned rules and hooks lists. Rule entries contain slashes and
+# dots, hook entries are filenames — one loose-enough pattern each, anchored on the declaration.
+bash_rules="$(awk '/^OWNED_RULES=\($/,/^\)$/' "$installer_sh" \
+  | grep -oE "^[[:space:]]+[A-Za-z0-9_./-]+\.instructions\.md|^[[:space:]]+AGENTS\.md" \
+  | tr -d ' ' | sort -u)"
+ps1_rules="$(awk '/\$script:OwnedRules = @\($/,/^\)$/' "$installer_ps1" \
+  | grep -oE "'[A-Za-z0-9_./-]+'| 'AGENTS\.md'" \
+  | tr -d "' " | sort -u)"
+if [ "$bash_rules" = "$ps1_rules" ] && [ -n "$bash_rules" ]; then
+  ok "cross-port: bash OWNED_RULES and ps1 \$script:OwnedRules agree ($(printf '%s\n' "$bash_rules" | paste -sd ',' -))"
+else
+  no "cross-port: bash OWNED_RULES and ps1 \$script:OwnedRules agree" \
+    "bash='$(printf '%s\n' "$bash_rules" | paste -sd ',' -)' ps1='$(printf '%s\n' "$ps1_rules" | paste -sd ',' -)'"
+fi
+bash_hooks="$(awk '/^OWNED_HOOKS=\($/,/^\)$/' "$installer_sh" \
+  | grep -oE "^[[:space:]]+[a-z0-9-]+\.(sh|py)" \
+  | tr -d ' ' | sort -u)"
+ps1_hooks="$(awk '/\$script:OwnedHooks = @\($/,/^\)$/' "$installer_ps1" \
+  | grep -oE "'[a-z0-9-]+\.(sh|py)'" \
+  | tr -d "'" | sort -u)"
+if [ "$bash_hooks" = "$ps1_hooks" ] && [ -n "$bash_hooks" ]; then
+  ok "cross-port: bash OWNED_HOOKS and ps1 \$script:OwnedHooks agree ($(printf '%s\n' "$bash_hooks" | paste -sd ',' -))"
+else
+  no "cross-port: bash OWNED_HOOKS and ps1 \$script:OwnedHooks agree" \
+    "bash='$(printf '%s\n' "$bash_hooks" | paste -sd ',' -)' ps1='$(printf '%s\n' "$ps1_hooks" | paste -sd ',' -)'"
+fi
+
+# A fresh scratch agent root carrying $2 named skills, one SKILL.md each. Echoes the agent root;
+# the skills root under test is <agent>/skills. Manifest helpers below take this agent root.
 make_root() {
-  local root="$scratch/case-$1/.agents/skills"
+  local root="$scratch/case-$1/.agents"
   shift
-  mkdir -p "$root/_smooth-devex-shared"
+  mkdir -p "$root/skills"
   local name
   for name in "$@"; do
-    mkdir -p "$root/$name"
-    printf '# %s\n' "$name" >"$root/$name/SKILL.md"
+    mkdir -p "$root/skills/$name"
+    printf '# %s\n' "$name" >"$root/skills/$name/SKILL.md"
   done
   printf '%s\n' "$root"
 }
 
-# The installer clones from the checkout itself; the shared-folder refresh only fires when the source
-# ships one, so SKILLS_BRANCH is empty in a detached checkout (the only honest answer there).
+# The installer clones from the checkout itself; SKILLS_BRANCH is empty in a detached checkout
+# (the only honest answer there). SKILLS_ROOT points at <agent>/skills so the manifest under
+# test lands at <agent>/_smooth-devex-shared/installation.json.
 run_sh() {
   local root="$1"; shift
-  SKILLS_ROOT="$root" SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
+  SKILLS_ROOT="$root/skills" SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
     SKILLS_TEST_OWNED_EXTRA="alpha beta gamma delta epsilon" \
     bash "$installer_sh" "$@" >"$scratch/out" 2>"$scratch/err"
 }
@@ -188,8 +219,8 @@ for entry in data["skills"]:
 json.dump(data, open(path, "w"), indent=2)
 PYEOF
 # ...and a skill is removed from disk while another is added.
-rm -rf "$root/gamma"
-mkdir -p "$root/delta"; printf '# delta\n' >"$root/delta/SKILL.md"
+rm -rf "$root/skills/gamma"
+mkdir -p "$root/skills/delta"; printf '# delta\n' >"$root/skills/delta/SKILL.md"
 
 run_sh "$root" >/dev/null 2>&1
 
@@ -219,8 +250,9 @@ esac
 # ---------------------------------------------------------------------------------------------
 # 3. the manifest survives a run (write order, not luck)
 # ---------------------------------------------------------------------------------------------
-# A no-shared-folder check: the manifest is written last, so even when the source ships no
-# _smooth-devex-shared/ folder, the manifest still appears at the end of a run.
+# The manifest is written last, after the shared-payload refresh, so the refresh can never
+# clobber the flags the update just read. If the manifest is missing at the end of a run,
+# the write ordering regressed.
 
 root="$(make_root "writeorder" alpha)"
 run_sh "$root" >/dev/null 2>&1 || true
@@ -237,10 +269,10 @@ fi
 # This is the case the end-to-end run caught and the harness did not: with the catalogue derived from
 # disk alone, an empty folder offers nothing to install, so the very first run - the one every operator
 # does - left them with an empty folder and a manifest listing nothing, and reported success.
-root="$scratch/emptyinstall/.codex/skills"
-mkdir -p "$root"
+root="$scratch/emptyinstall/.codex"
+mkdir -p "$root/skills"
 run_sh "$root" >/dev/null 2>&1 || true
-on_disk="$(find "$root" -maxdepth 2 -name SKILL.md | wc -l | tr -d ' ')"
+on_disk="$(find "$root/skills" -maxdepth 2 -name SKILL.md | wc -l | tr -d ' ')"
 if [ "$on_disk" -gt 5 ] && [ "$on_disk" = "$(manifest_names "$root" | wc -w | tr -d ' ')" ]; then
   ok "a first install into an empty folder puts the source's skills on disk ($on_disk)"
 else
@@ -257,7 +289,7 @@ for denied in ai-brain-dump ai-understanding; do
     *" $denied "*) no "deny list: $denied is not in the manifest" "found in: $names" ;;
     *) ok "deny list: $denied is not in the manifest" ;;
   esac
-  if [ -d "$root/$denied" ]; then
+  if [ -d "$root/skills/$denied" ]; then
     no "deny list: $denied is not copied to the consumer" "$denied/ is on disk"
   else
     ok "deny list: $denied is not copied to the consumer"
@@ -286,7 +318,7 @@ json.dump(data, open(path, "w"), indent=2)
 PYEOF
 run_sh "$root" >/dev/null 2>&1
 for denied in ai-brain-dump ai-understanding; do
-  if [ ! -d "$root/$denied" ]; then
+  if [ ! -d "$root/skills/$denied" ]; then
     ok "deny list survives a hand-edited manifest (no $denied on disk)"
   else
     no "deny list survives a hand-edited manifest (no $denied on disk)" "$denied/ landed"
@@ -301,15 +333,15 @@ done
 # owned, so both are real clone-and-copy cases rather than synthetic names that would only exercise
 # the warning branch.
 root="$(make_root "update" ai-terse create-hld)"
-printf 'operator edit\n' >"$root/ai-terse/SKILL.md"
+printf 'operator edit\n' >"$root/skills/ai-terse/SKILL.md"
 run_sh "$root" >/dev/null 2>&1
 
-if grep -q '^name:' "$root/ai-terse/SKILL.md" 2>/dev/null; then
+if grep -q '^name:' "$root/skills/ai-terse/SKILL.md" 2>/dev/null; then
   ok "an installed:true skill is replaced from the clone source"
 else
-  no "an installed:true skill is replaced from the clone source" "SKILL.md still: $(head -1 "$root/ai-terse/SKILL.md")"
+  no "an installed:true skill is replaced from the clone source" "SKILL.md still: $(head -1 "$root/skills/ai-terse/SKILL.md")"
 fi
-if [ -d "$root/create-hld/scripts" ]; then
+if [ -d "$root/skills/create-hld/scripts" ]; then
   ok "the copied skill carries its scripts folder"
 else
   no "the copied skill carries its scripts folder"
@@ -319,9 +351,9 @@ fi
 # The manifest has to exist before it can be switched off, so this is a first run followed by an
 # edit: that is the operator's actual sequence (install, then turn a skill off).
 root2="$(make_root "update-off" ai-terse create-hld)"
-printf 'operator edit\n' >"$root2/ai-terse/SKILL.md"
+printf 'operator edit\n' >"$root2/skills/ai-terse/SKILL.md"
 run_sh "$root2" >/dev/null 2>&1
-printf 'operator edit\n' >"$root2/ai-terse/SKILL.md"
+printf 'operator edit\n' >"$root2/skills/ai-terse/SKILL.md"
 python3 - "$root2/_smooth-devex-shared/installation.json" <<'PYEOF'
 import json, sys
 path = sys.argv[1]
@@ -331,10 +363,10 @@ for entry in data["skills"]:
 json.dump(data, open(path, "w"), indent=2)
 PYEOF
 run_sh "$root2" >/dev/null 2>&1
-if [ "$(cat "$root2/ai-terse/SKILL.md")" = "operator edit" ]; then
+if [ "$(cat "$root2/skills/ai-terse/SKILL.md")" = "operator edit" ]; then
   ok "an installed:false skill is never overwritten"
 else
-  no "an installed:false skill is never overwritten" "content is now: $(head -1 "$root2/ai-terse/SKILL.md")"
+  no "an installed:false skill is never overwritten" "content is now: $(head -1 "$root2/skills/ai-terse/SKILL.md")"
 fi
 
 # 4b. An unowned skill present on disk (and in source) is left byte-identical and never enters the
@@ -345,12 +377,12 @@ fi
 # case. We plant it on disk with operator-local content (a non-source SKILL.md), run, and assert
 # the disk content is unchanged AND the manifest has no such name.
 root="$(make_root "update-unowned" agile-github-breakdown)"
-printf 'operator-local content\n' >"$root/agile-github-breakdown/SKILL.md"
+printf 'operator-local content\n' >"$root/skills/agile-github-breakdown/SKILL.md"
 run_sh "$root" >/dev/null 2>&1
-if [ "$(cat "$root/agile-github-breakdown/SKILL.md")" = "operator-local content" ]; then
+if [ "$(cat "$root/skills/agile-github-breakdown/SKILL.md")" = "operator-local content" ]; then
   ok "an unowned source skill left on disk is left byte-identical (not copied over)"
 else
-  no "an unowned source skill left on disk is left byte-identical" "now: $(cat "$root/agile-github-breakdown/SKILL.md")"
+  no "an unowned source skill left on disk is left byte-identical" "now: $(cat "$root/skills/agile-github-breakdown/SKILL.md")"
 fi
 case " $(manifest_names "$root") " in
   *" agile-github-breakdown "*) no "an unowned source skill on disk is not listed in the manifest" "found in manifest" ;;
@@ -371,7 +403,7 @@ data["skills"].append({"name": "agile-github-breakdown", "installed": True})
 json.dump(data, open(path, "w"), indent=2)
 PYEOF
 run_sh "$root" >/dev/null 2>&1
-if [ ! -d "$root/agile-github-breakdown" ]; then
+if [ ! -d "$root/skills/agile-github-breakdown" ]; then
   ok "reconcile: a hand-edited manifest's unowned entry is dropped, not copied"
 else
   no "reconcile: a hand-edited manifest's unowned entry is dropped, not copied" "agile-github-breakdown/ landed"
@@ -389,8 +421,8 @@ fi
 #
 # This case fails when the update-loop guard is deleted - the assertion is the regression test.
 root="$(make_root "update-guard" alpha)"
-mkdir -p "$root/agile-github-breakdown"
-printf 'operator-local content\n' >"$root/agile-github-breakdown/SKILL.md"
+mkdir -p "$root/skills/agile-github-breakdown"
+printf 'operator-local content\n' >"$root/skills/agile-github-breakdown/SKILL.md"
 run_sh "$root" >/dev/null 2>&1
 python3 - "$root/_smooth-devex-shared/installation.json" <<'PYEOF'
 import json, sys
@@ -404,15 +436,15 @@ INSTALL_TMP="$(mktemp -d)"
 mkdir -p "$INSTALL_TMP/repo/.agents/skills"
 mkdir -p "$INSTALL_TMP/repo/.agents/skills/agile-github-breakdown"
 printf 'upstream-source content\n' >"$INSTALL_TMP/repo/.agents/skills/agile-github-breakdown/SKILL.md"
-SKILLS_ROOT="$root" SKILLS_TEST_OWNED_EXTRA="alpha beta gamma delta epsilon" \
+SKILLS_ROOT="$root/skills" SKILLS_TEST_OWNED_EXTRA="alpha beta gamma delta epsilon" \
   SKILLS_TEST_SKIP_RECONCILE=1 INSTALL_TMP="$INSTALL_TMP" \
   bash "$installer_sh" >/dev/null 2>&1 || true
 rm -rf "$INSTALL_TMP"
-if [ "$(cat "$root/agile-github-breakdown/SKILL.md")" = "operator-local content" ]; then
+if [ "$(cat "$root/skills/agile-github-breakdown/SKILL.md")" = "operator-local content" ]; then
   ok "update-guard: a hand-edited unowned entry is refused by the updater loop (operator content preserved)"
 else
   no "update-guard: a hand-edited unowned entry is refused by the updater loop" \
-    "SKILL.md content is now: $(cat "$root/agile-github-breakdown/SKILL.md")"
+    "SKILL.md content is now: $(cat "$root/skills/agile-github-breakdown/SKILL.md")"
 fi
 
 # ---------------------------------------------------------------------------------------------
@@ -420,6 +452,7 @@ fi
 # ---------------------------------------------------------------------------------------------
 
 root="$(make_root "corrupt" alpha)"
+mkdir -p "$root/_smooth-devex-shared"
 printf '{ not json' >"$root/_smooth-devex-shared/installation.json"
 # A non-zero exit is the expected outcome here, so it must not trip the harness's own set -e.
 run_sh "$root" >/dev/null 2>&1 || true
@@ -436,6 +469,7 @@ fi
 # 5b. A blank or whitespace-only manifest is the same kind of unparseable input: an empty file would
 # otherwise be accepted as a first install and silently re-enable every catalogue skill.
 root="$(make_root "blank" alpha)"
+mkdir -p "$root/_smooth-devex-shared"
 printf '   \n\n  \n' >"$root/_smooth-devex-shared/installation.json"
 st=0
 run_sh "$root" >/dev/null 2>&1 || st=$?
@@ -463,7 +497,7 @@ fi
 # mangled URL would have lost the @ and the :owner/ parts).
 root="$(make_root "sshpass" alpha)"
 err="$scratch/ssh.err"
-SKILLS_ROOT="$root" SKILLS_REPO="git@github.com:nonexistent-fake-host-9876543210/repo.git" SKILLS_BRANCH="main" \
+SKILLS_ROOT="$root/skills" SKILLS_REPO="git@github.com:nonexistent-fake-host-9876543210/repo.git" SKILLS_BRANCH="main" \
   bash "$installer_sh" 2>"$err" >/dev/null || true
 if grep -q 'git@github.com:nonexistent-fake-host-9876543210/repo.git' "$err"; then
   ok "an scp-style SSH SKILLS_REPO is passed through unchanged to git"
@@ -498,6 +532,65 @@ else
   no "an all-installed:false manifest does not abort the run (shared refresh still runs)" "st=$st"
 fi
 
+# 5f. The shared payload refreshes from the source on every run. The source tree ships
+# .agents/_smooth-devex-shared/ (setup/scripts, templates), so this is a real copy, not a no-op.
+root="$(make_root "shared" alpha)"
+run_sh "$root" >/dev/null 2>&1
+if [ -f "$root/_smooth-devex-shared/setup/scripts/agents-setup.sh" ] \
+  && [ -f "$root/_smooth-devex-shared/setup/scripts/agents-setup.ps1" ] \
+  && [ -f "$root/_smooth-devex-shared/templates/TEMPLATE_AGENTS.md" ] \
+  && [ -f "$root/_smooth-devex-shared/templates/AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md" ]; then
+  ok "shared payload: source setup/scripts and templates land in <agent>/_smooth-devex-shared"
+else
+  no "shared payload: source setup/scripts and templates land in <agent>/_smooth-devex-shared" \
+    "contents: $(ls "$root/_smooth-devex-shared" 2>/dev/null)"
+fi
+
+# 5g. Canonical links: the payload is linked back to <agent-root> paths so the
+# .agents/setup/... and .agents/templates/... references keep working.
+if [ -f "$root/setup/scripts/agents-setup.sh" ] && [ -L "$root/setup" ] \
+  && [ -f "$root/templates/TEMPLATE_AGENTS.md" ] && [ -L "$root/templates" ]; then
+  ok "canonical links: <agent>/setup and <agent>/templates resolve into _smooth-devex-shared"
+else
+  no "canonical links: <agent>/setup and <agent>/templates resolve into _smooth-devex-shared" "setup or templates missing or not a link"
+fi
+
+# 5h. Stale shared entries are swept: a file the source dropped does not survive.
+mkdir -p "$root/_smooth-devex-shared/setup/scripts"
+printf '# retired\n' >"$root/_smooth-devex-shared/setup/scripts/stale-retired.sh"
+run_sh "$root" >/dev/null 2>&1
+if [ ! -e "$root/_smooth-devex-shared/setup/scripts/stale-retired.sh" ] \
+  && [ -f "$root/_smooth-devex-shared/setup/scripts/agents-setup.sh" ]; then
+  ok "shared payload: stale entries are swept, live entries kept"
+else
+  no "shared payload: stale entries are swept, live entries kept" "stale survived or live lost"
+fi
+
+# 5i. A legacy manifest inside the skills root is ignored (fresh start), not migrated.
+root="$(make_root "legacy" alpha)"
+mkdir -p "$root/skills/_smooth-devex-shared"
+printf '{"updated": "2020-01-01T00:00:00Z", "skills": [{"name": "alpha", "installed": false}]}' \
+  >"$root/skills/_smooth-devex-shared/installation.json"
+run_sh "$root" >/dev/null 2>&1
+if [ "$(manifest_flag "$root" alpha)" = "true" ] \
+  && [ "$(cat "$root/skills/_smooth-devex-shared/installation.json")" = '{"updated": "2020-01-01T00:00:00Z", "skills": [{"name": "alpha", "installed": false}]}' ]; then
+  ok "legacy manifest inside skills root is ignored (fresh defaults, legacy untouched)"
+else
+  no "legacy manifest inside skills root is ignored" "alpha=$(manifest_flag "$root" alpha)"
+fi
+
+# 5j. An existing real directory at a canonical link path is never replaced.
+root="$(make_root "reallink" alpha)"
+mkdir -p "$root/setup"
+printf 'operator-owned\n' >"$root/setup/keep.txt"
+run_sh "$root" >/dev/null 2>&1
+if [ ! -L "$root/setup" ] && [ "$(cat "$root/setup/keep.txt")" = "operator-owned" ] \
+  && [ -f "$root/_smooth-devex-shared/setup/scripts/agents-setup.sh" ]; then
+  ok "canonical link: an existing real directory is left in place"
+else
+  no "canonical link: an existing real directory is left in place" "real dir replaced or payload missing"
+fi
+
 # ---------------------------------------------------------------------------------------------
 # 6. the root search, in the documented order
 # ---------------------------------------------------------------------------------------------
@@ -509,37 +602,192 @@ run_in_dir_searched() {
   ( cd "$dir" && SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" bash "$installer_sh" ) >/dev/null 2>&1
 }
 
-# A tree with .claude/skills and .codex/skills but no .agents/skills: the search must land on
-# .claude/skills, in the documented order, and must not create anything.
+# A tree with .claude/skills and .codex/skills but no .agents: the search must land on
+# .claude, in the documented order, and must not create anything.
 base="$scratch/search"
-mkdir -p "$base/.claude/skills/only-claude" "$base/.codex/skills/only-codex"
-printf '# only-claude\n' >"$base/.claude/skills/only-claude/SKILL.md"
-printf '# only-codex\n' >"$base/.codex/skills/only-codex/SKILL.md"
+mkdir -p "$base/.claude/skills" "$base/.codex/skills"
 if ! run_in_dir_searched "$base"; then
   no "root search: the run succeeds" "see the run above"
-elif [ -f "$base/.claude/skills/_smooth-devex-shared/installation.json" ] && [ ! -e "$base/.codex/skills/_smooth-devex-shared" ]; then
-  ok "root search: .claude/skills wins over .codex/skills"
+elif [ -f "$base/.claude/_smooth-devex-shared/installation.json" ] && [ ! -e "$base/.codex/_smooth-devex-shared" ]; then
+  ok "root search: .claude wins over .codex"
 else
-  no "root search: .claude/skills wins over .codex/skills" "the manifest landed in the wrong root"
+  no "root search: .claude wins over .codex" "the manifest landed in the wrong root"
 fi
 if [ -e "$base/.agents" ]; then
-  no "root search: creates no skills directory" "it created .agents"
+  no "root search: creates no agent directory" "it created .agents"
 else
-  ok "root search: creates no skills directory"
+  ok "root search: creates no agent directory"
 fi
 
-# A tree with no skills directory at all: a hard error, and still nothing created.
+# A tree with an agent directory but no skills directory: a hard error, and still nothing created.
+noskills="$scratch/noskills"
+mkdir -p "$noskills/.agents"
+if run_in_dir_searched "$noskills"; then
+  no "agent without skills exits non-zero" "expected failure, got success"
+else
+  ok "agent without skills exits non-zero"
+fi
+
+# A tree with no agent directory at all: a hard error, and still nothing created.
 empty="$scratch/empty"
 mkdir -p "$empty"
 if run_in_dir_searched "$empty"; then
-  no "no skills directory exits non-zero" "expected failure, got success"
+  no "no agent directory exits non-zero" "expected failure, got success"
 else
-  ok "no skills directory exits non-zero"
+  ok "no agent directory exits non-zero"
 fi
-if [ ! -d "$empty/.agents" ] && [ ! -d "$empty/.claude" ]; then
-  ok "no skills directory: creates nothing"
+if [ ! -d "$empty/.agents" ] && [ ! -d "$empty/.claude" ] && [ ! -d "$empty/.codex" ]; then
+  ok "no agent directory: creates nothing"
 else
-  no "no skills directory: creates nothing" "it created a skills directory"
+  no "no agent directory: creates nothing" "it created an agent directory"
+fi
+
+# ---------------------------------------------------------------------------------------------
+# 7. category switches (-r rules, -s skills, -h hooks; none = everything)
+# ---------------------------------------------------------------------------------------------
+# Rules and hooks payloads live in committed source files (.github/instructions, .agents/hooks),
+# so these cases are green even before the layout commit — unlike the shared-payload cases above.
+
+# 7a. -s only: skills install, rules and hooks untouched, manifest written.
+root="$(make_root "cat-skills" alpha)"
+run_sh "$root" -s >/dev/null 2>&1
+if [ -f "$root/_smooth-devex-shared/installation.json" ] \
+  && [ ! -e "$root/../.github" ] && [ ! -e "$root/hooks" ]; then
+  ok "-s only: skills install, no rules, no hooks"
+else
+  no "-s only: skills install, no rules, no hooks" "rules or hooks leaked in"
+fi
+
+# 7b. -r only: the five owned rules land, topology symlink created, no skills, no manifest.
+root="$(make_root "cat-rules" alpha)"
+run_sh "$root" -r >/dev/null 2>&1
+rules_ok=1
+for rel in code-review-standards.instructions.md git/git-policy.instructions.md \
+  meta/knowledge-conventional-contexts-quality.instructions.md meta/rules.instructions.md; do
+  [ -f "$root/../.github/instructions/$rel" ] || rules_ok=0
+done
+# The template's own index is never copied: a generated subset index ships instead, with no
+# references to unshipped rules.
+if [ -f "$root/../.github/instructions/AGENTS.md" ] \
+  && grep -q "installed subset" "$root/../.github/instructions/AGENTS.md" \
+  && ! grep -q "backend/" "$root/../.github/instructions/AGENTS.md"; then
+  :
+else
+  rules_ok=0
+fi
+if [ "$rules_ok" = "1" ] && [ -L "$root/rules" ] \
+  && [ ! -e "$root/skills/ai-terse" ] && [ ! -f "$root/_smooth-devex-shared/installation.json" ]; then
+  ok "-r only: owned rules land with topology link, no skills, no manifest"
+else
+  no "-r only: owned rules land with topology link, no skills, no manifest" "rules_ok=$rules_ok"
+fi
+
+# 7c. The two owned hooks land executable; unowned and operator files are untouched.
+# load-agents-context.sh is deliberately NOT owned (dead without its unowned implementation).
+root="$(make_root "cat-hooks" alpha)"
+mkdir -p "$root/hooks"
+printf '#!/bin/sh\n' >"$root/hooks/operator.sh"
+chmod 644 "$root/hooks/operator.sh"
+run_sh "$root" -h >/dev/null 2>&1
+if [ -f "$root/hooks/worktask-skill-trigger.sh" ] \
+  && [ -f "$root/hooks/manage-rule-system-context.sh" ] \
+  && [ -x "$root/hooks/worktask-skill-trigger.sh" ] \
+  && [ ! -e "$root/hooks/load-agents-context.sh" ] \
+  && [ ! -e "$root/hooks/slnx-docs-sync.py" ] \
+  && [ ! -x "$root/hooks/operator.sh" ] \
+  && [ ! -e "$root/skills/ai-terse" ] \
+  && [ ! -f "$root/_smooth-devex-shared/installation.json" ]; then
+  ok "-h only: owned hooks land executable, unowned and operator files untouched, no skills, no manifest"
+else
+  no "-h only: owned hooks land executable, unowned and operator files untouched, no skills, no manifest" "wrong hook set or operator file touched"
+fi
+
+# 7d. -r -h combined: rules and hooks, still no skills and no manifest.
+root="$(make_root "cat-rules-hooks" alpha)"
+run_sh "$root" -r -h >/dev/null 2>&1
+if [ -f "$root/../.github/instructions/git/git-policy.instructions.md" ] \
+  && [ -f "$root/hooks/worktask-skill-trigger.sh" ] \
+  && [ ! -e "$root/skills/ai-terse" ] \
+  && [ ! -f "$root/_smooth-devex-shared/installation.json" ]; then
+  ok "-r -h: rules and hooks install, skills skipped"
+else
+  no "-r -h: rules and hooks install, skills skipped" "wrong category set"
+fi
+
+# 7e. An unowned rule is never copied, and an operator's own rule file survives (overwrite,
+# never delete, no sweep).
+root="$(make_root "cat-unowned" alpha)"
+run_sh "$root" -r >/dev/null 2>&1
+mkdir -p "$root/../.github/instructions/backend"
+printf 'operator rule\n' >"$root/../.github/instructions/backend/operator.instructions.md"
+run_sh "$root" -r >/dev/null 2>&1
+if [ ! -e "$root/../.github/instructions/backend/api-mediator-validation.instructions.md" ] \
+  && [ "$(cat "$root/../.github/instructions/backend/operator.instructions.md")" = "operator rule" ]; then
+  ok "-r: unowned rules never copied, operator rules never swept"
+else
+  no "-r: unowned rules never copied, operator rules never swept" "unowned landed or operator lost"
+fi
+
+# 7f. An existing real rules directory is kept (topology link skipped, files still update).
+root="$(make_root "cat-realrules" alpha)"
+mkdir -p "$root/../.github/instructions"
+mkdir -p "$root/rules"
+printf 'operator index\n' >"$root/rules/AGENTS.md"
+run_sh "$root" -r >/dev/null 2>&1 || true
+if [ ! -L "$root/rules" ] && [ -d "$root/rules" ]; then
+  ok "-r: an existing real rules entry is never replaced"
+else
+  no "-r: an existing real rules entry is never replaced" "real dir replaced by link"
+fi
+
+# 7j. An existing consumer rules index is merged, not clobbered: the installed subset is
+# appended once, operator content survives, and a second run does not duplicate the section.
+root="$(make_root "cat-indexmerge" alpha)"
+mkdir -p "$root/../.github/instructions"
+printf '# AGENTS.md - Operator rules\n' >"$root/../.github/instructions/AGENTS.md"
+run_sh "$root" -r >/dev/null 2>&1
+run_sh "$root" -r >/dev/null 2>&1
+if [ "$(grep -c "installer-owned-rules-subset" "$root/../.github/instructions/AGENTS.md")" = "1" ] \
+  && grep -q "Operator rules" "$root/../.github/instructions/AGENTS.md" \
+  && grep -q "code-review-standards" "$root/../.github/instructions/AGENTS.md"; then
+  ok "-r: existing consumer index is appended once, never rewritten"
+else
+  no "-r: existing consumer index is appended once, never rewritten" "clobbered or duplicated"
+fi
+# 7g. An unknown switch is a hard error.
+root="$(make_root "cat-badflag" alpha)"
+st=0
+run_sh "$root" -x >/dev/null 2>&1 || st=$?
+if [ "$st" -ne 0 ]; then
+  ok "unknown switch exits non-zero"
+else
+  no "unknown switch exits non-zero" "expected failure, got success"
+fi
+
+# 7h. Inside a git work tree the run marks symlinks supported (consumer-side recording);
+# outside one (every other case in this harness) the step is silently skipped.
+root="$(make_root "cat-symlinkcfg" alpha)"
+git -C "$(dirname "$root")" init -q 2>/dev/null
+run_sh "$root" >/dev/null 2>&1
+if [ "$(git -C "$root" config core.symlinks 2>/dev/null)" = "true" ]; then
+  ok "consumer repo gets core.symlinks=true"
+else
+  no "consumer repo gets core.symlinks=true" "config missing or false"
+fi
+
+# 7i. A relative SKILLS_ROOT resolves against the cwd: state lands beside skills, not inside
+# them, and rules land in the repo root — never nested under the skills dir.
+relroot="$scratch/relroot"
+mkdir -p "$relroot/.agents/skills/alpha"
+printf '# alpha\n' >"$relroot/.agents/skills/alpha/SKILL.md"
+( cd "$relroot" && SKILLS_ROOT=.agents/skills SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
+  SKILLS_TEST_OWNED_EXTRA="alpha" bash "$installer_sh" -s -r ) >/dev/null 2>&1
+if [ -f "$relroot/.agents/_smooth-devex-shared/installation.json" ] \
+  && [ ! -e "$relroot/.agents/skills/_smooth-devex-shared" ] \
+  && [ -f "$relroot/.github/instructions/git/git-policy.instructions.md" ]; then
+  ok "relative SKILLS_ROOT resolves against the cwd"
+else
+  no "relative SKILLS_ROOT resolves against the cwd" "state or rules nested inside skills/"
 fi
 
 # ---------------------------------------------------------------------------------------------

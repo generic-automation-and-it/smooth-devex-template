@@ -5,24 +5,46 @@
 #   curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash
 #
 # Contract:
-#   1. Finds the skills root in order: .agents/skills → .claude/skills → .codex/skills, and errors
+#   1. Finds the agent root in order: .agents → .claude → .codex, and errors
 #      when none exists. It never creates one: a folder the operator did not ask for is not an install.
-#   2. Reads <root>/_smooth-devex-shared/installation.json.
+#      The skills root is <agent-root>/skills (override with SKILLS_ROOT, whose parent then counts
+#      as the agent root for state purposes).
+#   2. Category switches -r (rules), -s (skills), -h (hooks) select what this run installs.
+#      No switches means everything is on. Switches filter the run only; nothing is persisted.
+#   3. Skills: reads <agent-root>/_smooth-devex-shared/installation.json.
 #      - Missing  → creates it with every skill on disk, installed:true, UTC timestamp.
 #      - Present  → syncs: adds new skills, drops skills no longer on disk, keeps every
 #                   installed flag the operator already set. A corrupt file is a hard error,
 #                   never a silent reset of the whole manifest.
-#   3. Updates only the skills marked installed:true, cloning the repo once and copying those folders
-#      (plus the shared folder, if the source ships one) out of it.
-#   4. Writes the updated installation.json back with a fresh UTC timestamp — after the update, so
-#      refreshing the shared folder cannot clobber the manifest that update read.
+#      A legacy manifest at the old <skills-root>/_smooth-devex-shared/installation.json location
+#      is ignored (fresh start): it is reported on stderr and otherwise left untouched.
+#   4. Updates only the skills marked installed:true, cloning the repo once and copying those folders
+#      (plus the shared payload, if the source ships one) out of it.
+#   5. Rules (-r): copies the owned rule files (see OWNED_RULES) from the source's
+#      .github/instructions/ into <repo>/.github/instructions/, preserving relative paths.
+#      Overwrites, never deletes: an operator's own rules are never swept. Ensures the
+#      <agent-root>/rules → ../.github/instructions topology symlink when nothing is there.
+#   6. Hooks (-h): copies the owned hook files (see OWNED_HOOKS) from the source's .agents/hooks/
+#      into <agent-root>/hooks/. Overwrites, never deletes. Hook *registration* (settings.json)
+#      is deliberately out of scope — the consumer wires what it wants.
+#   7. Links every top-level shared-payload entry back to its canonical <agent-root> path
+#      (e.g. <agent-root>/setup → _smooth-devex-shared/setup), so SKILL.md references to the
+#      canonical paths keep working. An existing real file or directory at the link path is
+#      never replaced: it is reported and skipped.
+#   The temp clone forces `-c core.symlinks=true`; the consumer repo gets
+#   `core.symlinks=true` best-effort (silently skipped outside git). See SKILLS_INSTALLER.md.
+#   8. Writes the updated installation.json back with a fresh UTC timestamp — after the update, so
+#      refreshing the shared payload cannot clobber the manifest that update read. Only written
+#      when the skills category ran.
 #
 # Dependencies: bash, git, python3 (already a dependency of most skills shipped here).
 #
 # Environment overrides:
 #   SKILLS_REPO    — git URL to clone from (default: the upstream GitHub repo)
 #   SKILLS_BRANCH  — branch to clone (default: main)
-#   SKILLS_ROOT    — force a specific skills root (skips the search)
+#   SKILLS_ROOT    — force a specific skills root (skips the agent-root search; the
+#                    parent directory of SKILLS_ROOT then counts as the agent root,
+#                    so <parent>/_smooth-devex-shared holds the manifest)
 
 set -euo pipefail
 
@@ -59,6 +81,43 @@ OWNED_LIST=(
   manage-rule-system
 )
 
+# Rules the installer is allowed to carry across, as paths relative to .github/instructions/.
+# Derived from what the owned skills actually reference, plus the shared convention:
+#
+#   code-review-standards.instructions.md                       referenced by create-worktask
+#   git/git-policy.instructions.md                              referenced by ai-asset-sync, create-worktask
+#   meta/knowledge-conventional-contexts-quality.instructions.md   referenced by create-hld
+#   meta/rules.instructions.md                                  rule lifecycle convention (manage-rule-system)
+#
+# The rules index (AGENTS.md) is NOT copied: it catalogues the template's full rule tree, most of
+# which never ships. install_rules writes a generated index of the shipped subset instead, so a
+# fresh consumer never sees dangling references and an existing consumer's own index is merged,
+# not clobbered. Everything else in .github/instructions/ stays local. Same positive owned-set
+# shape as skills: never a deny list.
+OWNED_RULES=(
+  code-review-standards.instructions.md
+  git/git-policy.instructions.md
+  meta/knowledge-conventional-contexts-quality.instructions.md
+  meta/rules.instructions.md
+)
+
+# Hooks the installer is allowed to carry across. Derived the same way: a hook is owned iff an
+# owned skill's SKILL.md references it AND its implementation ships with it.
+#
+#   manage-rule-system-context.sh referenced by manage-rule-system (delegates into the owned skill)
+#   worktask-skill-trigger.sh     referenced by create-worktask (self-contained router)
+#
+# load-agents-context.sh is referenced by ai-template-sync but delegates to
+# context-load-agents-context/scripts/, which is NOT owned and never ships — copying the wrapper
+# alone installs a hook that silently does nothing (it exits 0 when the implementation is absent).
+# It stays local until its implementation is owned too. The rest (slnx-docs-sync.py,
+# agentmd-create-update.sh, code-review-standards-context.sh, knowledge-rule-enforce.sh) is
+# template-local and stays.
+OWNED_HOOKS=(
+  manage-rule-system-context.sh
+  worktask-skill-trigger.sh
+)
+
 die() { echo "install-skills: $*" >&2; exit 1; }
 log() { echo "install-skills: $*" >&2; }
 
@@ -86,18 +145,46 @@ owned_set() {
   printf '%s' "$out"
 }
 
+# Owned rules and hooks need no membership test: the install loops below iterate the
+# allowlists directly, so an unowned name can never enter (unlike skills, where a hand-edited
+# manifest needs the is_owned_skill guard). No helpers, nothing to drift.
+
+# Category switches. No switches means everything is on; any switch narrows the run to exactly
+# what was named. Switches filter the run only — nothing about the selection is persisted.
+DO_RULES=0
+DO_SKILLS=0
+DO_HOOKS=0
+
+parse_categories() {
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      -r) DO_RULES=1 ;;
+      -s) DO_SKILLS=1 ;;
+      -h) DO_HOOKS=1 ;;
+      -*) die "unknown option: $arg (use -r for rules, -s for skills, -h for hooks)" ;;
+      *) die "unexpected argument: $arg (use -r for rules, -s for skills, -h for hooks)" ;;
+    esac
+  done
+  if [ "$DO_RULES$DO_SKILLS$DO_HOOKS" = "000" ]; then
+    DO_RULES=1
+    DO_SKILLS=1
+    DO_HOOKS=1
+  fi
+}
+
 # ---------------------------------------------------------------------------
-# 1. Find skills root
+# 1. Find agent root and skills root
 # ---------------------------------------------------------------------------
 
-find_skills_root() {
-  # Returns an absolute path. The manifest lives at <root>/_smooth-devex-shared/installation.json,
+find_agent_root() {
+  # Returns an absolute path. The manifest lives at <agent-root>/_smooth-devex-shared/installation.json,
   # and a later `cd` would silently change what that path resolves to. Resolving once at discovery
   # keeps every downstream join against the same root.
   local dir
-  for dir in ".agents/skills" ".claude/skills" ".codex/skills"; do
+  for dir in ".agents" ".claude" ".codex"; do
     if [ -d "$dir" ]; then
-      printf '%s\n' "$(cd "$dir" && pwd)"
+      printf '%s\n' "$(cd "$dir" && pwd -P)"
       return 0
     fi
   done
@@ -287,17 +374,60 @@ clone_source() {
     *) [ -d "$clone_url" ] && clone_url="file://$PWD/$clone_url" ;;
   esac
 
+  # `-c core.symlinks=true` forces symlink checkout in the temp clone regardless of the
+  # operator's global git config. Without it, a Windows-default git materializes the source's
+  # committed symlinks (.agents/setup/scripts, .agents/templates) as plain text files, and the
+  # payload copy below would copy file-blobs instead of directories. On a machine without symlink
+  # privilege (Windows without Developer Mode or elevation) the forced checkout fails outright —
+  # so fall back to a plain clone with a warning instead of dying. The fallback is complete: the
+  # installer only reads real directories out of the clone (skills, hooks, _smooth-devex-shared,
+  # .github/instructions); canonical links are created filesystem-side afterwards.
   if [ -n "$SKILLS_BRANCH" ]; then
-    git clone --depth 1 --branch "$SKILLS_BRANCH" "$clone_url" "$INSTALL_TMP/repo" >/dev/null 2>&1 \
+    git -c core.symlinks=true clone --depth 1 --branch "$SKILLS_BRANCH" "$clone_url" "$INSTALL_TMP/repo" >/dev/null 2>&1 \
+      || { log "WARNING: symlink checkout failed — retrying without symlink support"; git clone --depth 1 --branch "$SKILLS_BRANCH" "$clone_url" "$INSTALL_TMP/repo" >/dev/null 2>&1; } \
       || die "Failed to clone $SKILLS_REPO (branch '$SKILLS_BRANCH' — set SKILLS_BRANCH empty for the default)"
   else
-    git clone --depth 1 "$clone_url" "$INSTALL_TMP/repo" >/dev/null 2>&1 \
+    git -c core.symlinks=true clone --depth 1 "$clone_url" "$INSTALL_TMP/repo" >/dev/null 2>&1 \
+      || { log "WARNING: symlink checkout failed — retrying without symlink support"; git clone --depth 1 "$clone_url" "$INSTALL_TMP/repo" >/dev/null 2>&1; } \
       || die "Failed to clone $SKILLS_REPO"
   fi
 }
 
+# Best-effort: mark symlinks supported in the consumer repo, mirroring .agents/setup/scripts.
+# Filesystem links the installer creates work regardless; this only affects how git *records*
+# them on the consumer's next commit. Outside a git work tree (or when git is missing) it is
+# silently skipped — never a failure.
+ensure_consumer_symlink_support() {
+  local agent_root="$1"
+  git -C "$agent_root" config core.symlinks true 2>/dev/null || true
+}
+
+# ensure_canonical_link AGENT_ROOT NAME — link <agent-root>/<name> at the shared payload entry.
+#
+# SKILL.md files reference canonical paths (.agents/setup/..., .agents/hooks/..., ...). The payload
+# lives under _smooth-devex-shared/, so the installer links each top-level payload entry back to its
+# canonical path. An existing real file or directory is never replaced: it is reported and skipped,
+# and the payload stays reachable under _smooth-devex-shared/ either way.
+ensure_canonical_link() {
+  local agent_root="$1" shared_dir="$2" name="$3"
+  local link="$agent_root/$name" target="_smooth-devex-shared/$name"
+  if [ -L "$link" ]; then
+    if [ "$(readlink "$link")" = "$target" ]; then
+      return 0
+    fi
+    log "WARNING: $link is a symlink to somewhere else — left untouched"
+    return 0
+  fi
+  if [ -e "$link" ]; then
+    log "WARNING: $link already exists — leaving the real entry in place, shared copy stays under $shared_dir/$name"
+    return 0
+  fi
+  ln -s "$target" "$link"
+  log "Linked $link -> $target"
+}
+
 update_installed_skills() {
-  local installation_json="$1" skills_root="$2"
+  local installation_json="$1" skills_root="$2" agent_root="$3" shared_dir="$4"
   local installed_names
 
   installed_names="$(printf '%s' "$installation_json" | python3 -c "
@@ -333,17 +463,19 @@ for s in data.get('skills', []):
     done <<< "$installed_names"
   fi
 
-  # The shared folder is not a skill and is never in the manifest, but any installed skill that
-  # references it is broken without it — so it refreshes on every run, independently of the flags.
+  # The shared payload is not a skill and all of it refreshes on every run, independently of
+  # the skill flags. Only cross-cutting, repo-owned infra lives here (setup scripts, templates,
+  # installer state): skills, rules and hooks each have their own installer category and their
+  # own standard directories.
   #
   # Refreshed *by content*, with stale entries removed, rather than merged in (which would leave a file
   # deleted upstream alive forever — an updater that never forgets anything is not an updater) and
   # rather than replacing the folder outright (which would take the manifest sitting inside it down with
   # it, and a run interrupted between the two would leave the next run rebuilding every flag from
   # defaults). So: copy across, then delete exactly what the source does not have, except the manifest.
-  local shared_source="$INSTALL_TMP/repo/.agents/skills/_smooth-devex-shared"
+  local shared_source="$INSTALL_TMP/repo/.agents/_smooth-devex-shared"
   if [ -d "$shared_source" ]; then
-    local shared_dest="$skills_root/_smooth-devex-shared"
+    local shared_dest="$shared_dir"
     mkdir -p "$shared_dest"
     cp -R "$shared_source/." "$shared_dest"
     # Recursive, and that recursion is the point: a top-level-only sweep keeps every entry the source
@@ -351,7 +483,122 @@ for s in data.get('skills', []):
     # a retired script actually goes.
     sweep_stale_entries "$shared_dest" "$shared_source"
     log "Updated _smooth-devex-shared"
+    # Link the payload back to canonical paths so .agents/setup/... references keep working.
+    local entry name
+    for entry in "$shared_source"/*; do
+      [ -e "$entry" ] || continue
+      name="$(basename "$entry")"
+      ensure_canonical_link "$agent_root" "$shared_dir" "$name"
+    done
   fi
+}
+
+# ---------------------------------------------------------------------------
+# 6. Rules and hooks (owned only, overwrite, never delete)
+# ---------------------------------------------------------------------------
+
+# The shipped-rules table, shared by the full-file and append paths below. Scopes mirror the
+# template's own index for the owned subset only.
+rules_index_table() {
+  cat <<'EOF'
+| Scope | Rules |
+| :---- | :---- |
+| `**` | `code-review-standards` · `git/git-policy` |
+| `**/*AGENTS.md` | `meta/knowledge-conventional-contexts-quality` |
+| `.agents/rules/**` | `meta/rules` |
+EOF
+}
+
+write_rules_index() {
+  # The template's own AGENTS.md catalogues rules that never ship (dangling refs on a fresh
+  # install) and would clobber an existing consumer index — so it is never copied. Instead:
+  # missing index → write a generated one we own; our generated file → refresh it;
+  # someone else's index → append our subset once (marker-guarded), never rewrite it.
+  local dest_rules="$1" index="$1/AGENTS.md" table
+  table="$(rules_index_table)"
+  if [ ! -f "$index" ]; then
+    {
+      printf '# AGENTS.md - Rules (installed subset)\n\n'
+      printf '<!-- installer-owned-rules-subset: regenerated by install-skills -->\n\n'
+      printf 'Rule index for the files the skills installer shipped. The template full index\n'
+      printf 'lives upstream; only the files below are present here.\n\n'
+      printf '## Key Behaviors\n\n%s\n' "$table"
+      printf '\nFile = `<name>.instructions.md` in `.github/instructions/`.\n'
+    } > "$index"
+    log "Wrote generated rules index $index"
+  elif [ "$(head -n 1 "$index")" = "# AGENTS.md - Rules (installed subset)" ]; then
+    {
+      printf '# AGENTS.md - Rules (installed subset)\n\n'
+      printf '<!-- installer-owned-rules-subset: regenerated by install-skills -->\n\n'
+      printf 'Rule index for the files the skills installer shipped. The template full index\n'
+      printf 'lives upstream; only the files below are present here.\n\n'
+      printf '## Key Behaviors\n\n%s\n' "$table"
+      printf '\nFile = `<name>.instructions.md` in `.github/instructions/`.\n'
+    } > "$index"
+    log "Refreshed generated rules index $index"
+  elif grep -q "installer-owned-rules-subset" "$index"; then
+    log "Rules index already carries the installed subset — left untouched"
+  else
+    {
+      printf '\n## Installed subset (installer-owned-rules-subset)\n\n%s\n' "$table"
+    } >> "$index"
+    log "Appended installed subset to existing rules index $index"
+  fi
+}
+
+install_rules() {
+  local agent_root="$1"
+  local repo_root source_rules dest_rules rel
+  # The agent root is a direct child of the repo root (.agents, .claude, .codex all are).
+  repo_root="$(dirname "$agent_root")"
+  source_rules="$INSTALL_TMP/repo/.github/instructions"
+  dest_rules="$repo_root/.github/instructions"
+  if [ ! -d "$source_rules" ]; then
+    log "No .github/instructions in source — nothing to install for rules"
+    return 0
+  fi
+  mkdir -p "$dest_rules"
+  for rel in "${OWNED_RULES[@]}"; do
+    if [ -f "$source_rules/$rel" ]; then
+      mkdir -p "$(dirname "$dest_rules/$rel")"
+      cp "$source_rules/$rel" "$dest_rules/$rel"
+      log "Updated rule $rel"
+    else
+      log "WARNING: rule $rel not found in repo — left on disk untouched"
+    fi
+  done
+  # Topology: <agent-root>/rules → ../.github/instructions, but only when nothing is there.
+  # A real directory is an operator's own rules — never replaced, never merged into.
+  if [ ! -e "$agent_root/rules" ] && [ ! -L "$agent_root/rules" ]; then
+    ln -s ../.github/instructions "$agent_root/rules"
+    log "Linked $agent_root/rules -> ../.github/instructions"
+  fi
+  write_rules_index "$dest_rules"
+}
+
+install_hooks() {
+  local agent_root="$1"
+  local source_hooks dest_hooks name
+  source_hooks="$INSTALL_TMP/repo/.agents/hooks"
+  dest_hooks="$agent_root/hooks"
+  if [ ! -d "$source_hooks" ]; then
+    log "No .agents/hooks in source — nothing to install for hooks"
+    return 0
+  fi
+  mkdir -p "$dest_hooks"
+  for name in "${OWNED_HOOKS[@]}"; do
+    if [ -e "$source_hooks/$name" ]; then
+      cp -R "$source_hooks/$name" "$dest_hooks/$name"
+      # Exec bit per owned file only: a wildcard chmod would also flip operator-owned
+      # scripts sharing the directory. Preserve the source bit, don't invent one.
+      case "$name" in
+        *.sh) [ -x "$source_hooks/$name" ] && chmod +x "$dest_hooks/$name" ;;
+      esac
+      log "Updated hook $name"
+    else
+      log "WARNING: hook $name not found in repo — left on disk untouched"
+    fi
+  done
 }
 
 # ---------------------------------------------------------------------------
@@ -359,42 +606,80 @@ for s in data.get('skills', []):
 # ---------------------------------------------------------------------------
 
 main() {
-  local skills_root json_path existing_json new_json
+  parse_categories "$@"
+  local agent_root skills_root shared_dir json_path legacy_json existing_json new_json
 
   if [ -n "${SKILLS_ROOT:-}" ]; then
-    skills_root="$SKILLS_ROOT"
-    [ -d "$skills_root" ] || die "SKILLS_ROOT '$skills_root' does not exist"
+    [ -d "$SKILLS_ROOT" ] || die "SKILLS_ROOT '$SKILLS_ROOT' does not exist"
+    # Resolve to absolute first: a relative SKILLS_ROOT (e.g. `.` from inside the skills dir)
+    # would make dirname return the skills dir itself, nesting state inside skills/ and
+    # misplacing rules. The parent of the absolute path is the agent root, whatever it is named.
+    skills_root="$(cd "$SKILLS_ROOT" && pwd -P)"
+    # The parent of an explicitly forced skills root counts as the agent root, whatever it
+    # is named: the shared dir is always a sibling of the skills dir, never inside it.
+    agent_root="$(cd "$(dirname "$skills_root")" && pwd -P)"
   else
-    skills_root="$(find_skills_root)" \
-      || die "no skills directory found — expected one of .agents/skills, .claude/skills, .codex/skills (create one, or set SKILLS_ROOT)"
+    agent_root="$(find_agent_root)" \
+      || die "no agent directory found — expected one of .agents, .claude, .codex (create one, or set SKILLS_ROOT)"
+    skills_root="$agent_root/skills"
+    # The skills directory is only required when the skills category runs: a rules-only or
+    # hooks-only run must work in a tree that has no skills at all.
+    if [ "$DO_SKILLS" = "1" ]; then
+      [ -d "$skills_root" ] || die "no skills directory found — expected $skills_root (create it, or set SKILLS_ROOT)"
+    fi
   fi
 
-  json_path="$skills_root/_smooth-devex-shared/installation.json"
-  mkdir -p "$skills_root/_smooth-devex-shared"
+  shared_dir="$agent_root/_smooth-devex-shared"
+  json_path="$shared_dir/installation.json"
 
-  log "Skills root: $skills_root"
-
-  # A non-zero status here is the corrupt-manifest case; json_read has already said why. Swallowing it
-  # would rebuild the manifest from defaults and re-enable skills the operator had switched off.
-  existing_json="$(json_read "$json_path")" \
-    || die "cannot read $json_path — fix or delete it, then re-run"
+  log "Agent root: $agent_root"
+  [ "$DO_SKILLS" = "1" ] && log "Skills root: $skills_root"
 
   clone_source
+  ensure_consumer_symlink_support "$agent_root"
 
-  log "Syncing installation.json…"
-  new_json="$(build_installation_json "$skills_root" "$existing_json" \
-    "$(list_skills "$INSTALL_TMP/repo/.agents/skills" | python3 -c "
+  if [ "$DO_SKILLS" = "1" ]; then
+    mkdir -p "$shared_dir"
+
+    # Fresh start across the layout move: a manifest at the legacy location inside the skills
+    # root is ignored, not migrated. Migrating would silently re-apply flags the operator may
+    # have set under a different contract; the notice tells them where to look.
+    legacy_json="$skills_root/_smooth-devex-shared/installation.json"
+    if [ "$legacy_json" != "$json_path" ] && [ -f "$legacy_json" ]; then
+      log "Ignoring legacy manifest at $legacy_json — delete it to silence this notice"
+    fi
+
+    # A non-zero status here is the corrupt-manifest case; json_read has already said why.
+    # Swallowing it would rebuild the manifest from defaults and re-enable skills the operator
+    # had switched off.
+    existing_json="$(json_read "$json_path")" \
+      || die "cannot read $json_path — fix or delete it, then re-run"
+
+    log "Syncing installation.json…"
+    new_json="$(build_installation_json "$skills_root" "$existing_json" \
+      "$(list_skills "$INSTALL_TMP/repo/.agents/skills" | python3 -c "
 import json, sys
 print(json.dumps(sorted(line.strip() for line in sys.stdin if line.strip())))
 ")")"
 
-  log "Updating installed skills…"
-  update_installed_skills "$new_json" "$skills_root"
+    log "Updating installed skills…"
+    update_installed_skills "$new_json" "$skills_root" "$agent_root" "$shared_dir"
 
-  # Written last: the shared-folder refresh happens during the update, and the manifest lives inside it.
-  json_write "$json_path" "$new_json"
+    # Written last: the shared-folder refresh happens during the update, and the manifest lives inside it.
+    json_write "$json_path" "$new_json"
+  fi
 
-  log "Done. State: $json_path"
+  if [ "$DO_RULES" = "1" ]; then
+    log "Updating owned rules…"
+    install_rules "$agent_root"
+  fi
+
+  if [ "$DO_HOOKS" = "1" ]; then
+    log "Updating owned hooks…"
+    install_hooks "$agent_root"
+  fi
+
+  log "Done."
 }
 
 # Test-only entry point. SKILLS_TEST_SKIP_RECONCILE=1 lets the harness exercise the update-loop guard
@@ -409,7 +694,10 @@ print(json.dumps(sorted(line.strip() for line in sys.stdin if line.strip())))
 main_skip_reconcile() {
   local skills_root="$SKILLS_ROOT"
   [ -d "$skills_root" ] || die "SKILLS_ROOT '$skills_root' does not exist (required for uninstall)"
-  json_path="$skills_root/_smooth-devex-shared/installation.json"
+  local agent_root shared_dir json_path existing_json
+  agent_root="$(cd "$(dirname "$skills_root")" && pwd -P)"
+  shared_dir="$agent_root/_smooth-devex-shared"
+  json_path="$shared_dir/installation.json"
   existing_json="$(json_read "$json_path")" \
     || die "cannot read $json_path — fix or delete it, then re-run"
   # The test sets INSTALL_TMP externally so disk and source can differ; verify it exists.
@@ -417,7 +705,7 @@ main_skip_reconcile() {
   [ -d "$INSTALL_TMP/repo/.agents/skills" ] || die "INSTALL_TMP/repo/.agents/skills must exist externally"
   trap 'rm -rf "${INSTALL_TMP:-}"' EXIT INT TERM HUP
   log "Updating installed skills (skip-reconcile mode)…"
-  update_installed_skills "$existing_json" "$skills_root"
+  update_installed_skills "$existing_json" "$skills_root" "$agent_root" "$shared_dir"
   log "Done. State (untouched): $json_path"
 }
 

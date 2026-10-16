@@ -10,6 +10,12 @@ Read [`README.md`](./README.md) first — skill index, switches, effort levels a
   the skill's job (shell out to `gh`, swap a symlink, refresh a template dir), keep it and baseline it
   per [skillspector-pre-pr](../../.github/instructions/skills/skillspector-pre-pr.instructions.md). A green
   gate bought by gutting a skill is a failure.
+- **`SKILL.md` is code; a skill-local `AGENTS.md` never repeats it.** Switches, workflow steps, and
+  output formats live once in `SKILL.md` and are referenced, not restated. `AGENTS.md` carries only
+  what `SKILL.md` cannot: non-obvious traps, cross-section couplings a rename would silently break,
+  and the consequence of violating a rule. A restated paragraph is drift by construction — the next
+  edit updates one copy and not the other. (This file itself is local-only: the installer copies
+  owned skill folders, never the skills root's own `AGENTS.md`.)
 
 ## Architecture Decisions
 
@@ -37,3 +43,4 @@ Read [`README.md`](./README.md) first — skill index, switches, effort levels a
 | 2026-10-15 | Cut to README pointer + LADR-001; skill-specific facts moved to each skill's AGENTS.md | — |
 | 2026-10-16 | `ai-ralph-loop` added; local only (not in the installer's owned set) | — |
 | 2026-10-16 | `ai-ralph-loop` shipped by the installer (added to the owned set) | #104 |
+| 2026-10-16 | `SKILL.md`-is-code: skill `AGENTS.md` files carry traps only, never restatements | — |

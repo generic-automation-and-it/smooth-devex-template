@@ -150,25 +150,31 @@ tests/
 
 ## Use it in another repository
 
-To pull just the **agent skills** (`.agents/skills/`) from this template into an existing repository,
+To pull the **agent skills** (`.agents/skills/`), **owned rules** (`.github/instructions/` subset),
+and **owned hooks** (`.agents/hooks/` subset) from this template into an existing repository,
 without copying the rest of the template, run the one-command installer. The installer is per-skill
 **opt-out** — new catalogue entries default to `installed:true` — and keeps an editable manifest. It
-never touches the calling repo's `src/`, `tests/`, or `.github/` directories.
+never touches the calling repo's `src/` or `tests/` directories; with the default switches it writes
+skills, the shared payload, the five owned rules under `.github/instructions/`, and the three owned
+hooks.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash
+curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -r -s -h
 ```
 
 ```powershell
-irm https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.ps1 | iex
+$script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.ps1)); & $script -r -s -h
 ```
+
+`-r` rules, `-s` skills, `-h` hooks — no switches means everything is on, so `-r -s -h` spells the
+default out loud. Narrow with any subset (`-s` for skills only).
 
 > **Risk callout.** A first run into an existing `.agents/skills/` **replaces every local skill folder**
 > with the source's version — there is no confirmation prompt. Set `installed: false` in
 > `_smooth-devex-shared/installation.json` for anything you want kept, before the first install, or
 > back the folder up first.
 
-State lives in `<your-repo>/.agents/skills/_smooth-devex-shared/installation.json` (UTC stamp plus a
+State lives in `<your-repo>/.agents/_smooth-devex-shared/installation.json` (UTC stamp plus a
 `name` / `installed` pair per skill). Flip a skill off by setting its `installed` flag to `false`; the
 installer will leave it on disk but stop overwriting it on every run. Full contract and operator
 documentation: [`scripts/SKILLS_INSTALLER.md`](scripts/SKILLS_INSTALLER.md).
@@ -185,23 +191,22 @@ installed here either — install them with that repository's own installer.
 
 ### Scope
 
-The installer ships only `.agents/skills/`. It does **not** carry:
+The installer ships owned skills, owned rules, owned hooks, and the shared payload —
+see `scripts/SKILLS_INSTALLER.md` for the owned sets. It does **not** carry anything else:
+template-domain rules, local skills, and unowned hooks stay in this repo.
 
-- `.agents/rules/` (rules referenced by skill `SKILL.md` frontmatter)
-- `.agents/templates/` (referenced by `create-worktask/SKILL.md`)
-- `.agents/hooks/` (referenced by some `setup/scripts/` flows)
-
-A consumer that runs the one-liner into an empty repo gets the skill folders but the cross-tree
+A consumer that runs the one-liner into an empty repo gets the skill folders plus the
 references inside `SKILL.md` files (`Bash(.agents/rules/.../SKILL.md:*)`, etc.) point at paths that
-do not exist. Skills that need rules or templates need a manual copy of those files alongside the
-install. See `scripts/SKILLS_INSTALLER.md` for the per-skill dependency list.
+exist after a default `-r -s -h` run. Skills whose `SKILL.md` references template-domain rules
+outside the owned set need a manual copy of those files alongside the install. See
+`scripts/SKILLS_INSTALLER.md` for the per-category dependency list.
 
 ### Supported roots
 
-The installer accepts `.agents/skills/`, `.claude/skills/`, or `.codex/skills/` as the skills root.
-A consumer that picks `.claude/skills/` or `.codex/skills/` as its root must create the canonical
-symlink (`.claude/skills -> .agents/skills` / `.codex/skills -> .agents/skills`) for the skill
-`SKILL.md` files to find their `scripts/` siblings at the canonical path.
+The installer accepts `.agents`, `.claude`, or `.codex` as the agent root; skills live at
+`<agent-root>/skills` and state plus shared payload at `<agent-root>/_smooth-devex-shared/`.
+A `SKILLS_ROOT` override points at a skills directory directly — its parent then counts as the
+agent root.
 
 ---
 

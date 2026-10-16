@@ -27,6 +27,7 @@ No switch is needed — a bare invocation is the full run.
 | _(none)_ | Full run over the branch diff, up to 10 loops | — |
 | `--loops <n>` | Loop cap; any positive integer | `10` |
 | `--scope <path\|glob>` | Review these files instead of the branch diff | branch diff vs `origin/main` |
+| `--spawn` | Run the two review lenses as parallel subagents with fresh context | off — both lenses run sequentially, inline, in the current agent pid |
 
 Single-dash spellings (`-loops 5`) are accepted. An unrecognised switch or a non-positive `--loops` is
 not guessed at: say what was passed and ask.
@@ -93,13 +94,17 @@ loop — never rely on recall of earlier loops.
 ### Loop n (1 … cap)
 
 1. **Review.** Target: loop 1 and any confirmation sweep = full scope; otherwise the **delta** — files
-   edited in loop n−1 plus their direct callers and importers. Run two read-only reviewers in parallel,
-   each with fresh context and the [Reviewer brief](#reviewer-brief):
+   edited in loop n−1 plus their direct callers and importers. Review through both lenses, each with
+   the [Reviewer brief](#reviewer-brief):
    - Lens A: feature gap, potential bug.
    - Lens B: architectural issue, YAGNI, KISS, clean code consistency.
 
-   A harness without sub-agents runs the two lenses inline, one after the other, re-reading the target
-   files from disk.
+   Without `--spawn` (the default), run the two lenses **sequentially, inline, in the current agent
+   pid**: lens A first over the target files, then lens B, re-reading the target files from disk
+   between them so neither lens inherits the other's framing. With `--spawn`, run them as two
+   parallel subagents, each handed the reviewer brief, the target file list, and the ledger path.
+   A harness that cannot spawn subagents ignores `--spawn` and runs inline — never fail the run
+   for it.
 2. **Triage.** Check each finding against the code yourself. Accept, reject or defer it with a reason.
    A finding matching a ledger row (same file, same issue) is dropped.
 3. **Fix.** Accepted findings only, in order: potential bug → feature gap → architectural issue → the
