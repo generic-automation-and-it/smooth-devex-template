@@ -587,7 +587,7 @@ function Install-OwnedHooks {
             if ($name -like '*.sh') {
                 $src = Join-Path $sourceHooks $name
                 $dst = Join-Path $destHooks $name
-                if ((Test-Path -LiteralPath $src) -and ((Get-Item $src).UnixFileMode -band [System.IO.UnixFileMode]::ExecuteUser)) {
+                if ((Test-Path -LiteralPath $src) -and ((Get-Item $src).UnixFileMode -band [System.IO.UnixFileMode]::UserExecute)) {
                     & chmod +x $dst 2>$null
                 }
             }
