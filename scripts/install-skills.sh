@@ -102,16 +102,18 @@ OWNED_RULES=(
 )
 
 # Hooks the installer is allowed to carry across. Derived the same way: a hook is owned iff an
-# owned skill's SKILL.md references it.
+# owned skill's SKILL.md references it AND its implementation ships with it.
 #
-#   load-agents-context.sh        referenced by ai-template-sync
-#   manage-rule-system-context.sh referenced by manage-rule-system
-#   worktask-skill-trigger.sh     referenced by create-worktask
+#   manage-rule-system-context.sh referenced by manage-rule-system (delegates into the owned skill)
+#   worktask-skill-trigger.sh     referenced by create-worktask (self-contained router)
 #
-# The rest (slnx-docs-sync.py, agentmd-create-update.sh, code-review-standards-context.sh,
-# knowledge-rule-enforce.sh) is template-local and stays.
+# load-agents-context.sh is referenced by ai-template-sync but delegates to
+# context-load-agents-context/scripts/, which is NOT owned and never ships — copying the wrapper
+# alone installs a hook that silently does nothing (it exits 0 when the implementation is absent).
+# It stays local until its implementation is owned too. The rest (slnx-docs-sync.py,
+# agentmd-create-update.sh, code-review-standards-context.sh, knowledge-rule-enforce.sh) is
+# template-local and stays.
 OWNED_HOOKS=(
-  load-agents-context.sh
   manage-rule-system-context.sh
   worktask-skill-trigger.sh
 )
@@ -542,8 +544,6 @@ install_hooks() {
       log "WARNING: hook $name not found in repo — left on disk untouched"
     fi
   done
-  # Hooks run as commands; a lost exec bit is a silently dead hook.
-  chmod +x "$dest_hooks"/*.sh 2>/dev/null || true
 }
 
 # ---------------------------------------------------------------------------

@@ -138,12 +138,15 @@ Overwrite, never delete — an operator's own rules are never swept. Everything 
 The run also ensures the `<agent-root>/rules → ../.github/instructions` topology symlink when
 nothing is there; a real directory is never replaced. Skipped entirely unless `-r` (or no switches).
 
-**5. Update the owned hooks (`-h`).** The three `OWNED_HOOKS` files copy from the source's
-`.agents/hooks/` into `<agent-root>/hooks/`, kept executable. A hook is owned iff an owned
-skill's `SKILL.md` references it (`load-agents-context.sh`, `manage-rule-system-context.sh`,
-`worktask-skill-trigger.sh`); the rest stays local. Overwrite, never delete. Hook
-*registration* (`settings.json`) is deliberately out of scope — copy the wiring by hand for
-the hooks you want live. Skipped entirely unless `-h` (or no switches).
+**5. Update the owned hooks (`-h`).** The two `OWNED_HOOKS` files copy from the source's
+`.agents/hooks/` into `<agent-root>/hooks/`, kept executable (exec bit preserved per owned file,
+never a wildcard over the directory). A hook is owned iff an owned skill's `SKILL.md` references
+it *and* its implementation ships with it (`manage-rule-system-context.sh`,
+`worktask-skill-trigger.sh`); `load-agents-context.sh` stays local because it delegates to an
+unowned skill that never ships — copying the wrapper alone would install a silently dead hook.
+Overwrite, never delete. Hook *registration* (`settings.json`) is deliberately out of scope —
+copy the wiring by hand for the hooks you want live. Skipped entirely unless `-h` (or no
+switches).
 
 **6. Refresh `_smooth-devex-shared`** (when the source ships one, and the skills category runs). That folder holds cross-cutting,
 repo-owned payload — currently `setup/scripts/` (the agent setup scripts every tool selection

@@ -673,19 +673,24 @@ else
   no "-r only: owned rules land with topology link, no skills, no manifest" "rules_ok=$rules_ok"
 fi
 
-# 7c. -h only: the three owned hooks land executable, no skills, no manifest.
+# 7c. The two owned hooks land executable; unowned and operator files are untouched.
+# load-agents-context.sh is deliberately NOT owned (dead without its unowned implementation).
 root="$(make_root "cat-hooks" alpha)"
+mkdir -p "$root/hooks"
+printf '#!/bin/sh\n' >"$root/hooks/operator.sh"
+chmod 644 "$root/hooks/operator.sh"
 run_sh "$root" -h >/dev/null 2>&1
 if [ -f "$root/hooks/worktask-skill-trigger.sh" ] \
   && [ -f "$root/hooks/manage-rule-system-context.sh" ] \
-  && [ -f "$root/hooks/load-agents-context.sh" ] \
   && [ -x "$root/hooks/worktask-skill-trigger.sh" ] \
+  && [ ! -e "$root/hooks/load-agents-context.sh" ] \
   && [ ! -e "$root/hooks/slnx-docs-sync.py" ] \
+  && [ ! -x "$root/hooks/operator.sh" ] \
   && [ ! -e "$root/skills/ai-terse" ] \
   && [ ! -f "$root/_smooth-devex-shared/installation.json" ]; then
-  ok "-h only: owned hooks land executable, unowned hook skipped, no skills, no manifest"
+  ok "-h only: owned hooks land executable, unowned and operator files untouched, no skills, no manifest"
 else
-  no "-h only: owned hooks land executable, unowned hook skipped, no skills, no manifest" "wrong hook set"
+  no "-h only: owned hooks land executable, unowned and operator files untouched, no skills, no manifest" "wrong hook set or operator file touched"
 fi
 
 # 7d. -r -h combined: rules and hooks, still no skills and no manifest.

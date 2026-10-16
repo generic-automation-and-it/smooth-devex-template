@@ -97,9 +97,11 @@ $script:OwnedRules = @(
 )
 
 # Hooks the installer is allowed to carry across: a hook is owned iff an owned skill's SKILL.md
-# references it. Mirrors OWNED_HOOKS in install-skills.sh (harness-held byte-for-byte).
+# references it AND its implementation ships with it. load-agents-context.sh is referenced by
+# ai-template-sync but delegates to an unowned skill that never ships — copying the wrapper alone
+# installs a silently dead hook, so it stays local. Mirrors OWNED_HOOKS in install-skills.sh
+# (harness-held byte-for-byte).
 $script:OwnedHooks = @(
-    'load-agents-context.sh'
     'manage-rule-system-context.sh'
     'worktask-skill-trigger.sh'
 )
@@ -511,11 +513,6 @@ function Install-OwnedHooks {
         else {
             Write-Info "WARNING: hook $name not found in repo - left on disk untouched"
         }
-    }
-    # Hooks run as commands; a lost exec bit is a silently dead hook. .NET copy does not
-    # guarantee unix mode bits, so best-effort chmod on unix only (mirrors the bash port).
-    if ($IsLinux -or $IsMacOS) {
-        & chmod +x (Join-Path $destHooks '*.sh') 2>$null
     }
 }
 
