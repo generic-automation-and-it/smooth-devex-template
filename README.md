@@ -155,8 +155,8 @@ and **owned hooks** (`.agents/hooks/` subset) from this template into an existin
 without copying the rest of the template, run the one-command installer. The installer is per-skill
 **opt-out** — new catalogue entries default to `installed:true` — and keeps an editable manifest. It
 never touches the calling repo's `src/` or `tests/` directories; with the default switches it writes
-skills, the shared payload, the five owned rules under `.github/instructions/`, and the three owned
-hooks.
+skills, the shared payload, the owned rules under `<agent-root>/rules/`, and the owned hooks. Every
+copy is self-contained: DRY symlinks inside the template are copied as real content.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -r -s -h

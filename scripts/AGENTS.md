@@ -11,7 +11,7 @@ repository's source outside its declared contract.
 
 - **Read-only by default.** Scripts write only into the paths their contract declares: the
   installer writes the resolved skills root, `<agent-root>/_smooth-devex-shared/`, the owned
-  `<agent-root>/hooks/` files, the owned `.github/instructions/` subset, and canonical symlinks —
+  `<agent-root>/hooks/` files, the owned rules subset under `<agent-root>/rules/`, and canonical symlinks —
   or, when force-pinned via `SKILLS_ROOT`, into exactly that path and its siblings. Anything else
   that wants to touch the calling repo's `src/`, `tests/`, `.github/` or other top-level
   directories belongs elsewhere — most likely as a workflow under `.github/workflows/` or an
@@ -33,8 +33,8 @@ documentation.
 | File | Role |
 | --- | --- |
 | `install-skills.sh` | bash port. macOS / Linux. Needs `bash`, `git`, `python3`. |
-| `install-skills.ps1` | PowerShell 7 port. Windows or anywhere `pwsh` runs. Needs `pwsh`, `git`. |
-| `test-install-skills.sh` | Harness. 51 cases, bash port only (the ps1 port is read, not run). |
+| `install-skills.ps1` | PowerShell 7.2+ port. Windows or anywhere `pwsh` runs. Needs `pwsh` 7.2+, `git`. |
+| `test-install-skills.sh` | Harness. 54 cases, bash port only (the ps1 port is read, not run). |
 
 The installer pulls a flat list of folders from `.agents/skills/` in this repository into a consumer
 repository, controlled by a per-skill `installed` flag in
@@ -82,4 +82,5 @@ Two known gaps:
 | 2026-10-16 | Category switches `-r -s -h` (default all-on): `OWNED_RULES` (5 files) + rules topology link, `OWNED_HOOKS` (3 files, exec bit); harness covers categories, unowned, real-dir, bad flag; README one-liners spell the default | — |
 | 2026-10-16 | Symlink support: temp clone forces `-c core.symlinks=true`, consumer repo marked best-effort; ps1 junction fallback documented as degraded | — |
 | 2026-10-16 | `ai-ralph-loop` added to the owned set (seven skills) | #104 |
-| 2026-10-16 | Test files/folders pruned from copied skills + shared payload; missing `skills/` under a found agent root is created, not a hard error; ps1 `UnixFileMode::UserExecute` fix (hook step crashed on macOS/Linux) | — |
+| 2026-10-16 | Test files/folders pruned from copied skills + shared payload; missing `skills/` under a found agent root is created, not a hard error; ps1 `UnixFileMode::UserExecute` fix (hook step crashed on macOS/Linux) | #110 |
+| 2026-10-16 | WET copies (ps1 floor raised to pwsh 7.2 for `LinkTarget`): in-clone symlinks in skills, rules, hooks and the shared payload are materialised (`copy_wet` / `Copy-Wet`) so installed skills are self-contained (Claude Desktop import); outside, dangling and cyclic links copied as links. Rules now land in `<agent-root>/rules/` (written through an operator's `rules` symlink); the installer no longer creates the `rules → ../.github/instructions` link | #110 |
