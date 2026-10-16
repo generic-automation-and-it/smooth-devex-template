@@ -11,6 +11,8 @@ alwaysApply: false
 
 Updated: 2026-09-13
 
+Scope: EF materialisation (`ToArrayAsync` vs `ToListAsync`). Type selection beyond that: see `backend/collection-types`.
+
 ## Non-Negotiables
 
 - **`AsNoTracking()` materialisation is an array.** Use `ToArrayAsync` / `ToArray`, typed as `T[]`. A `List<T>` signals the collection will grow; a no-tracking query does not.

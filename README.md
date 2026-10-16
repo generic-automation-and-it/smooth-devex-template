@@ -181,7 +181,7 @@ documentation: [`scripts/SKILLS_INSTALLER.md`](scripts/SKILLS_INSTALLER.md).
 
 ### Owned set
 
-The installer ships **exactly six** skills: `ai-asset-sync`, `ai-template-sync`, `ai-terse`,
+The installer ships **exactly seven** skills: `ai-asset-sync`, `ai-ralph-loop`, `ai-template-sync`, `ai-terse`,
 `create-hld`, `create-worktask`, `manage-rule-system`. Anything else in this template's
 `.agents/skills/` — the `agile-github-*` pair, `context-load-*`, `git-commit*` / `git-sync`,
 `ai-brain-dump`, `ai-understanding` — is treated as **local** to this template and never enters a

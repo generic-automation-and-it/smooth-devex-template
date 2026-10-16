@@ -104,6 +104,11 @@
     <File Path=".agents/skills/ai-brain-dump/README.md" />
     <File Path=".agents/skills/ai-brain-dump/agents/openai.yaml" />
   </Folder>
+  <Folder Name="/.agents/skills/ai-ralph-loop/">
+    <File Path=".agents/skills/ai-ralph-loop/SKILL.md" />
+    <File Path=".agents/skills/ai-ralph-loop/AGENTS.md" />
+    <File Path=".agents/skills/ai-ralph-loop/agents/openai.yaml" />
+  </Folder>
   <Folder Name="/.agents/skills/ai-terse/">
     <File Path=".agents/skills/ai-terse/SKILL.md" />
     <File Path=".agents/skills/ai-terse/agents/openai.yaml" />

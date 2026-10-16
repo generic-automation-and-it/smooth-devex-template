@@ -43,6 +43,8 @@ Planned work is tracked as worktasks under `.context/work-tasks/` (gitignored, l
 
 Read [`.github/instructions/AGENTS.md`](.github/instructions/AGENTS.md) — rule index and when each applies.
 
+**New skill, rule or hook → wire its distribution in the same PR.** Skill: add to `OWNED_LIST` in `scripts/install-skills.{sh,ps1}` + owned-set docs (`README.md`, `scripts/SKILLS_INSTALLER.md`), or mark it local in its `AGENTS.md`. Rule: row in `.github/instructions/AGENTS.md`. Hook: register in `.agents/settings.json` (Claude) and `.agents/hooks.json` (Codex). `ai-template-sync` copies `.agents/` and `.github/instructions/` wholesale; the skill installer copies only the owned list.
+
 ## Build / Test Commands
 
 ```bash

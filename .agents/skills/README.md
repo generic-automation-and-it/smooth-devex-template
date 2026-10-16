@@ -11,6 +11,7 @@ Skills live **flat**, one directory per skill directly under `.agents/skills/`. 
 | **agile-github-breakdown** | Turn a braindump or existing Feature into GitHub Feature + Task issues | `/agile-github-breakdown` |
 | **agile-github-task-from-diff** | Create a GitHub Task (sub-issue) from the current git diff vs main | `/agile-github-task-from-diff [--feature-issue <n> \| --noparentid]` |
 | **ai-brain-dump** | Listen-first capture session; synthesize on request | `/ai-brain-dump [--oktoask] [--thinking] [--oktoreaddocs] [--oktowebsearch] [--all]` |
+| **ai-ralph-loop** | Review → fix → verify the branch diff in fresh-eyes loops until clean; ends with a fix table | `/ai-ralph-loop [--loops <n>] [--scope <path\|glob>]` |
 | **ai-terse** | Reformat this turn's reply into terse, high-density output with a TL;DR | `/ai-terse` |
 | **ai-template-sync** | UPSERT smooth-devex-template scaffold into an existing repo | `/ai-template-sync` |
 | **ai-asset-sync** | Dependabot-style OpenCode sync of skills/rules from `owner/repo@ref:path` | `/ai-asset-sync` |
@@ -41,6 +42,20 @@ Opt-in switches relax that, at different token costs (see `ai-brain-dump/README.
 
 The tool switches (`--oktoreaddocs`, `--oktowebsearch`) re-enable the file/web payload bloat the
 listen-first default avoids — use deliberately.
+
+### ai-ralph-loop switches
+
+Default (no switch) is the full run: branch diff vs `origin/main`, up to 10 loops, stopping at the first
+full-scope pass with no accepted finding. Findings are limited to feature gaps, potential bugs,
+architectural issues, YAGNI, KISS and clean code consistency, each grounded in known Understandings,
+`*AGENTS.md`, rules or specs. The run ends with an `ID | Category | File(s) fixed | Rationale | Loop` table
+and never commits.
+
+| Switch | Effect | Default |
+|--------|--------|---------|
+| _(none)_ | Full run over the branch diff, up to 10 loops | — |
+| `--loops <n>` | Loop cap; any positive integer | `10` |
+| `--scope <path\|glob>` | Review these files instead of the branch diff | branch diff vs `origin/main` |
 
 ### ai-understanding switches
 
@@ -117,6 +132,7 @@ A harness that honours skill `effort` applies it on invocation; a harness with a
 | **ai-template-sync** | medium | `sync.sh` does the copy/compare; the agent only picks flags, runs the rules-layout pre-flight and builds the conflict table |
 | **ai-brain-dump** | medium | Listen-first capture — `high` would be re-paid on every turn of a long session. Deep reasoning happens downstream, in the skills its output feeds (`ai-understanding`, `agile-github-breakdown`, `create-hld`, `create-worktask`) |
 | **ai-asset-sync** | high | AI-merge of local vs upstream skills/rules + chore PR |
+| **ai-ralph-loop** | high | Each loop triages reviewer findings against code and context, then fixes and verifies — judgment repeated up to the loop cap |
 | **ai-understanding** | high | Judging what qualifies as transferable knowledge + merge/promotion decisions |
 | **agile-github-breakdown** | xhigh | Multi-turn FR/NFR → Task graph + GitHub writes |
 | **create-hld** | xhigh | Multi-turn clarification gates + architectural judgment (LADRs, NFRs, diagrams) |
@@ -160,7 +176,7 @@ Skills are flat under `.agents/skills/`; the category lives in the folder-name p
 | Prefix | Skills |
 |--------|--------|
 | `agile-` | `agile-github-breakdown`, `agile-github-task-from-diff` |
-| `ai-` | `ai-brain-dump`, `ai-terse`, `ai-template-sync`, `ai-asset-sync`, `ai-understanding` |
+| `ai-` | `ai-brain-dump`, `ai-ralph-loop`, `ai-terse`, `ai-template-sync`, `ai-asset-sync`, `ai-understanding` |
 | `context-` | `context-load-agents-context`, `context-load-context` |
 | `git-` | `git-commit`, `git-commit-push`, `git-commit-push-pr`, `git-sync` |
 | _(none)_ | `create-hld`, `create-worktask`, `manage-rule-system` |
