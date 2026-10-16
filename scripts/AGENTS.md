@@ -40,8 +40,8 @@ repository, controlled by a per-skill `installed` flag in
 name is deliberately per-repo so a single tree cannot confuse two installers' state files.
 
 A small hardcoded **owned set** (`OWNED_LIST` in `install-skills.sh`, `$script:OwnedList` in
-`install-skills.ps1`) scopes the installer to six template-purpose skills: `ai-asset-sync`,
-`ai-template-sync`, `ai-terse`, `create-hld`, `create-worktask`, `manage-rule-system`. Everything
+`install-skills.ps1`) scopes the installer to seven template-purpose skills: `ai-asset-sync`,
+`ai-ralph-loop`, `ai-template-sync`, `ai-terse`, `create-hld`, `create-worktask`, `manage-rule-system`. Everything
 else in `.agents/skills/` is treated as local and never enters a consumer's manifest, even when a
 hand-edited manifest names it `installed: true` — the update loop refuses unowned names as well as
 the manifest builder. This is the same shape `smooth-ai-product-context-memory` PR #245 introduced;
@@ -76,3 +76,4 @@ Two known gaps:
 | Date | Change | Ref |
 | :---- | :---- | :---- |
 | 2026-10-15 | Initial: `install-skills.{sh,ps1}` + harness + docs | — |
+| 2026-10-16 | `ai-ralph-loop` added to the owned set (seven skills) | #104 |

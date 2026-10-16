@@ -144,7 +144,7 @@ root="$(make_root "first" alpha beta)"
 run_sh "$root" >/dev/null 2>&1 || true
 manifest="$root/_smooth-devex-shared/installation.json"
 if [ ! -f "$manifest" ]; then no "first run creates installation.json"; exit 1; fi
-# The catalogue is the owned intersection of source + disk. Real owned skills from source (the six
+# The catalogue is the owned intersection of source + disk. Real owned skills from source (the seven
 # .agents/skills names from this template) plus the harness's synthetic owned names (alpha/beta via
 # SKILLS_TEST_OWNED_EXTRA). An unowned skill like agile-github-breakdown is in source but NOT in
 # the catalogue - the contract this case pins.

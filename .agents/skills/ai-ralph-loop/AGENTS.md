@@ -21,3 +21,4 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
 | Date | Change | Ref |
 | :---- | :---- | :---- |
 | 2026-10-16 | Initial: Ralph review→fix→verify loop, `--loops` / `--scope`, fix table | — |
+| 2026-10-16 | Shipped by the installer (owned set) | #104 |
