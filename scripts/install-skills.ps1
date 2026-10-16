@@ -352,10 +352,10 @@ function Invoke-SourceClone {
         $cloneUrl = "file:///$cloneUrl"
     }
     if ($Branch) {
-        $gitOutput = & git clone --depth 1 --branch $Branch $cloneUrl $script:TempRepo 2>&1
+        $gitOutput = & git -c core.symlinks=true clone --depth 1 --branch $Branch $cloneUrl $script:TempRepo 2>&1
     }
     else {
-        $gitOutput = & git clone --depth 1 $cloneUrl $script:TempRepo 2>&1
+        $gitOutput = & git -c core.symlinks=true clone --depth 1 $cloneUrl $script:TempRepo 2>&1
     }
     if ($LASTEXITCODE -ne 0) {
         Fail "failed to clone $Repo - $($gitOutput -join ' ')"
@@ -452,6 +452,14 @@ function Update-InstalledSkills {
             Ensure-CanonicalLink -AgentRoot $AgentRoot -Name $entry.Name
         }
     }
+}
+
+function Ensure-ConsumerSymlinkSupport {
+    # Best-effort: mark symlinks supported in the consumer repo, mirroring .agents/setup/scripts.
+    # Filesystem links the installer creates work regardless; this only affects how git *records*
+    # them on the consumer's next commit. Outside a git work tree it is silently skipped.
+    param([string] $AgentRoot)
+    & git -C $AgentRoot config core.symlinks true 2>$null
 }
 
 function Install-OwnedRules {
@@ -554,7 +562,11 @@ if ($script:DoSkills) { Write-Info "Skills root: $($script:SkillsRootPath)" }
 # The clone happens before the manifest is built, because the manifest's catalogue is the source's skill
 # list. Derived from disk alone, a first install into an empty folder would decide there was nothing to
 # install - an empty folder and a manifest listing nothing, on the operator's very first run.
+# `-c core.symlinks=true` on the clone forces symlink checkout in the temp clone regardless of the
+# operator's global git config; without it a Windows-default git materializes the source's committed
+# symlinks as text files and the payload copy would copy file-blobs instead of directories.
 Invoke-SourceClone -Repo $SkillsRepo -Branch $SkillsBranch
+Ensure-ConsumerSymlinkSupport -AgentRoot $script:AgentRootPath
 
 if ($script:DoSkills) {
     New-Item -ItemType Directory -Path $sharedDir -Force | Out-Null

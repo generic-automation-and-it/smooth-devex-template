@@ -736,6 +736,17 @@ else
   no "unknown switch exits non-zero" "expected failure, got success"
 fi
 
+# 7h. Inside a git work tree the run marks symlinks supported (consumer-side recording);
+# outside one (every other case in this harness) the step is silently skipped.
+root="$(make_root "cat-symlinkcfg" alpha)"
+git -C "$(dirname "$root")" init -q 2>/dev/null
+run_sh "$root" >/dev/null 2>&1
+if [ "$(git -C "$root" config core.symlinks 2>/dev/null)" = "true" ]; then
+  ok "consumer repo gets core.symlinks=true"
+else
+  no "consumer repo gets core.symlinks=true" "config missing or false"
+fi
+
 # ---------------------------------------------------------------------------------------------
 
 echo

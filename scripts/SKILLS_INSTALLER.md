@@ -157,6 +157,12 @@ Every top-level payload entry is then linked back to its canonical `<agent-root>
 in `SKILL.md` files keep working. An existing real file or directory at a link path is never
 replaced — the run reports it and moves on.
 
+**Symlink support.** The temp clone forces `-c core.symlinks=true` so committed symlinks in the
+source check out as links even under a Windows-default git (otherwise the payload copy would copy
+file-blobs instead of directories). The run also sets `core.symlinks=true` in the consumer repo
+(best-effort, silently skipped outside a git work tree) so created links record as links on the
+next commit — same as `.agents/setup/scripts` does.
+
 **7. Write the manifest last**, stamped with the current UTC time (skills category only). That ordering is deliberate — see
 [Write ordering](#write-ordering-is-load-bearing).
 
@@ -255,4 +261,5 @@ The PowerShell port is **not exercised here.** `install-skills.ps1` is a hand-tr
 catches. A two-port harness doubles the maintenance surface for a contract that exists to be read, not
 to be redundantly proven on platforms the gate does not run. The PowerShell canonical-link step
 uses a junction fallback (symlinks need elevation or Developer Mode on Windows); the bash port uses
-plain symlinks.
+plain symlinks. A junction is *not* a symlink — git would commit its target's contents as real
+files, so prefer Developer Mode/elevation and treat junctions as a degraded install.

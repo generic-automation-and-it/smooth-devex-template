@@ -31,6 +31,8 @@
 #      (e.g. <agent-root>/setup → _smooth-devex-shared/setup), so SKILL.md references to the
 #      canonical paths keep working. An existing real file or directory at the link path is
 #      never replaced: it is reported and skipped.
+#   The temp clone forces `-c core.symlinks=true`; the consumer repo gets
+#   `core.symlinks=true` best-effort (silently skipped outside git). See SKILLS_INSTALLER.md.
 #   8. Writes the updated installation.json back with a fresh UTC timestamp — after the update, so
 #      refreshing the shared payload cannot clobber the manifest that update read. Only written
 #      when the skills category ran.
@@ -384,13 +386,26 @@ clone_source() {
     *) [ -d "$clone_url" ] && clone_url="file://$PWD/$clone_url" ;;
   esac
 
+  # `-c core.symlinks=true` forces symlink checkout in the temp clone regardless of the
+  # operator's global git config. Without it, a Windows-default git materializes the source's
+  # committed symlinks (.agents/setup/scripts, .agents/templates) as plain text files, and the
+  # payload copy below would copy file-blobs instead of directories.
   if [ -n "$SKILLS_BRANCH" ]; then
-    git clone --depth 1 --branch "$SKILLS_BRANCH" "$clone_url" "$INSTALL_TMP/repo" >/dev/null 2>&1 \
+    git -c core.symlinks=true clone --depth 1 --branch "$SKILLS_BRANCH" "$clone_url" "$INSTALL_TMP/repo" >/dev/null 2>&1 \
       || die "Failed to clone $SKILLS_REPO (branch '$SKILLS_BRANCH' — set SKILLS_BRANCH empty for the default)"
   else
-    git clone --depth 1 "$clone_url" "$INSTALL_TMP/repo" >/dev/null 2>&1 \
+    git -c core.symlinks=true clone --depth 1 "$clone_url" "$INSTALL_TMP/repo" >/dev/null 2>&1 \
       || die "Failed to clone $SKILLS_REPO"
   fi
+}
+
+# Best-effort: mark symlinks supported in the consumer repo, mirroring .agents/setup/scripts.
+# Filesystem links the installer creates work regardless; this only affects how git *records*
+# them on the consumer's next commit. Outside a git work tree (or when git is missing) it is
+# silently skipped — never a failure.
+ensure_consumer_symlink_support() {
+  local agent_root="$1"
+  git -C "$agent_root" config core.symlinks true 2>/dev/null || true
 }
 
 # ensure_canonical_link AGENT_ROOT NAME — link <agent-root>/<name> at the shared payload entry.
@@ -571,6 +586,7 @@ main() {
   [ "$DO_SKILLS" = "1" ] && log "Skills root: $skills_root"
 
   clone_source
+  ensure_consumer_symlink_support "$agent_root"
 
   if [ "$DO_SKILLS" = "1" ]; then
     mkdir -p "$shared_dir"
