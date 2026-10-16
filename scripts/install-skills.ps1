@@ -131,24 +131,9 @@ function Get-OwnedSet {
     return $out
 }
 
-function Test-OwnedRule {
-    param([string] $Name)
-    # Case-sensitive exact allowlist, same shape as Test-OwnedSkill.
-    $set = ($script:OwnedRules -join ' ')
-    if ($set -cmatch ("(^| )([\s\S]*\s)?" + [regex]::Escape($Name) + "(\s|$)")) {
-        return $true
-    }
-    return $false
-}
-
-function Test-OwnedHook {
-    param([string] $Name)
-    $set = ($script:OwnedHooks -join ' ')
-    if ($set -cmatch ("(^| )([\s\S]*\s)?" + [regex]::Escape($Name) + "(\s|$)")) {
-        return $true
-    }
-    return $false
-}
+# Owned rules and hooks need no membership test: Install-OwnedRules/Hooks loop the allowlists
+# directly, so an unowned name can never enter (unlike skills, where a hand-edited manifest needs
+# the Test-OwnedSkill guard). No helpers, nothing to drift.
 
 if (Get-Variable -Name PSNativeCommandArgumentPassing -ErrorAction SilentlyContinue) {
     $PSNativeCommandArgumentPassing = 'Standard'
@@ -176,22 +161,8 @@ function Find-AgentRoot {
 }
 
 # ---------------------------------------------------------------------------
-# 2. List skills on disk (dirs with SKILL.md, excluding _smooth-devex-shared)
-# ---------------------------------------------------------------------------
-
-function Get-DiskSkills {
-    param([string] $Root)
-    @(Get-ChildItem -LiteralPath $Root -Directory |
-        Where-Object { $_.Name -ne '_smooth-devex-shared' } |
-        Where-Object { Test-OwnedSkill -Name $_.Name } |
-        Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'SKILL.md') -PathType Leaf } |
-        Select-Object -ExpandProperty Name |
-        Sort-Object)
-}
-# See Get-Skills below — Get-DiskSkills / Get-CatalogSkills were the duplicated pair.
-
-# ---------------------------------------------------------------------------
-# 3. Manifest read / build
+# 2. List skills (dirs with SKILL.md, excluding _smooth-devex-shared). One function serves
+# both disk and clone-source: the only difference is the root directory.
 # ---------------------------------------------------------------------------
 
 function Read-InstallationJson {
@@ -217,17 +188,9 @@ function Read-InstallationJson {
     }
 }
 
-function Get-CatalogSkills {
-    # Kept as a wrapper for clarity at the call sites; the body is Get-Skills. See Get-Skills below.
-    param([string] $Root)
-    Get-Skills -Root $Root
-}
-
 function Get-Skills {
     # One function for both disk and clone-source: the only thing they differ on is which
-    # directory is the root, and the owned-set gate is the same either way. The previous
-    # duplication (Get-DiskSkills / Get-CatalogSkills) was a copy-paste that drifted on
-    # every new gate, so the test had to cover two near-identical shapes.
+    # directory is the root, and the owned-set gate is the same either way.
     param([string] $Root)
     if (-not (Test-Path -LiteralPath $Root -PathType Container)) { return @() }
     @(Get-ChildItem -LiteralPath $Root -Directory |
@@ -349,7 +312,9 @@ function Invoke-SourceClone {
     # falls through (the clone will then fail at the git call with the real reason, not a mangled URL).
     $cloneUrl = $Repo -replace '\\', '/'
     if (-not ($cloneUrl -match '^[a-zA-Z][a-zA-Z0-9+.-]*://') -and -not $cloneUrl.StartsWith('/') -and (Test-Path -LiteralPath $cloneUrl -PathType Container)) {
-        $cloneUrl = "file:///$cloneUrl"
+        # Resolve against the current directory first: "file:///$cloneUrl" would point at the
+        # filesystem root, not the caller's tree (bash builds file://$PWD/<rel> for the same case).
+        $cloneUrl = "file://$((Resolve-Path -LiteralPath $cloneUrl).Path -replace '\\', '/')"
     }
     if ($Branch) {
         $gitOutput = & git -c core.symlinks=true clone --depth 1 --branch $Branch $cloneUrl $script:TempRepo 2>&1
@@ -368,7 +333,14 @@ function Ensure-CanonicalLink {
     param([string] $AgentRoot, [string] $Name)
     $link = Join-Path $AgentRoot $Name
     $target = "_smooth-devex-shared/$Name"
-    if (Test-Path -LiteralPath $link) {
+    # A dangling symlink reads as absent to Test-Path; re-creating over it aborts under Stop.
+    # Check the link itself first, same as the rules-link guard below.
+    $linkTaken = Test-Path -LiteralPath $link
+    if (-not $linkTaken) {
+        $dangling = Get-Item -LiteralPath $link -Force -ErrorAction SilentlyContinue
+        $linkTaken = ($null -ne $dangling) -and ($null -ne $dangling.LinkType)
+    }
+    if ($linkTaken) {
         $item = Get-Item -LiteralPath $link -Force
         if ($item.LinkType) {
             # A link is already there: ours (same payload, either link kind) or someone else's.
@@ -487,8 +459,15 @@ function Install-OwnedRules {
         }
     }
     # Topology: <agent-root>/rules -> ../.github/instructions, but only when nothing is there.
+    # A dangling symlink reads as absent to Test-Path, so check the link itself: re-creating over
+    # an existing path aborts the run under $ErrorActionPreference = Stop.
     $rulesLink = Join-Path $AgentRoot 'rules'
-    if (-not (Test-Path -LiteralPath $rulesLink)) {
+    $rulesLinkTaken = Test-Path -LiteralPath $rulesLink
+    if (-not $rulesLinkTaken) {
+        $existing = Get-Item -LiteralPath $rulesLink -Force -ErrorAction SilentlyContinue
+        $rulesLinkTaken = ($null -ne $existing) -and ($null -ne $existing.LinkType)
+    }
+    if (-not $rulesLinkTaken) {
         try {
             New-Item -ItemType SymbolicLink -Path $rulesLink -Target '../.github/instructions' | Out-Null
         }
@@ -519,6 +498,11 @@ function Install-OwnedHooks {
         else {
             Write-Info "WARNING: hook $name not found in repo - left on disk untouched"
         }
+    }
+    # Hooks run as commands; a lost exec bit is a silently dead hook. .NET copy does not
+    # guarantee unix mode bits, so best-effort chmod on unix only (mirrors the bash port).
+    if ($IsLinux -or $IsMacOS) {
+        & chmod +x (Join-Path $destHooks '*.sh') 2>$null
     }
 }
 
@@ -582,8 +566,8 @@ if ($script:DoSkills) {
     $existingSkills = @()
     if ($existing -and $existing.skills) { $existingSkills = @($existing.skills) }
 
-    $diskSkills = @(Get-DiskSkills -Root $script:SkillsRootPath)
-    $sourceSkills = @(Get-CatalogSkills -Root (Join-Path $script:TempRepo '.agents/skills'))
+    $diskSkills = @(Get-Skills -Root $script:SkillsRootPath)
+    $sourceSkills = @(Get-Skills -Root (Join-Path $script:TempRepo '.agents/skills'))
     # Escaped colons are deliberate. 'T' is a .NET custom-format *modifier* (time designator), so an
     # unescaped 'HH:mm:ss' follows the designator and ':' then renders as the culture's time separator -
     # which is '.' under one locale and ':' under another, producing a timestamp the bash port and this

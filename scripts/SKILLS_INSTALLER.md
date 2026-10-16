@@ -174,7 +174,7 @@ Edit the manifest and re-run. The flag is read, never guessed:
 # one skill off
 python3 - <<'EOF'
 import json
-p = '.agents/skills/_smooth-devex-shared/installation.json'
+p = '.agents/_smooth-devex-shared/installation.json'
 d = json.load(open(p))
 for s in d['skills']:
     if s['name'] == 'git-sync':
@@ -211,16 +211,15 @@ back the folder up first.
 
 ## Scope
 
-The installer ships `.agents/skills/` (owned set only) plus the cross-cutting, repo-owned
-`.agents/_smooth-devex-shared/` payload (currently `setup/scripts/` + `templates/`). It does **not** carry:
+The installer ships `.agents/skills/` (owned set only), the owned `.github/instructions/` rule
+subset, the owned `.agents/hooks/` subset, plus the cross-cutting, repo-owned
+`.agents/_smooth-devex-shared/` payload (currently `setup/scripts/` + `templates/`). It does **not**
+carry anything else: template-domain rules, local skills, and unowned hooks stay in this repo.
 
-- `.agents/rules/` (referenced by skill `SKILL.md` frontmatter — consumer keeps its own)
-- `.agents/hooks/` (referenced by some `setup/scripts/` flows)
-
-A consumer that runs the one-liner into an empty repo gets the owned skill folders plus the shared
-payload, with canonical paths (`setup/`, `templates/`) linked back to `_smooth-devex-shared/`, but
-the cross-tree references inside `SKILL.md` files that point at `.agents/rules/` still need a manual
-copy of those files alongside the install.
+A consumer that runs the one-liner into an empty repo gets the owned skills, rules, and hooks plus
+the shared payload, with canonical paths (`setup/`, `templates/`) linked back to
+`_smooth-devex-shared/`. Cross-tree references inside `SKILL.md` files that point at rules outside
+the owned set still need a manual copy of those files alongside the install.
 
 | Skill | Needs (manual copy) |
 |---|---|
@@ -250,7 +249,7 @@ and payload purposes.
 bash scripts/test-install-skills.sh
 ```
 
-40+ cases against the bash port, no network and no container engine needed: the clone source is the
+48 cases against the bash port, no network and no container engine needed: the clone source is the
 checkout itself (`SKILLS_REPO` pointed at the repo, `SKILLS_BRANCH` at the current branch), so a harness
 that reached GitHub would be red for reasons unrelated to the code. Runs in the PR gate. The shared
 payload, canonical links, stale-entry sweep, legacy-manifest ignore, and real-dir-at-link-path cases

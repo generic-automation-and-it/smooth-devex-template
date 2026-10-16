@@ -9,10 +9,13 @@ repository's source outside its declared contract.
 
 ## Non-Negotiables
 
-- **Read-only by default.** Scripts write only into the skills root they resolved (or, when the
-  installer is force-pinned via `SKILLS_ROOT`, into exactly that path). Anything that wants to touch
-  the calling repo's `src/`, `tests/`, `.github/` or other top-level directories belongs elsewhere —
-  most likely as a workflow under `.github/workflows/` or an action under `.github/actions/`.
+- **Read-only by default.** Scripts write only into the paths their contract declares: the
+  installer writes the resolved skills root, `<agent-root>/_smooth-devex-shared/`, the owned
+  `<agent-root>/hooks/` files, the owned `.github/instructions/` subset, and canonical symlinks —
+  or, when force-pinned via `SKILLS_ROOT`, into exactly that path and its siblings. Anything else
+  that wants to touch the calling repo's `src/`, `tests/`, `.github/` or other top-level
+  directories belongs elsewhere — most likely as a workflow under `.github/workflows/` or an
+  action under `.github/actions/`.
 - **Idempotent runs.** Re-running a script with the same inputs must converge on the same state — that
   is the contract the [test harness](test-install-skills.sh) verifies, and the property that makes a
   `curl | bash` one-liner safe to put in onboarding docs.
@@ -31,7 +34,7 @@ documentation.
 | --- | --- |
 | `install-skills.sh` | bash port. macOS / Linux. Needs `bash`, `git`, `python3`. |
 | `install-skills.ps1` | PowerShell 7 port. Windows or anywhere `pwsh` runs. Needs `pwsh`, `git`. |
-| `test-install-skills.sh` | Harness. 30+ cases over both ports when `pwsh` is present. |
+| `test-install-skills.sh` | Harness. 48 cases, bash port only (the ps1 port is read, not run). |
 
 The installer pulls a flat list of folders from `.agents/skills/` in this repository into a consumer
 repository, controlled by a per-skill `installed` flag in

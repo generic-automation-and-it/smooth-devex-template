@@ -56,6 +56,7 @@ and never commits.
 | _(none)_ | Full run over the branch diff, up to 10 loops | — |
 | `--loops <n>` | Loop cap; any positive integer | `10` |
 | `--scope <path\|glob>` | Review these files instead of the branch diff | branch diff vs `origin/main` |
+| `--spawn` | Review lenses as parallel subagents | off — sequential inline in the current pid |
 
 ### ai-understanding switches
 
@@ -153,6 +154,7 @@ wording they all follow.
 
 - **git-commit-push** → invokes **git-commit** at `effort: low`
 - **git-commit-push-pr** → invokes **git-commit-push** at `effort: medium`
+- **git-sync** → invokes **git-commit** at `effort: low` (dirty-tree MERGE_ERROR only, then retries once)
 
 ### Frontmatter shape
 

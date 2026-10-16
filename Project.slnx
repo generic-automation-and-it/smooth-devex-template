@@ -165,7 +165,9 @@
   </Folder>
   <Folder Name="/.agents/skills/git-sync/">
     <File Path=".agents/skills/git-sync/SKILL.md" />
+    <File Path=".agents/skills/git-sync/AGENTS.md" />
     <File Path=".agents/skills/git-sync/agents/openai.yaml" />
+    <File Path=".agents/skills/git-sync/scripts/safe-sync.sh" />
   </Folder>
   <Folder Name="/.agents/skills/manage-rule-system/">
     <File Path=".agents/skills/manage-rule-system/SKILL.md" />

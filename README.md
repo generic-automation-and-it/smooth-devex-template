@@ -191,23 +191,22 @@ installed here either — install them with that repository's own installer.
 
 ### Scope
 
-The installer ships only `.agents/skills/`. It does **not** carry:
+The installer ships owned skills, owned rules, owned hooks, and the shared payload —
+see `scripts/SKILLS_INSTALLER.md` for the owned sets. It does **not** carry anything else:
+template-domain rules, local skills, and unowned hooks stay in this repo.
 
-- `.agents/rules/` (rules referenced by skill `SKILL.md` frontmatter)
-- `.agents/templates/` (referenced by `create-worktask/SKILL.md`)
-- `.agents/hooks/` (referenced by some `setup/scripts/` flows)
-
-A consumer that runs the one-liner into an empty repo gets the skill folders but the cross-tree
+A consumer that runs the one-liner into an empty repo gets the skill folders plus the
 references inside `SKILL.md` files (`Bash(.agents/rules/.../SKILL.md:*)`, etc.) point at paths that
-do not exist. Skills that need rules or templates need a manual copy of those files alongside the
-install. See `scripts/SKILLS_INSTALLER.md` for the per-skill dependency list.
+exist after a default `-r -s -h` run. Skills whose `SKILL.md` references template-domain rules
+outside the owned set need a manual copy of those files alongside the install. See
+`scripts/SKILLS_INSTALLER.md` for the per-category dependency list.
 
 ### Supported roots
 
-The installer accepts `.agents/skills/`, `.claude/skills/`, or `.codex/skills/` as the skills root.
-A consumer that picks `.claude/skills/` or `.codex/skills/` as its root must create the canonical
-symlink (`.claude/skills -> .agents/skills` / `.codex/skills -> .agents/skills`) for the skill
-`SKILL.md` files to find their `scripts/` siblings at the canonical path.
+The installer accepts `.agents`, `.claude`, or `.codex` as the agent root; skills live at
+`<agent-root>/skills` and state plus shared payload at `<agent-root>/_smooth-devex-shared/`.
+A `SKILLS_ROOT` override points at a skills directory directly — its parent then counts as the
+agent root.
 
 ---
 

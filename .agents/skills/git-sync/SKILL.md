@@ -73,7 +73,7 @@ Please resolve conflicts and commit the merge.
    - Resolve by keeping the intent of both branches
    - Prefer our branch's structure/style while incorporating new content from main
    - Stage the resolved files
-   - Commit the merge resolution with message: `Merge main into <current-branch>`
+   - Commit the merge resolution with message: `chore(sync): merge main into <current-branch>`
    - Run `git log --oneline -5` to show the result
 4. If it prints `MERGE_ERROR` — follow [On MERGE_ERROR](#on-merge_error-dirty-tree-commit-then-retry).
    Only a repeated MERGE_ERROR after the retry ends the run here.

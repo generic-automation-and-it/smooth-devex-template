@@ -143,23 +143,9 @@ owned_set() {
   printf '%s' "$out"
 }
 
-# Owned rules and hooks need no test extras: the harness exercises them against the real source
-# payload, so the production lists are the test lists.
-is_owned_rule() {
-  local name="$1"
-  case " ${OWNED_RULES[*]} " in
-    *" $name "*) return 0 ;;
-  esac
-  return 1
-}
-
-is_owned_hook() {
-  local name="$1"
-  case " ${OWNED_HOOKS[*]} " in
-    *" $name "*) return 0 ;;
-  esac
-  return 1
-}
+# Owned rules and hooks need no membership test: the install loops below iterate the
+# allowlists directly, so an unowned name can never enter (unlike skills, where a hand-edited
+# manifest needs the is_owned_skill guard). No helpers, nothing to drift.
 
 # Category switches. No switches means everything is on; any switch narrows the run to exactly
 # what was named. Switches filter the run only — nothing about the selection is persisted.
