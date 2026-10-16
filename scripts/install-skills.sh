@@ -8,7 +8,8 @@
 #   1. Finds the agent root in order: .agents → .claude → .codex, and errors
 #      when none exists. It never creates one: a folder the operator did not ask for is not an install.
 #      The skills root is <agent-root>/skills (override with SKILLS_ROOT, whose parent then counts
-#      as the agent root for state purposes).
+#      as the agent root for state purposes). Once an agent root is found, missing skills/, hooks/
+#      and .github/instructions/ folders are created for the categories that run.
 #   2. Category switches -r (rules), -s (skills), -h (hooks) select what this run installs.
 #      No switches means everything is on. Switches filter the run only; nothing is persisted.
 #   3. Skills: reads <agent-root>/_smooth-devex-shared/installation.json.
@@ -19,7 +20,8 @@
 #      A legacy manifest at the old <skills-root>/_smooth-devex-shared/installation.json location
 #      is ignored (fresh start): it is reported on stderr and otherwise left untouched.
 #   4. Updates only the skills marked installed:true, cloning the repo once and copying those folders
-#      (plus the shared payload, if the source ships one) out of it.
+#      (plus the shared payload, if the source ships one) out of it. Test files (see prune_tests)
+#      are never copied: they exercise the template, not the consumer.
 #   5. Rules (-r): copies the owned rule files (see OWNED_RULES) from the source's
 #      .github/instructions/ into <repo>/.github/instructions/, preserving relative paths.
 #      Overwrites, never deletes: an operator's own rules are never swept. Ensures the
@@ -335,6 +337,15 @@ sweep_stale_entries() {
   done
 }
 
+# prune_tests DIR — delete test files and test folders from a freshly copied tree.
+#
+# Tests ship in the template so the template can run them; a consumer gets the skill, not its test
+# suite. Mirrors Remove-Tests in install-skills.ps1.
+prune_tests() {
+  find "$1" \( -type d \( -name test -o -name tests -o -name __tests__ \) \) -prune -exec rm -rf {} + 2>/dev/null || true
+  find "$1" -type f \( -name 'test_*' -o -name '*_test.*' -o -name '*.test.*' -o -name '*.Tests.ps1' \) -exec rm -f {} + 2>/dev/null || true
+}
+
 # ---------------------------------------------------------------------------
 # 5. Update installed skills from the repo
 # ---------------------------------------------------------------------------
@@ -456,6 +467,7 @@ for s in data.get('skills', []):
       if [ -d "$INSTALL_TMP/repo/.agents/skills/$name" ]; then
         rm -rf "$skills_root/$name"
         cp -R "$INSTALL_TMP/repo/.agents/skills/$name" "$skills_root/$name"
+        prune_tests "$skills_root/$name"
         log "Updated $name"
       else
         log "WARNING: $name not found in repo — left on disk untouched"
@@ -478,6 +490,7 @@ for s in data.get('skills', []):
     local shared_dest="$shared_dir"
     mkdir -p "$shared_dest"
     cp -R "$shared_source/." "$shared_dest"
+    prune_tests "$shared_dest"
     # Recursive, and that recursion is the point: a top-level-only sweep keeps every entry the source
     # still has *as a folder* while leaving the files inside it that the source dropped, which is where
     # a retired script actually goes.
@@ -622,10 +635,11 @@ main() {
     agent_root="$(find_agent_root)" \
       || die "no agent directory found — expected one of .agents, .claude, .codex (create one, or set SKILLS_ROOT)"
     skills_root="$agent_root/skills"
-    # The skills directory is only required when the skills category runs: a rules-only or
-    # hooks-only run must work in a tree that has no skills at all.
-    if [ "$DO_SKILLS" = "1" ]; then
-      [ -d "$skills_root" ] || die "no skills directory found — expected $skills_root (create it, or set SKILLS_ROOT)"
+    # The agent root is the operator's opt-in; the skills folder under it is ours to create, and
+    # only when the skills category runs — a rules-only or hooks-only run leaves no empty skills/.
+    if [ "$DO_SKILLS" = "1" ] && [ ! -d "$skills_root" ]; then
+      mkdir -p "$skills_root"
+      log "Created $skills_root"
     fi
   fi
 

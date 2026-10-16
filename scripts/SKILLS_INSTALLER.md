@@ -42,8 +42,10 @@ Both take the same three environment overrides, so a local clone or a fork works
 **1. Find the agent root, in this order.** `.agents` → `.claude` → `.codex`. The
 first that exists is used. If none exists the run **fails and creates nothing** — a folder the operator
 never asked for is not an install. The skills root is `<agent-root>/skills` (override with `SKILLS_ROOT`,
-whose parent directory then counts as the agent root). If the agent root has no `skills/` directory
-the run fails the same way.
+whose parent directory then counts as the agent root). Once an agent root is found, the installer
+creates any missing category folder it needs — `<agent-root>/skills/`, `<agent-root>/hooks/`,
+`.github/instructions/` — for the categories that run; a rules-only or hooks-only run creates no
+`skills/`.
 
 In this repository `.claude` and `.codex` are symlinks to `.agents`, so all paths resolve to the
 same tree and the first match is the real one.
@@ -80,6 +82,10 @@ with another one's state file.
 | not owned (on disk, in the source, or hand-written into the manifest) | **never** listed, **never** copied, even if the manifest is hand-edited |
 | manifest will not parse | **run fails**, file left untouched |
 | no manifest at all | created from the owned catalogue, every entry `installed: true` |
+
+**Tests never ship.** Test folders (`test/`, `tests/`, `__tests__/`) and test files (`test_*`,
+`*_test.*`, `*.test.*`, `*.Tests.ps1`) are pruned from every copied skill and from the shared payload:
+they exercise the template, not the consumer.
 
 ## Owned set
 
@@ -258,7 +264,7 @@ and payload purposes.
 bash scripts/test-install-skills.sh
 ```
 
-48 cases against the bash port, no network and no container engine needed: the clone source is the
+51 cases against the bash port, no network and no container engine needed: the clone source is the
 checkout itself (`SKILLS_REPO` pointed at the repo, `SKILLS_BRANCH` at the current branch), so a harness
 that reached GitHub would be red for reasons unrelated to the code. Runs in the PR gate. The shared
 payload, canonical links, stale-entry sweep, legacy-manifest ignore, and real-dir-at-link-path cases

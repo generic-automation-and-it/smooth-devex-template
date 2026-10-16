@@ -12,7 +12,8 @@
       1. Finds the agent root in order: .agents -> .claude -> .codex, and errors
          when none exists. It never creates one: a folder the operator did not ask for is not an install.
          The skills root is <agent-root>/skills (override with SKILLS_ROOT, whose parent then counts
-         as the agent root for state purposes).
+         as the agent root for state purposes). Once an agent root is found, missing skills/, hooks/
+         and .github/instructions/ folders are created for the categories that run.
       2. Reads <agent-root>/_smooth-devex-shared/installation.json.
          - Missing  -> creates it with every skill on disk, installed:true, UTC timestamp.
          - Present  -> syncs: adds new skills, drops skills no longer on disk, keeps every
@@ -21,7 +22,8 @@
          A legacy manifest at the old <skills-root>/_smooth-devex-shared/installation.json location
          is ignored (fresh start): it is reported and otherwise left untouched.
       3. Updates only the skills marked installed:true, cloning the repo once and copying those folders
-         (plus the shared payload, if the source ships one) out of it.
+         (plus the shared payload, if the source ships one) out of it. Test files (see Remove-Tests)
+         are never copied: they exercise the template, not the consumer.
       4. Writes the updated installation.json back with a fresh UTC timestamp - after the update, so
          refreshing the shared payload cannot clobber the manifest that update read.
       5. Links every top-level shared-payload entry back to its canonical <agent-root> path
@@ -251,6 +253,21 @@ function Build-InstallationJson {
     return "{`n  `"updated`": $updatedJson,`n  `"skills`": [`n$joined  ]`n}"
 }
 
+function Remove-Tests {
+    # Delete test files and test folders from a freshly copied tree.
+    #
+    # Tests ship in the template so the template can run them; a consumer gets the skill, not its test
+    # suite. Mirrors prune_tests in install-skills.sh.
+    param([string] $Root)
+
+    Get-ChildItem -LiteralPath $Root -Recurse -Directory -Force |
+        Where-Object { $_.Name -in @('test', 'tests', '__tests__') } |
+        ForEach-Object { if (Test-Path -LiteralPath $_.FullName) { Remove-Item -LiteralPath $_.FullName -Recurse -Force } }
+    Get-ChildItem -LiteralPath $Root -Recurse -File -Force |
+        Where-Object { $_.Name -like 'test_*' -or $_.Name -like '*_test.*' -or $_.Name -like '*.test.*' -or $_.Name -like '*.Tests.ps1' } |
+        Remove-Item -Force
+}
+
 function Remove-StaleEntries {
     # Remove from Dest everything Source does not have, recursively.
     #
@@ -410,6 +427,7 @@ function Update-InstalledSkills {
             $dest = Join-Path $SkillsRoot $name
             if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
             Copy-Item -LiteralPath $source -Destination $dest -Recurse -Force
+            Remove-Tests -Root $dest
             Write-Info "Updated $name"
         } else {
             Write-Info "WARNING: $name not found in repo - left on disk untouched"
@@ -431,6 +449,7 @@ function Update-InstalledSkills {
         $sharedDest = $SharedDir
         New-Item -ItemType Directory -Path $sharedDest -Force | Out-Null
         Copy-Item -Path (Join-Path $sharedSource '*') -Destination $sharedDest -Recurse -Force
+        Remove-Tests -Root $sharedDest
         Remove-StaleEntries -Dest $sharedDest -Source $sharedSource
         Write-Info 'Updated _smooth-devex-shared'
         # Link the payload back to canonical paths so .agents/setup/... references keep working.
@@ -600,10 +619,11 @@ if ($SkillsRoot) {
 else {
     $script:AgentRootPath = Find-AgentRoot
     $script:SkillsRootPath = Join-Path $script:AgentRootPath 'skills'
-    # The skills directory is only required when the skills category runs: a rules-only or
-    # hooks-only run must work in a tree that has no skills at all.
+    # The agent root is the operator's opt-in; the skills folder under it is ours to create, and
+    # only when the skills category runs - a rules-only or hooks-only run leaves no empty skills/.
     if ($script:DoSkills -and (-not (Test-Path -LiteralPath $script:SkillsRootPath -PathType Container))) {
-        Fail "no skills directory found - expected $($script:SkillsRootPath) (create it, or set SKILLS_ROOT)"
+        New-Item -ItemType Directory -Path $script:SkillsRootPath -Force | Out-Null
+        Write-Info "Created $($script:SkillsRootPath)"
     }
 }
 

@@ -347,6 +347,17 @@ else
   no "the copied skill carries its scripts folder"
 fi
 
+# Test files ship in the template, not to consumers: ai-asset-sync carries
+# scripts/lib/test_parse_manifest.py upstream, and the installed copy must not.
+root_t="$(make_root "no-tests" ai-asset-sync)"
+run_sh "$root_t" >/dev/null 2>&1
+if [ -f "$root_t/skills/ai-asset-sync/scripts/lib/parse_manifest.py" ] \
+  && [ ! -e "$root_t/skills/ai-asset-sync/scripts/lib/test_parse_manifest.py" ]; then
+  ok "test files are not copied with a skill"
+else
+  no "test files are not copied with a skill" "test_parse_manifest.py present or parse_manifest.py missing"
+fi
+
 # Now the same run with one skill switched off: the off folder must be left exactly as it is.
 # The manifest has to exist before it can be switched off, so this is a first run followed by an
 # edit: that is the operator's actual sequence (install, then turn a skill off).
@@ -619,13 +630,17 @@ else
   ok "root search: creates no agent directory"
 fi
 
-# A tree with an agent directory but no skills directory: a hard error, and still nothing created.
+# A tree with an agent directory but no skills/hooks folders: the agent root is the opt-in, so the
+# run creates the category folders under it and installs into them.
 noskills="$scratch/noskills"
 mkdir -p "$noskills/.agents"
-if run_in_dir_searched "$noskills"; then
-  no "agent without skills exits non-zero" "expected failure, got success"
+if ! run_in_dir_searched "$noskills"; then
+  no "agent without skills: the run succeeds" "see the run above"
+elif [ -f "$noskills/.agents/skills/ai-terse/SKILL.md" ] && [ -d "$noskills/.agents/hooks" ] \
+  && [ -d "$noskills/.github/instructions" ]; then
+  ok "agent without skills: skills, hooks and rules folders are created"
 else
-  ok "agent without skills exits non-zero"
+  no "agent without skills: skills, hooks and rules folders are created" "a category folder is missing"
 fi
 
 # A tree with no agent directory at all: a hard error, and still nothing created.
