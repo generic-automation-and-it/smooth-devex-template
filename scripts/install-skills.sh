@@ -539,6 +539,11 @@ install_hooks() {
   for name in "${OWNED_HOOKS[@]}"; do
     if [ -e "$source_hooks/$name" ]; then
       cp -R "$source_hooks/$name" "$dest_hooks/$name"
+      # Exec bit per owned file only: a wildcard chmod would also flip operator-owned
+      # scripts sharing the directory. Preserve the source bit, don't invent one.
+      case "$name" in
+        *.sh) [ -x "$source_hooks/$name" ] && chmod +x "$dest_hooks/$name" ;;
+      esac
       log "Updated hook $name"
     else
       log "WARNING: hook $name not found in repo — left on disk untouched"

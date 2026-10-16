@@ -514,6 +514,21 @@ function Install-OwnedHooks {
             Write-Info "WARNING: hook $name not found in repo - left on disk untouched"
         }
     }
+    # Hooks run as commands; a lost exec bit is a silently dead hook. .NET copy does not
+    # guarantee unix mode bits, so best-effort chmod on unix only — per owned file, never a
+    # wildcard that would flip operator-owned scripts sharing the directory. Preserve the
+    # source bit, don't invent one.
+    if ($IsLinux -or $IsMacOS) {
+        foreach ($name in $script:OwnedHooks) {
+            if ($name -like '*.sh') {
+                $src = Join-Path $sourceHooks $name
+                $dst = Join-Path $destHooks $name
+                if ((Test-Path -LiteralPath $src) -and ((Get-Item $src).UnixFileMode -band [System.IO.UnixFileMode]::ExecuteUser)) {
+                    & chmod +x $dst 2>$null
+                }
+            }
+        }
+    }
 }
 
 # ---------------------------------------------------------------------------
