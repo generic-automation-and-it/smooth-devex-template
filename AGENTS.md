@@ -64,13 +64,13 @@ xunit.v3 · Shouldly · Bogus · Respawn. Three tiers (drives where a test belon
 - **L1** component — `Application.ComponentTest` uses in-memory EF Core; `Infrastructure.ComponentTest` uses a real isolated DB + Respawn.
 - **L2** `*.IntegrationTest` — full stack, real PostgreSQL.
 
-Shared fixtures: `tests/Project.TestFramework/`; Aspire dependency host (PostgreSQL + WireMock): `tests/Project.TestFramework.Aspire/`. Details: `.docs/wiki/testing.md`.
+Shared fixtures: `tests/Project.TestFramework/`; Aspire dependency host (PostgreSQL + WireMock): `tests/Project.TestFramework.Aspire/`. Details: `docs/wiki/testing.md`.
 
 ## Architecture Decisions (NFRs)
 
-Reviewer docs: `.docs/wiki/`. Designs, NFRs and LADRs: `.docs/hlds/`.
+Reviewer docs: `docs/wiki/`. Designs, NFRs and LADRs: `docs/hlds/`.
 
 ## CI/CD
 
-- PR gate (`.github/workflows/pr-gate.yml`): restore → build (Release) → Aspire-backed test with coverage. Details: `.docs/wiki/ci.md`.
+- PR gate (`.github/workflows/pr-gate.yml`): restore → build (Release) → Aspire-backed test with coverage. Details: `docs/wiki/ci.md`.
 - Skill gate (`.github/workflows/skill-scan.yml`): only relevant when touching `.agents/skills/**`. Baseline-aware — new non-baselined findings fail; details live in the workflow and `.agents/skills/AGENTS.md` (LADR-001).

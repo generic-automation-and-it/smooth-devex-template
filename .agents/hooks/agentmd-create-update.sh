@@ -21,7 +21,7 @@ cat <<'EOF2'
 
 ## Template to use
 Base new AGENTS.md files on .agents/templates/TEMPLATE_AGENTS.md (root CLAUDE.md/AGENTS.md exempt).
-An HLD folder (.docs/hlds/NNN-*/) uses the create-hld template and the rule's Design-Documentation Folders section instead.
+An HLD folder (docs/hlds/NNN-*/) uses the create-hld template and the rule's Design-Documentation Folders section instead.
 
 Proceed: read the referenced file (if it exists), apply the structure, enforce every Value Gate, and output the complete AGENTS.md content.
 </context-auto-loaded>
