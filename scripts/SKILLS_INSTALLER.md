@@ -122,16 +122,22 @@ edit inside one survives every run until you set its flag back. A skill outside 
 never copied even when a hand-edited manifest asks for it. Skipped entirely unless `-s` (or no
 switches).
 
-**4. Update the owned rules (`-r`).** The five `OWNED_RULES` files copy from the source's
+**4. Update the owned rules (`-r`).** The four `OWNED_RULES` files copy from the source's
 `.github/instructions/` into `<repo>/.github/instructions/`, preserving relative paths:
 
 | Owned rule | Why |
 |---|---|
-| `AGENTS.md` | rules index (shared part) |
 | `code-review-standards.instructions.md` | referenced by `create-worktask` |
 | `git/git-policy.instructions.md` | referenced by `ai-asset-sync`, `create-worktask` |
 | `meta/knowledge-conventional-contexts-quality.instructions.md` | referenced by `create-hld` |
 | `meta/rules.instructions.md` | rule lifecycle convention (`manage-rule-system`) |
+
+The template's own `AGENTS.md` index is **never copied** — it catalogues rules that don't ship
+(dangling refs on a fresh install) and would clobber an existing consumer index. Instead the run
+writes a generated subset index: missing index → created; installer-generated index → refreshed;
+an existing operator index → the subset section is appended once, never rewritten. Overwrite,
+never delete — an operator's own rules are never swept. Skipped entirely unless `-r` (or no
+switches).
 
 Overwrite, never delete — an operator's own rules are never swept. Everything else in
 `.github/instructions/` (backend/\*, skills/\*, clean-code, solid-principles, …) stays local.

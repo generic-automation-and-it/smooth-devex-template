@@ -662,10 +662,19 @@ fi
 root="$(make_root "cat-rules" alpha)"
 run_sh "$root" -r >/dev/null 2>&1
 rules_ok=1
-for rel in AGENTS.md code-review-standards.instructions.md git/git-policy.instructions.md \
+for rel in code-review-standards.instructions.md git/git-policy.instructions.md \
   meta/knowledge-conventional-contexts-quality.instructions.md meta/rules.instructions.md; do
   [ -f "$root/../.github/instructions/$rel" ] || rules_ok=0
 done
+# The template's own index is never copied: a generated subset index ships instead, with no
+# references to unshipped rules.
+if [ -f "$root/../.github/instructions/AGENTS.md" ] \
+  && grep -q "installed subset" "$root/../.github/instructions/AGENTS.md" \
+  && ! grep -q "backend/" "$root/../.github/instructions/AGENTS.md"; then
+  :
+else
+  rules_ok=0
+fi
 if [ "$rules_ok" = "1" ] && [ -L "$root/rules" ] \
   && [ ! -e "$root/skills/ai-terse" ] && [ ! -f "$root/_smooth-devex-shared/installation.json" ]; then
   ok "-r only: owned rules land with topology link, no skills, no manifest"
@@ -731,6 +740,20 @@ else
   no "-r: an existing real rules entry is never replaced" "real dir replaced by link"
 fi
 
+# 7j. An existing consumer rules index is merged, not clobbered: the installed subset is
+# appended once, operator content survives, and a second run does not duplicate the section.
+root="$(make_root "cat-indexmerge" alpha)"
+mkdir -p "$root/../.github/instructions"
+printf '# AGENTS.md - Operator rules\n' >"$root/../.github/instructions/AGENTS.md"
+run_sh "$root" -r >/dev/null 2>&1
+run_sh "$root" -r >/dev/null 2>&1
+if [ "$(grep -c "installer-owned-rules-subset" "$root/../.github/instructions/AGENTS.md")" = "1" ] \
+  && grep -q "Operator rules" "$root/../.github/instructions/AGENTS.md" \
+  && grep -q "code-review-standards" "$root/../.github/instructions/AGENTS.md"; then
+  ok "-r: existing consumer index is appended once, never rewritten"
+else
+  no "-r: existing consumer index is appended once, never rewritten" "clobbered or duplicated"
+fi
 # 7g. An unknown switch is a hard error.
 root="$(make_root "cat-badflag" alpha)"
 st=0
