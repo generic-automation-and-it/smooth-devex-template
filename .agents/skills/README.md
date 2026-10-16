@@ -124,6 +124,17 @@ A harness that honours skill `effort` applies it on invocation; a harness with a
 
 ### Sub-skill invocation
 
+Chain: **git-commit-push-pr** → **git-commit-push** → **git-commit**. Each link invokes the next
+as a sub-agent at the callee's frontmatter `effort`, on the session's model:
+
+- Claude Code: `Task(subagent_type: "general-purpose", prompt: "invoke <skill> skill" + args)`
+- Copilot / Codex: invoke the `<skill>` skill
+
+Arguments forward down the chain: commit message, `--issue <number>` (push, pr), `--autonomous`
+(all links, transitively). A link with nothing to do (no changes, nothing to push) continues
+gracefully — never an error. SKILL.md files state their own link; this section is the shared
+wording they all follow.
+
 - **git-commit-push** → invokes **git-commit** at `effort: low`
 - **git-commit-push-pr** → invokes **git-commit-push** at `effort: medium`
 
