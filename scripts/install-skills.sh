@@ -375,12 +375,18 @@ clone_source() {
   # `-c core.symlinks=true` forces symlink checkout in the temp clone regardless of the
   # operator's global git config. Without it, a Windows-default git materializes the source's
   # committed symlinks (.agents/setup/scripts, .agents/templates) as plain text files, and the
-  # payload copy below would copy file-blobs instead of directories.
+  # payload copy below would copy file-blobs instead of directories. On a machine without symlink
+  # privilege (Windows without Developer Mode or elevation) the forced checkout fails outright —
+  # so fall back to a plain clone with a warning instead of dying. The fallback is complete: the
+  # installer only reads real directories out of the clone (skills, hooks, _smooth-devex-shared,
+  # .github/instructions); canonical links are created filesystem-side afterwards.
   if [ -n "$SKILLS_BRANCH" ]; then
     git -c core.symlinks=true clone --depth 1 --branch "$SKILLS_BRANCH" "$clone_url" "$INSTALL_TMP/repo" >/dev/null 2>&1 \
+      || { log "WARNING: symlink checkout failed — retrying without symlink support"; git clone --depth 1 --branch "$SKILLS_BRANCH" "$clone_url" "$INSTALL_TMP/repo" >/dev/null 2>&1; } \
       || die "Failed to clone $SKILLS_REPO (branch '$SKILLS_BRANCH' — set SKILLS_BRANCH empty for the default)"
   else
     git -c core.symlinks=true clone --depth 1 "$clone_url" "$INSTALL_TMP/repo" >/dev/null 2>&1 \
+      || { log "WARNING: symlink checkout failed — retrying without symlink support"; git clone --depth 1 "$clone_url" "$INSTALL_TMP/repo" >/dev/null 2>&1; } \
       || die "Failed to clone $SKILLS_REPO"
   fi
 }

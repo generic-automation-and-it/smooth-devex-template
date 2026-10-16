@@ -323,6 +323,19 @@ function Invoke-SourceClone {
         $gitOutput = & git -c core.symlinks=true clone --depth 1 $cloneUrl $script:TempRepo 2>&1
     }
     if ($LASTEXITCODE -ne 0) {
+        # A machine without symlink privilege (Windows without Developer Mode or elevation) fails
+        # the forced checkout outright. Retry plain with a warning instead of dying: the installer
+        # only reads real directories out of the clone, and canonical links are created
+        # filesystem-side afterwards (with the junction fallback where needed).
+        Write-Info 'WARNING: symlink checkout failed - retrying without symlink support'
+        if ($Branch) {
+            $gitOutput = & git clone --depth 1 --branch $Branch $cloneUrl $script:TempRepo 2>&1
+        }
+        else {
+            $gitOutput = & git clone --depth 1 $cloneUrl $script:TempRepo 2>&1
+        }
+    }
+    if ($LASTEXITCODE -ne 0) {
         Fail "failed to clone $Repo - $($gitOutput -join ' ')"
     }
 }
