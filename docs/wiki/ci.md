@@ -36,7 +36,7 @@ Accepted: `MAJOR.MINOR.PATCH` with optional `-prerelease` and `+build`, no leadi
 
 ## AI asset sync
 
-Reusable workflow `.github/workflows/pipeline-ai-asset-sync.yml` (`workflow_call` + `workflow_dispatch` only — no push/pull_request). Composite action `.github/actions/ai-asset-sync`. Consumer example: `.docs/examples/ai-asset-sync-caller.yml`. See [AI Asset Sync](ai-asset-sync.md).
+Reusable workflow `.github/workflows/pipeline-ai-asset-sync.yml` (`workflow_call` + `workflow_dispatch` only — no push/pull_request). Composite action `.github/actions/ai-asset-sync`. Consumer example: `docs/examples/ai-asset-sync-caller.yml`. See [AI Asset Sync](ai-asset-sync.md).
 
 ## .NET local tools
 

@@ -179,18 +179,20 @@
     <File Path=".agents/templates/TEMPLATE_AGENTS.md" />
     <File Path=".agents/templates/TEMPLATE_README.md" />
   </Folder>
-  <Folder Name="/.docs/">
+  <Folder Name="/docs/">
     <File Path="README.md" />
   </Folder>
-  <Folder Name="/.docs/wiki/">
-    <File Path=".docs/wiki/ai-asset-sync.md" />
-    <File Path=".docs/wiki/ai-tooling.md" />
-    <File Path=".docs/wiki/architecture.md" />
-    <File Path=".docs/wiki/ci.md" />
-    <File Path=".docs/wiki/testing.md" />
+  <Folder Name="/docs/wiki/">
+    <File Path="docs/wiki/ai-asset-sync.md" />
+    <File Path="docs/wiki/ai-tooling.md" />
+    <File Path="docs/wiki/architecture.md" />
+    <File Path="docs/wiki/ci.md" />
+    <File Path="docs/wiki/local-dev.md" />
+    <File Path="docs/wiki/reuse.md" />
+    <File Path="docs/wiki/testing.md" />
   </Folder>
-  <Folder Name="/.docs/adr/" />
-  <Folder Name="/.docs/nfr/" />
+  <Folder Name="/docs/adr/" />
+  <Folder Name="/docs/nfr/" />
   <Folder Name="/docker/">
     <File Path="Dockerfile" />
     <File Path="docker-compose.yml" />

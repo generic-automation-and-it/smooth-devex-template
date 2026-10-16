@@ -4,7 +4,7 @@
 # Each source is owner/repo@ref:path. Remote path == local path (no rename).
 # strategy: ai-merge (default) | overwrite
 #
-# See .docs/wiki/ai-asset-sync.md and .docs/examples/ai-asset-sync-caller.yml.
+# See docs/wiki/ai-asset-sync.md and docs/examples/ai-asset-sync-caller.yml.
 version: 1
 entries: []
 # Example:

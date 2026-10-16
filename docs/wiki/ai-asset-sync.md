@@ -6,7 +6,7 @@ Implementation lives in `.agents/skills/ai-asset-sync/scripts/run-sync.sh`. The 
 
 ## Consumer setup
 
-1. Copy [`.docs/examples/ai-asset-sync-caller.yml`](../examples/ai-asset-sync-caller.yml) to `.github/workflows/pipeline-ai-asset-sync.yml`.
+1. Copy [`docs/examples/ai-asset-sync-caller.yml`](../examples/ai-asset-sync-caller.yml) to `.github/workflows/pipeline-ai-asset-sync.yml`.
 2. Add `.github/assets/ai-sync.yml`:
 
 ```yaml
@@ -42,7 +42,7 @@ Branch: `chore/ai-sync-{UTC YYYYMMDD-HHMM}-{run id}` (fresh each run, collision-
 
 | Shape | When |
 |-------|------|
-| Reusable `workflow_call` | Caller YAML in `.docs/examples/ai-asset-sync-caller.yml`. Skill fetched at `github.job_workflow_sha` if not installed locally. |
+| Reusable `workflow_call` | Caller YAML in `docs/examples/ai-asset-sync-caller.yml`. Skill fetched at `github.job_workflow_sha` if not installed locally. |
 | `workflow_dispatch` in this template | Same workflow file, in-repo skill, no side checkout. |
 | Skill installed locally | Skip side checkout; `run-sync.sh` from the consumer tree. |
 | Composite action `.github/actions/ai-asset-sync` | Copy-install / local-job packaging; still calls `run-sync.sh`. |
@@ -84,5 +84,5 @@ Move/rename (remote path ≠ local path), one-PR-per-entry, auto-merge of the sy
 ## Related
 
 - Skill: `.agents/skills/ai-asset-sync/`
-- Example caller: `.docs/examples/ai-asset-sync-caller.yml`
+- Example caller: `docs/examples/ai-asset-sync-caller.yml`
 - [CI](ci.md) · [AI tooling](ai-tooling.md)
