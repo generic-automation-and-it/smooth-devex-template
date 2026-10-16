@@ -79,7 +79,8 @@ Two known gaps:
 | :---- | :---- | :---- |
 | 2026-10-15 | Initial: `install-skills.{sh,ps1}` + harness + docs | — |
 | 2026-10-16 | Agent-root layout: manifest + cross-cutting payload at `<agent-root>/_smooth-devex-shared/` (ships `setup/scripts/`, `templates/`), canonical symlinks, legacy-manifest fresh start; harness covers refresh/sweep/links/legacy | — |
-| 2026-10-16 | Category switches `-r -s -h` (default all-on): `OWNED_RULES` (5 files) + rules topology link, `OWNED_HOOKS` (3 files, exec bit); harness covers categories, unowned, real-dir, bad flag; README one-liners spell the default | — |
+| 2026-10-16 | Category switches `-r -s -h` (default all-on): `OWNED_RULES` (4 files) + rules topology link, `OWNED_HOOKS` (2 files, exec bit); harness covers categories, unowned, real-dir, bad flag; README one-liners spell the default | — |
 | 2026-10-16 | Symlink support: temp clone forces `-c core.symlinks=true`, consumer repo marked best-effort; ps1 junction fallback documented as degraded | — |
 | 2026-10-16 | `ai-ralph-loop` added to the owned set (seven skills) | #104 |
-| 2026-10-16 | README installer one-liners moved to `Getting Started → Install into an existing repository` (before one-time setup); single copy, lower section links to it — keep new commands there | — |
+| 2026-10-16 | README owned-set table before Tech Stack (7 skills, 4 rules, 2 hooks); matches `OWNED_LIST`/`OWNED_RULES`/`OWNED_HOOKS` | — |
+| 2026-10-16 | README top install section shows both Mac/Linux `curl` and Windows `irm` one-liners; full details stay in `docs/wiki/reuse.md` | — |

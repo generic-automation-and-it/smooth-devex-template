@@ -18,7 +18,7 @@ Skills live **flat**, one directory per skill directly under `.agents/skills/`. 
 | **ai-understanding** | Export session knowledge as Understandings; import, publish, consume | `/ai-understanding [--export [--all]] [--import] [--publish [--portable-only]] [--consume <src>] [--path <target>] [--promote <slug>] [--index]` |
 | **context-load-agents-context** | Load ancestor AGENTS.md context for a file | `/context-load-agents-context` |
 | **context-load-context** | Load domain context before implementation | `/context-load-context auth` |
-| **create-hld** | Author a design-only High-Level Design under `.docs/hlds/NNN-<slug>/` | `/create-hld <kebab-slug>` |
+| **create-hld** | Author a design-only High-Level Design under `docs/hlds/NNN-<slug>/` | `/create-hld <kebab-slug>` |
 | **create-worktask** | Scaffold and populate a standalone worktask under `.context/work-tasks/` | Claude Code: `/create-worktask <kebab-slug>`; Codex: `$create-worktask <kebab-slug>`; imperative natural-language prompts route through the shared hook |
 | **git-commit** | Commit with conventional format | `/git-commit [--autonomous]` |
 | **git-commit-push** | Commit and push to remote | `/git-commit-push [--autonomous]` |

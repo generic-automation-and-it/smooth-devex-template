@@ -74,7 +74,7 @@ without a citation, YAGNI wins.
    - `*AGENTS.md` chain for each scope file (`.agents/skills/context-load-agents-context/scripts/load-agents-context.sh --file <path>`, or walk ancestor directories).
    - Rules whose scope matches a scope file (index: `.agents/rules/AGENTS.md`).
    - `.context/understandings/INDEX.md` → every unit whose question matches the scope's subject. No store → continue without it.
-   - Specs: active worktask under `.context/work-tasks/`, referenced `.docs/hlds/`, PR body (`gh pr view --json body`) when a PR exists.
+   - Specs: active worktask under `.context/work-tasks/`, referenced `docs/hlds/`, PR body (`gh pr view --json body`) when a PR exists.
 3. **Baseline verify.** Build and run the tests covering the scope (commands from root `AGENTS.md`).
    Record failures as baseline — a loop is judged on *new* failures only.
 4. **Open the ledger** (below).
