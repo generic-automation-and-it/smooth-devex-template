@@ -555,8 +555,11 @@ main() {
   local agent_root skills_root shared_dir json_path legacy_json existing_json new_json
 
   if [ -n "${SKILLS_ROOT:-}" ]; then
-    skills_root="$SKILLS_ROOT"
-    [ -d "$skills_root" ] || die "SKILLS_ROOT '$skills_root' does not exist"
+    [ -d "$SKILLS_ROOT" ] || die "SKILLS_ROOT '$SKILLS_ROOT' does not exist"
+    # Resolve to absolute first: a relative SKILLS_ROOT (e.g. `.` from inside the skills dir)
+    # would make dirname return the skills dir itself, nesting state inside skills/ and
+    # misplacing rules. The parent of the absolute path is the agent root, whatever it is named.
+    skills_root="$(cd "$SKILLS_ROOT" && pwd -P)"
     # The parent of an explicitly forced skills root counts as the agent root, whatever it
     # is named: the shared dir is always a sibling of the skills dir, never inside it.
     agent_root="$(cd "$(dirname "$skills_root")" && pwd -P)"

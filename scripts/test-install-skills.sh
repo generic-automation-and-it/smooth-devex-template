@@ -747,6 +747,21 @@ else
   no "consumer repo gets core.symlinks=true" "config missing or false"
 fi
 
+# 7i. A relative SKILLS_ROOT resolves against the cwd: state lands beside skills, not inside
+# them, and rules land in the repo root — never nested under the skills dir.
+relroot="$scratch/relroot"
+mkdir -p "$relroot/.agents/skills/alpha"
+printf '# alpha\n' >"$relroot/.agents/skills/alpha/SKILL.md"
+( cd "$relroot" && SKILLS_ROOT=.agents/skills SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
+  SKILLS_TEST_OWNED_EXTRA="alpha" bash "$installer_sh" -s -r ) >/dev/null 2>&1
+if [ -f "$relroot/.agents/_smooth-devex-shared/installation.json" ] \
+  && [ ! -e "$relroot/.agents/skills/_smooth-devex-shared" ] \
+  && [ -f "$relroot/.github/instructions/git/git-policy.instructions.md" ]; then
+  ok "relative SKILLS_ROOT resolves against the cwd"
+else
+  no "relative SKILLS_ROOT resolves against the cwd" "state or rules nested inside skills/"
+fi
+
 # ---------------------------------------------------------------------------------------------
 
 echo
