@@ -152,7 +152,9 @@ else:
 prompt_decisions() {
   local answer=""
   # `-r` only checks the file mode: /dev/tty is world-readable on a CI runner that has no controlling
-  # terminal, and opening it there fails with ENXIO. Open it for real before trusting it.
+  # terminal, and opening it there fails with ENXIO. Open it for real before trusting it, then guard
+  # the read itself — a failed open, a failed read, or EOF all fall back to disabled (never abort
+  # the install under `set -e`).
   if ! { : < /dev/tty; } 2>/dev/null; then
     log "No terminal available — decisions disabled by default"
     DECISIONS_ENABLED="false"
@@ -162,7 +164,11 @@ prompt_decisions() {
   echo "  Enable AI decision validation for ralph loop?"
   echo "  (Evaluates each fix via local OpenJEV model; requires openjev at localhost:1234)"
   printf "  [y/N] "
-  read -r answer < /dev/tty || true
+  if ! read -r answer < /dev/tty 2>/dev/null; then
+    log "Could not read terminal — decisions disabled by default"
+    DECISIONS_ENABLED="false"
+    return
+  fi
   case "$answer" in
     [yY]|[yY][eE][sS])
       DECISIONS_ENABLED="true"
@@ -395,12 +401,12 @@ else:
     merged = []
     for name in sorted(catalog):
         merged.append({"name": name, "installed": existing_map.get(name, True)})
-    # Preserve decisions_enabled from existing JSON when present; otherwise use the current value.
-    # An operator who already answered the prompt keeps their choice across re-installs.
-    existing_decisions = existing.get("decisions_enabled")
+    # decisions_enabled is the resolved preference already computed by the caller (main) —
+    # -d override, a reused saved value, a prompt answer, or the no-terminal default. Write it
+    # as-is so a -d override actually persists across re-installs.
     data = {
         "updated": now,
-        "decisions_enabled": decisions_enabled if existing_decisions is None else existing_decisions,
+        "decisions_enabled": decisions_enabled,
         "skills": merged,
     }
 

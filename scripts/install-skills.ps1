@@ -289,8 +289,7 @@ function Build-InstallationJson {
         [string[]] $DiskSkills,
         [string[]] $SourceSkills,
         [object[]] $ExistingSkills,
-        [bool] $DecisionsEnabled = $false,
-        [Nullable[bool]] $ExistingDecisionsEnabled = $null
+        [bool] $DecisionsEnabled = $false
     )
 
     # The catalogue is the union (source + disk) INTERSECTED with the owned set. Without the
@@ -324,9 +323,10 @@ function Build-InstallationJson {
         $items += '    ' + ($item | ConvertTo-Json -Compress -Depth 3)
     }
 
-    # Preserve decisions_enabled from existing JSON when present; otherwise use the current value.
-    $decisionsValue = if ($null -ne $ExistingDecisionsEnabled) { $ExistingDecisionsEnabled } else { $DecisionsEnabled }
-    $decisionsJson = if ($decisionsValue) { 'true' } else { 'false' }
+    # decisions_enabled is the resolved preference already computed by the caller (main) —
+    # a -d override, a reused saved value, a prompt answer, or the no-terminal default. Write it
+    # as-is so a -d override actually persists across re-installs.
+    $decisionsJson = if ($DecisionsEnabled) { 'true' } else { 'false' }
 
     $updatedJson = $Updated | ConvertTo-Json -Compress
     $joined = $items -join ",`n"
@@ -747,7 +747,7 @@ if ($script:DoSkills) {
     # port cannot agree on.
     $newJson = Build-InstallationJson -Updated ([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH\:mm\:ssZ')) `
         -DiskSkills $diskSkills -SourceSkills $sourceSkills -ExistingSkills $existingSkills `
-        -DecisionsEnabled $script:DecisionsEnabled -ExistingDecisionsEnabled $(if ($null -ne $existing -and $existing.psobject.Properties['decisions_enabled']) { [bool]$existing.decisions_enabled } else { $null })
+        -DecisionsEnabled $script:DecisionsEnabled
 
     Write-Info 'Syncing installation.json...'
     Write-Info 'Updating installed skills...'
