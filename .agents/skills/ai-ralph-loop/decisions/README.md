@@ -35,21 +35,28 @@ The installer also sets `decisions_enabled: true` in `_smooth-devex-shared/insta
 | `SMOOTH_DEVEX_DECISIONS_MIN_PROBABILITY` | `0.60` | Minimum probability (0-1) for the fix to be marked `keep=true` |
 | `SMOOTH_DEVEX_DECISIONS_MAX_ATTEMPTS` | `3` | Retry count on timeout or connection failure |
 | `SMOOTH_DEVEX_DECISIONS_TIMEOUT` | `60` | Per-request timeout in seconds |
-| `SMOOTH_DEVEX_DECISIONS_TEMPLATE` | `templates/default.json` | Override template path (relative to script) |
+| `SMOOTH_DEVEX_DECISIONS_TEMPLATE` | `templates/build.json` | Override template path (relative to script) |
 
 ## How It Works
 
 1. Ralph loop triage accepts a finding and produces a fix (before/after code).
 2. `decision-evaluate.sh` reads the question template, injects before/after code into the state, and calls OpenJEV.
-3. OpenJEV returns probability distributions for three questions:
-   - **problem_severity** — is the problem real? (not a real problem → critical)
-   - **fix_necessity** — must the fix be applied now? (must_fix / should_fix / can_defer / skip_fix)
-   - **net_value** — after weighing severity, quality, and cost, is the fix worth applying? (negative → high)
-4. Decision percentage = combined probability of "positive" + "high" net value.
+3. Two templates are available:
+   - **Code mode** (`templates/build.json`) — asks:
+     - **developer_value** — does this change minimize a feature gap? (closes_gap / improves_quality / marginal / no_value)
+     - **necessity** — is it necessary for the PR? (essential / important / optional / unnecessary)
+     - **primary_value_category** — what kind of value? (correctness / security / test_coverage / maintainability)
+   - **Plan mode** (`templates/plan.json`) — asks:
+     - **requirement_coverage** — does a cited requirement ask for this? (directly_required / implicitly_needed / nice_to_have / not_required)
+     - **design_necessity** — is it necessary for the system? (essential / important / beneficial / unnecessary)
+     - **architectural_value** — overall architectural worth? (harmful → high)
+4. Decision percentage:
+   - Code mode = P(closes_gap) + P(improves_quality)
+   - Plan mode = P(positive) + P(high) on architectural_value
 5. If percentage >= `MIN_PROBABILITY`, the fix is marked `keep=true`.
 6. On timeout or failure (after retries), falls back to existing ralph behavior — no gate.
 
-The goal is to **stop unnecessary fixes** — changes that are technically correct but provide no real value. A cosmetic rename scores ~34% (blocked); a null-ref fix scores ~100% (passed).
+Use `SMOOTH_DEVEX_DECISIONS_TEMPLATE` to select the plan template when running in plan mode.
 
 ## Output Format
 
@@ -70,16 +77,20 @@ value=positive|pct=72|necessity=should_fix|keep=true|confidence=0.35|fallback=fa
 
 ## Customising Templates
 
-Edit `templates/default.json` to change the questions, criteria, or state prompt. The template uses these placeholders:
+Edit `templates/build.json` (code mode) or `templates/plan.json` (plan mode) to change the questions, criteria, or state prompt. The template uses these placeholders:
 
 | Placeholder | Replaced with |
 |-------------|---------------|
 | `{{CATEGORY}}` | Ralph loop category name |
-| `{{BEFORE}}` | Code before the fix |
-| `{{AFTER}}` | Code after the fix |
-| `{{CONTEXT}}` | File:line location |
+| `{{BEFORE}}` | Code/plan text before the fix |
+| `{{AFTER}}` | Code/plan text after the fix |
+| `{{CONTEXT}}` | File:line or section:paragraph location |
 
 The `questions` object follows the OpenJEV API format — `type` is `choice` or `score`, with `instructions` and `criteria`.
+
+The script auto-detects which template is in use by checking which question names appear in the response:
+- `developer_value` present → code mode (pct = closes_gap + improves_quality)
+- `architectural_value` present → plan mode (pct = positive + high scores)
 
 ## Disable
 

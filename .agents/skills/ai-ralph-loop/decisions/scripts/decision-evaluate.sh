@@ -69,9 +69,9 @@ MIN_PROB="${SMOOTH_DEVEX_DECISIONS_MIN_PROBABILITY:-0.60}"
 MAX_ATTEMPTS="${SMOOTH_DEVEX_DECISIONS_MAX_ATTEMPTS:-3}"
 TIMEOUT="${SMOOTH_DEVEX_DECISIONS_TIMEOUT:-60}"
 
-# Template lives next to this script's parent: decisions/templates/default.json
+# Template lives next to this script's parent: decisions/templates/build.json
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEMPLATE_FILE="${SMOOTH_DEVEX_DECISIONS_TEMPLATE:-$SCRIPT_DIR/../templates/default.json}"
+TEMPLATE_FILE="${SMOOTH_DEVEX_DECISIONS_TEMPLATE:-$SCRIPT_DIR/../templates/build.json}"
 
 if [ ! -f "$TEMPLATE_FILE" ]; then
   echo "decision-evaluate: template not found: $TEMPLATE_FILE" >&2
@@ -155,29 +155,52 @@ if not response_text:
 try:
     result = json.loads(response_text)
     answers = result["answers"]
-    net_value = answers.get("net_value", {})
-    necessity = answers.get("fix_necessity", {})
 
-    # Decision percentage: combined probability of "positive" (2) + "high" (3) net value.
-    # These are the levels where the fix clearly improves the codebase.
-    probabilities = net_value.get("probabilities", {})
-    prob_positive = probabilities.get("2", 0)
-    prob_high = probabilities.get("3", 0)
-    decision_pct = round((prob_positive + prob_high) * 100)
-    keep = (prob_positive + prob_high) >= min_prob
+    # Detect template mode from which questions are present in the response.
+    # Code mode: developer_value (choice) + necessity (choice) + primary_value_category (choice)
+    # Plan mode: requirement_coverage (choice) + design_necessity (choice) + architectural_value (score)
 
-    confidence = net_value.get("confidence", 0)
+    if "developer_value" in answers:
+        # --- Code mode ---
+        dev_value = answers["developer_value"]
+        probs = dev_value.get("probabilities", {})
+        # Decision pct: combined probability of closes_gap + improves_quality
+        decision_pct = round((probs.get("closes_gap", 0) + probs.get("improves_quality", 0)) * 100)
+        keep = (probs.get("closes_gap", 0) + probs.get("improves_quality", 0)) >= min_prob
+        confidence = dev_value.get("confidence", 0)
+        value_label = dev_value.get("choice", "unknown")
 
-    score = net_value.get("score", 0)
-    legend = net_value.get("legend", {})
-    value_label = legend.get(str(int(round(score))), "unknown")
-    # Extract short label: "positive — the fix clearly improves..." → "positive"
-    short_label = value_label.split(" — ")[0].split(" - ")[0].strip().replace(" ", "_")
+        necessity = answers.get("necessity", {})
+        necessity_choice = necessity.get("choice", "unknown")
 
-    # Fix necessity choice: must_fix, should_fix, can_defer, skip_fix
-    necessity_choice = necessity.get("choice", "unknown")
+        # Primary value category for the value field
+        pvc = answers.get("primary_value_category", {})
+        short_label = pvc.get("choice", "unknown")
 
-    print(f"value={short_label}|pct={decision_pct}|necessity={necessity_choice}|keep={'true' if keep else 'false'}|confidence={confidence:.2f}|fallback=false")
+        print(f"value={short_label}|pct={decision_pct}|necessity={necessity_choice}|keep={'true' if keep else 'false'}|confidence={confidence:.2f}|fallback=false")
+
+    elif "architectural_value" in answers:
+        # --- Plan mode ---
+        arch_value = answers["architectural_value"]
+        probs = arch_value.get("probabilities", {})
+        # Decision pct: combined probability of positive (2) + high (3)
+        decision_pct = round((probs.get("2", 0) + probs.get("3", 0)) * 100)
+        keep = (probs.get("2", 0) + probs.get("3", 0)) >= min_prob
+        confidence = arch_value.get("confidence", 0)
+
+        score = arch_value.get("score", 0)
+        legend = arch_value.get("legend", {})
+        value_label = legend.get(str(int(round(score))), "unknown")
+        short_label = value_label.split(" — ")[0].split(" - ")[0].strip().replace(" ", "_")
+
+        design_nec = answers.get("design_necessity", {})
+        necessity_choice = design_nec.get("choice", "unknown")
+
+        print(f"value={short_label}|pct={decision_pct}|necessity={necessity_choice}|keep={'true' if keep else 'false'}|confidence={confidence:.2f}|fallback=false")
+
+    else:
+        print("value=fallback|pct=0|keep=false|confidence=0|fallback=true")
+        sys.exit(0)
 except (json.JSONDecodeError, KeyError, ValueError):
     print("value=fallback|pct=0|keep=false|confidence=0|fallback=true")
     sys.exit(0)

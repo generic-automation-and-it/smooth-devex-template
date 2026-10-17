@@ -31,6 +31,7 @@ No switch is needed — a bare invocation is the full run.
 | `--plan [path]` | Review a plan or design document instead of code ([Plan mode](#plan-mode)) | off — code mode |
 | `--spawn` | Run the two review lenses as parallel subagents with fresh context | off — both lenses run sequentially, inline, in the current agent pid |
 | `--notests` | Do not create new tests during the loop; retain coverage review, existing-test repairs and verification | off — create required tests |
+| `--nodecisions` | Skip decision validation even when `SMOOTH_DEVEX_DECISIONS_ENABLED=true` | off — run decisions when enabled |
 
 Single-dash spellings (`-loops 5`) are accepted. An unrecognised switch or a non-positive `--loops` is
 not guessed at: say what was passed and ask.
@@ -44,10 +45,14 @@ table's `Decision` column.
 
 Full reference: [`decisions/README.md`](decisions/README.md).
 
+Two templates: `decisions/templates/build.json` (code mode) and `decisions/templates/plan.json`
+(plan mode — evaluates architectural/design value instead of code fix value). Set
+`SMOOTH_DEVEX_DECISIONS_TEMPLATE` to the plan template path when running in `--plan` mode.
+
 ### When it runs
 
 After triage accepts a finding and the fix is written, call the decision script before recording the
-ledger row:
+ledger row. Skipped when `--nodecisions` is set.
 
 ```bash
 # Write before/after code to temp files, then:
@@ -247,7 +252,7 @@ across tiers.
 ### Ledger
 
 `.context/ralph-loop/<yyyyMMdd-HHmm>/ledger.md` (UTC stamp, one folder per run). Header: scope list,
-active switches (including `--notests`), context pack paths, baseline verify result. For code scope,
+active switches (including `--notests` and `--nodecisions`), context pack paths, baseline verify result. For code scope,
 keep the test inventory current in a separate table — [Test focus](#test-focus) does not apply in
 plan mode, so that table is omitted there:
 
@@ -282,8 +287,8 @@ cell holds the plan section the finding was fixed in.
 2. **Triage.** Check each finding against the code yourself. Accept, reject or defer it with a reason.
    A finding matching a ledger row (same file, same issue) is dropped. With `--notests`, defer test
    creation findings rather than accepting them for a fix; keep production fixes eligible. When
-   decisions are enabled, run the decision script on each accepted finding's fix before recording
-   (see [Decision validation](#decision-validation-opt-in)).
+   decisions are enabled and `--nodecisions` is not set, run the decision script on each accepted
+   finding's fix before recording (see [Decision validation](#decision-validation-opt-in)).
 3. **Fix.** Accepted findings only, in order: potential bug → feature gap → architectural issue → the
    rest. Smallest change that resolves it, matching the surrounding code. A bug fix gets a regression
 test at the tier required by Test focus unless `--notests` is set; then fix the production issue and
@@ -308,8 +313,9 @@ stands and both are named in the report. A finding whose fix failed verification
 ### Reviewer brief
 
 Hand this section, the Categories table, the Evidence bar and Test focus to each reviewer, with the
-target file list, active switches and the ledger path. Include the `--notests` switch instructions when
-set. This hand-off applies to both inline and spawned reviews.
+target file list, the active switches and the ledger path. Include the `--notests` switch instructions when
+set. Include the `--nodecisions` switch instruction: when set, skip decision validation regardless of
+`SMOOTH_DEVEX_DECISIONS_ENABLED`. This hand-off applies to both inline and spawned reviews.
 
 When `--plan` is active, also hand over the whole [Plan mode](#plan-mode) section and treat it as
 overriding this one: reviewers get the Categories-to-plan translation, the `section:paragraph` location

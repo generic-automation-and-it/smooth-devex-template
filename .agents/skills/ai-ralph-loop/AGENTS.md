@@ -38,3 +38,5 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
 | 2026-10-16 | `--notests`: active-switch reviewer hand-off | — |
 | 2026-10-17 | `--plan [path]` switch: plan/design mode, additive; same loop, evidence bar and convergence | — |
 | 2026-10-17 | Decision validation layer (opt-in via `SMOOTH_DEVEX_DECISIONS_ENABLED`); `Decision` column in output table | — |
+| 2026-10-17 | Code-mode template rewritten (developer_value/necessity/primary_value_category); plan-mode template added (`templates/plan.json`); script auto-detects mode | — |
+| 2026-10-17 | `--nodecisions` switch: bypass decision validation even when env var is set | — |
