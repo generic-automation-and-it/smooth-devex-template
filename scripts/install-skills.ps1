@@ -53,7 +53,9 @@ param(
     [Alias('s')]
     [switch] $Skills,
     [Alias('h')]
-    [switch] $Hooks
+    [switch] $Hooks,
+    [Alias('d')]
+    [switch] $Decisions
 )
 
 Set-StrictMode -Version Latest
@@ -663,9 +665,11 @@ function Install-OwnedHooks {
 
 # Category switches. No switches means everything is on; any switch narrows the run to
 # exactly what was named. Switches filter the run only — nothing is persisted.
+# -d "decision validation" is a separate opt-in flag, not a category: it does not default on.
 $script:DoRules = [bool]$Rules
 $script:DoSkills = [bool]$Skills
 $script:DoHooks = [bool]$Hooks
+$script:DoDecisions = [bool]$Decisions
 if (-not ($script:DoRules -or $script:DoSkills -or $script:DoHooks)) {
     $script:DoRules = $true
     $script:DoSkills = $true
@@ -717,11 +721,15 @@ if ($script:DoSkills) {
     $existingSkills = @()
     if ($existing -and $existing.skills) { $existingSkills = @($existing.skills) }
 
-    # Decision validation opt-in. Prompt only when the preferences entry is missing — a saved
-    # true or false is reused without re-asking (idempotent). Read-Host reads from the console,
-    # so the prompt is asked even on a piped `irm | iex` run; falls back to disabled if no host.
+    # Decision validation opt-in. Prompt only when the preferences entry is missing and -d is not
+    # given — a saved true or false is reused without re-asking (idempotent). -d forces decisions on
+    # (no prompt, overrides a saved false). Read-Host reads from the console, so the prompt is asked
+    # even on a piped `irm | iex` run; falls back to disabled if no host.
     $hasDecisionsPref = Test-DecisionsPropertyExists -ExistingJson $existing
-    if ($hasDecisionsPref) {
+    if ($script:DoDecisions) {
+        $script:DecisionsEnabled = $true
+        Write-Info 'Decisions enabled via -d'
+    } elseif ($hasDecisionsPref) {
         $script:DecisionsEnabled = [bool] (Get-DecisionsEnabled -ExistingJson $existing)
         Write-Info "Decisions preference saved ($($script:DecisionsEnabled)) - skipping prompt"
     } else {

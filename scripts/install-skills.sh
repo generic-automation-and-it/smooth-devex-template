@@ -230,9 +230,12 @@ owned_set() {
 
 # Category switches. No switches means everything is on; any switch narrows the run to exactly
 # what was named. Switches filter the run only — nothing about the selection is persisted.
+# -d "decision validation" is a separate opt-in flag, not a category: it does not default on and
+# is not part of the "no switches = all categories" rule.
 DO_RULES=0
 DO_SKILLS=0
 DO_HOOKS=0
+DO_DECISIONS=0
 
 parse_categories() {
   local arg
@@ -241,8 +244,9 @@ parse_categories() {
       -r) DO_RULES=1 ;;
       -s) DO_SKILLS=1 ;;
       -h) DO_HOOKS=1 ;;
-      -*) die "unknown option: $arg (use -r for rules, -s for skills, -h for hooks)" ;;
-      *) die "unexpected argument: $arg (use -r for rules, -s for skills, -h for hooks)" ;;
+      -d) DO_DECISIONS=1 ;;
+      -*) die "unknown option: $arg (use -r for rules, -s for skills, -h for hooks, -d for decisions)" ;;
+      *) die "unexpected argument: $arg (use -r for rules, -s for skills, -h for hooks, -d for decisions)" ;;
     esac
   done
   if [ "$DO_RULES$DO_SKILLS$DO_HOOKS" = "000" ]; then
@@ -744,16 +748,20 @@ main() {
     existing_json="$(json_read "$json_path")" \
       || die "cannot read $json_path — fix or delete it, then re-run"
 
-    # Decision validation opt-in. Prompt only when the preferences entry is missing — a saved
-    # true or false is reused without re-asking (idempotent). The prompt reads from /dev/tty, so
-    # it is asked even on a piped `curl | bash` run; falls back to disabled when no terminal.
+    # Decision validation opt-in. Prompt only when the preferences entry is missing and -d is not
+    # given — a saved true or false is reused without re-asking (idempotent). -d forces decisions on
+    # (no prompt, overrides a saved false). The prompt reads from /dev/tty, so it is asked even on a
+    # piped `curl | bash` run; falls back to disabled when no terminal.
     local existing_decisions
     existing_decisions="$(check_decisions_enabled "$existing_json")"
-    if [ "$existing_decisions" = "missing" ]; then
-      prompt_decisions
-    else
+    if [ "$DO_DECISIONS" = "1" ]; then
+      DECISIONS_ENABLED="true"
+      log "Decisions enabled via -d"
+    elif [ "$existing_decisions" != "missing" ]; then
       DECISIONS_ENABLED="$existing_decisions"
       log "Decisions preference saved ($DECISIONS_ENABLED) — skipping prompt"
+    else
+      prompt_decisions
     fi
     if [ "$DECISIONS_ENABLED" = "true" ]; then
       write_decisions_env

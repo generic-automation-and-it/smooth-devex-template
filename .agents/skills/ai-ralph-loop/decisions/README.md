@@ -16,6 +16,12 @@ later re-install it reuses the saved value without re-asking.
 The prompt reads from the controlling terminal, so it is asked even on a piped `curl | bash` run.
 It only falls back to disabled when no terminal is available (CI, cron).
 
+To opt in without the prompt, pass `-d` to the installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -r -s -h -d
+```
+
 Set manually, or edit your shell profile directly:
 
 ```bash
