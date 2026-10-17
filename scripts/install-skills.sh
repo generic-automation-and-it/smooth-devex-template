@@ -150,8 +150,10 @@ else:
 # stdin is piped (a typical `curl | bash`). Falls back to disabled when no terminal
 # exists (CI, cron). Sets DECISIONS_ENABLED to "true" or "false".
 prompt_decisions() {
-  local answer
-  if [ ! -r /dev/tty ]; then
+  local answer=""
+  # `-r` only checks the file mode: /dev/tty is world-readable on a CI runner that has no controlling
+  # terminal, and opening it there fails with ENXIO. Open it for real before trusting it.
+  if ! { : < /dev/tty; } 2>/dev/null; then
     log "No terminal available — decisions disabled by default"
     DECISIONS_ENABLED="false"
     return
@@ -160,7 +162,7 @@ prompt_decisions() {
   echo "  Enable AI decision validation for ralph loop?"
   echo "  (Evaluates each fix via local OpenJEV model; requires openjev at localhost:1234)"
   printf "  [y/N] "
-  read -r answer < /dev/tty
+  read -r answer < /dev/tty || true
   case "$answer" in
     [yY]|[yY][eE][sS])
       DECISIONS_ENABLED="true"
