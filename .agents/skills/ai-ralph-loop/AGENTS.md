@@ -23,6 +23,9 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
   `true`, the decision script is never called. When the service is unreachable (after retries), the
   loop falls back to existing behaviour — never blocks on decision availability. The `Decision`
   column shows `N/A` in both cases.
+- **Plan mode's ledger is keyed by section, not by file.** In the `File(s)` column the cell holds the plan
+  section heading. An agent matching ledger rows by literal file path finds no duplicate, re-raises a
+  settled section, and the run churns to the cap instead of converging.
 
 ## Changelog
 
@@ -33,4 +36,5 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
 | 2026-10-16 | `--spawn` switch: parallel subagent lenses; default stays sequential inline in the current pid | — |
 | 2026-10-16 | Test focus hand-off; DR-003 coupling | — |
 | 2026-10-16 | `--notests`: active-switch reviewer hand-off | — |
+| 2026-10-17 | `--plan [path]` switch: plan/design mode, additive; same loop, evidence bar and convergence | — |
 | 2026-10-17 | Decision validation layer (opt-in via `SMOOTH_DEVEX_DECISIONS_ENABLED`); `Decision` column in output table | — |
