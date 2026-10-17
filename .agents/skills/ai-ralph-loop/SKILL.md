@@ -41,9 +41,17 @@ additive: it changes the review target, never the loop. Same six categories, sam
 ledger, same convergence rule, same `--loops` and `--spawn`. Only the three deltas below differ; where
 this section is silent, the [Workflow](#workflow) applies unchanged.
 
+The Categories table is read against the plan, not the code. Each row's *Qualifies when* translates by
+swapping its subject — a potential bug is a step that produces a wrong result, YAGNI is a section no
+cited requirement asks for, KISS is the same outcome in fewer steps. The *Not a finding* column
+translates the same way; its entries are exclusions, and an exclusion that does not apply to a plan
+excludes nothing.
+
 ### Target
 
-- `--plan <path>` — read that file. A path that does not exist is not guessed at: say so and ask.
+- `--plan <path>` — read that file. A next token starting with `-` is the next switch, not a path
+  (`--plan --loops 3` runs plan mode with a cap of 3). A path that does not exist is not guessed at: say
+  so and ask.
 - `--plan` with no argument — create the plan, then loop over it:
   1. `mkdir -p .context/temp` and write `.context/temp/plan-<yyyyMMdd-HHmm>-<pid>.md` (UTC stamp, current
      pid — two runs in the same minute never collide). This is a working scratch file, never committed.
@@ -67,8 +75,8 @@ and recording each result in the ledger:
 
 ### Report
 
-The same fix table with `Section(s) fixed` in place of `File(s) fixed`. The **Verify** line under it
-reports the four checks above instead of build/test commands.
+The same fix table with `Section(s) fixed` in place of `File(s) fixed`. The **Verify** line reports the
+four checks above instead of build/test commands, and names the plan document's path.
 
 ## Categories
 
@@ -198,8 +206,7 @@ The final message is this table — `fixed` rows only, IDs from the ledger:
 Then three lines:
 
 - **Result** — `converged at loop k` · `cap reached (n loops)` · `stopped: verify red at loop k`.
-- **Verify** — build/test commands and state, against baseline. In plan mode, the four check results and
-  the plan document's path.
+- **Verify** — build/test commands and state, against baseline. In plan mode, see [Report](#report).
 - **Not fixed** — rejected / deferred / oscillation counts, one line per deferred or oscillation item, and the ledger path.
 
 No fixes at all → say `no findings` and give the Result and Verify lines only.
