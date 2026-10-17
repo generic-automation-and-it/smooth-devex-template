@@ -146,12 +146,14 @@ else:
 }
 
 # prompt_decisions — ask the user whether to enable decision validation.
-# Only prompts when stdin is a TTY (interactive). On piped input (curl | bash),
-# defaults to false so the one-liner stays non-interactive.
+# Only prompts when stdin is a TTY (interactive). On piped input (curl | bash) it
+# defaults to false so the one-liner stays non-interactive; to opt in without a
+# prompt, set SMOOTH_DEVEX_DECISIONS_ENABLED=true in the environment first.
 # Sets DECISIONS_ENABLED to "true" or "false".
 prompt_decisions() {
   if [ ! -t 0 ]; then
     log "Non-interactive session — decisions disabled by default"
+    log "To enable, re-run with SMOOTH_DEVEX_DECISIONS_ENABLED=true (e.g. SMOOTH_DEVEX_DECISIONS_ENABLED=true curl -fsSL ... | bash)"
     DECISIONS_ENABLED="false"
     return
   fi
@@ -743,15 +745,20 @@ main() {
     existing_json="$(json_read "$json_path")" \
       || die "cannot read $json_path — fix or delete it, then re-run"
 
-    # Decision validation opt-in. Only prompt when the preference is not yet recorded.
-    # A saved true or false is reused without re-asking — idempotent across re-installs.
+    # Decision validation opt-in. Priority: explicit env var > saved preference > interactive
+    # prompt > (non-interactive with no pref) disabled. The env var lets a `curl | bash` run opt
+    # in without a TTY (e.g. SMOOTH_DEVEX_DECISIONS_ENABLED=true curl -fsSL ... | bash) and flips a
+    # previously-saved preference without re-prompting.
     local existing_decisions
     existing_decisions="$(check_decisions_enabled "$existing_json")"
-    if [ "$existing_decisions" = "missing" ]; then
-      prompt_decisions
-    else
+    if [ -n "${SMOOTH_DEVEX_DECISIONS_ENABLED:-}" ]; then
+      DECISIONS_ENABLED="$SMOOTH_DEVEX_DECISIONS_ENABLED"
+      log "Decisions via env: $DECISIONS_ENABLED"
+    elif [ "$existing_decisions" != "missing" ]; then
       DECISIONS_ENABLED="$existing_decisions"
       log "Decisions preference saved ($DECISIONS_ENABLED) — skipping prompt"
+    else
+      prompt_decisions
     fi
     if [ "$DECISIONS_ENABLED" = "true" ]; then
       write_decisions_env

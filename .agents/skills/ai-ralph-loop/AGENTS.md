@@ -19,6 +19,10 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
   higher-priority rule can silently suppress the skill's testing findings.
 - **New switches narrow or tune; they never gate.** Behaviour the bare run already has stays
   available without any switch.
+- **Decision validation is opt-in and non-blocking.** When `SMOOTH_DEVEX_DECISIONS_ENABLED` is not
+  `true`, the decision script is never called. When the service is unreachable (after retries), the
+  loop falls back to existing behaviour — never blocks on decision availability. `--nodecisions`
+  bypasses it even when enabled.
 - **Plan mode's ledger is keyed by section, not by file.** In the `File(s)` column the cell holds the plan
   section heading. An agent matching ledger rows by literal file path finds no duplicate, re-raises a
   settled section, and the run churns to the cap instead of converging.
@@ -33,3 +37,7 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
 | 2026-10-16 | Test focus hand-off; DR-003 coupling | — |
 | 2026-10-16 | `--notests`: active-switch reviewer hand-off | — |
 | 2026-10-17 | `--plan [path]` switch: plan/design mode, additive; same loop, evidence bar and convergence | — |
+| 2026-10-17 | Decision validation layer (opt-in via `SMOOTH_DEVEX_DECISIONS_ENABLED`); `Decision` column in output table | — |
+| 2026-10-17 | Code-mode template rewritten (developer_value/necessity/primary_value_category); plan-mode template added; script auto-detects mode | — |
+| 2026-10-17 | `--nodecisions` switch: bypass decision validation even when env var is set | — |
+| 2026-10-17 | Installer env-var opt-in for non-interactive runs (`SMOOTH_DEVEX_DECISIONS_ENABLED=true curl \| bash`) | — |

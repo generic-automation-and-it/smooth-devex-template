@@ -168,7 +168,9 @@ function Get-DecisionsEnabled {
 
 function Prompt-Decisions {
     # Ask the user whether to enable decision validation.
-    # Only prompts when stdin is a terminal (interactive). On piped input, defaults to false.
+    # Only prompts when stdin is a terminal (interactive). On piped input it default to false
+    # so the one-liner stays non-interactive; to opt in without a prompt, set
+    # $env:SMOOTH_DEVEX_DECISIONS_ENABLED = 'true' in the environment first.
     # Sets $script:DecisionsEnabled to $true or $false.
     if (-not [Console]::IsInputRedirected) {
         Write-Host ''
@@ -184,6 +186,7 @@ function Prompt-Decisions {
         }
     } else {
         Write-Info 'Non-interactive session - decisions disabled by default'
+        Write-Info 'To enable, re-run with $env:SMOOTH_DEVEX_DECISIONS_ENABLED = ''true'''
         $script:DecisionsEnabled = $false
     }
 }
@@ -716,10 +719,15 @@ if ($script:DoSkills) {
     $existingSkills = @()
     if ($existing -and $existing.skills) { $existingSkills = @($existing.skills) }
 
-    # Decision validation opt-in. Only prompt when the preference is not yet recorded.
-    # A saved true or false is reused without re-asking — idempotent across re-installs.
+    # Decision validation opt-in. Priority: explicit env var > saved preference > interactive
+    # prompt > (non-interactive with no pref) disabled. The env var lets an `irm | iex` run opt
+    # in without a TTY ($env:SMOOTH_DEVEX_DECISIONS_ENABLED = 'true') and flips a previously-saved
+    # preference without re-prompting.
     $hasDecisionsPref = Test-DecisionsPropertyExists -ExistingJson $existing
-    if ($hasDecisionsPref) {
+    if ($null -ne $env:SMOOTH_DEVEX_DECISIONS_ENABLED -and $env:SMOOTH_DEVEX_DECISIONS_ENABLED -ne '') {
+        $script:DecisionsEnabled = ($env:SMOOTH_DEVEX_DECISIONS_ENABLED -eq 'true')
+        Write-Info "Decisions via env: $($script:DecisionsEnabled)"
+    } elseif ($hasDecisionsPref) {
         $script:DecisionsEnabled = [bool] (Get-DecisionsEnabled -ExistingJson $existing)
         Write-Info "Decisions preference saved ($($script:DecisionsEnabled)) - skipping prompt"
     } else {
