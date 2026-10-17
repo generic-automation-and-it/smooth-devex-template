@@ -146,6 +146,72 @@ function Write-Info { param([string] $Message) Write-Host "install-skills: $Mess
 function Fail { param([string] $Message) [Console]::Error.WriteLine("install-skills: $Message"); exit 1 }
 
 # ---------------------------------------------------------------------------
+# Decision validation opt-in
+# ---------------------------------------------------------------------------
+
+function Test-DecisionsEnabled {
+    # Returns $true or $false from the decisions_enabled field in the existing JSON.
+    param([object] $ExistingJson)
+    if ($null -eq $ExistingJson) { return $false }
+    $val = $ExistingJson.psobject.Properties['decisions_enabled']
+    if ($null -eq $val) { return $false }
+    return [bool] $val.Value
+}
+
+function Prompt-Decisions {
+    # Ask the user whether to enable decision validation.
+    # Only prompts when stdin is a terminal (interactive). On piped input, defaults to false.
+    # Sets $script:DecisionsEnabled to $true or $false.
+    if (-not [Console]::IsInputRedirected) {
+        Write-Host ''
+        Write-Host '  Enable AI decision validation for ralph loop?'
+        Write-Host '  (Evaluates each fix via local OpenJEV model; requires openjev at localhost:1234)'
+        $answer = Read-Host '  [y/N]'
+        if ($answer -match '^[yY]') {
+            $script:DecisionsEnabled = $true
+            Write-Info 'Decisions enabled'
+        } else {
+            $script:DecisionsEnabled = $false
+            Write-Info 'Decisions disabled'
+        }
+    } else {
+        Write-Info 'Non-interactive session - decisions disabled by default'
+        $script:DecisionsEnabled = $false
+    }
+}
+
+function Write-DecisionsEnv {
+    # Write SMOOTH_DEVEX_DECISIONS_* env vars to the user's PowerShell profile.
+    # Idempotent: skips when the sentinel marker is already present.
+    $profilePath = $PROFILE.CurrentUserAllHosts
+    if (-not $profilePath) {
+        $profilePath = Join-Path $env:USERPROFILE 'Documents\PowerShell\Microsoft.PowerShell_profile.ps1'
+    }
+    if ((Test-Path -LiteralPath $profilePath -PathType Leaf) -and
+        (Select-String -LiteralPath $profilePath -Pattern 'SMOOTH_DEVEX_DECISIONS' -Quiet)) {
+        Write-Info "Decision env vars already in $profilePath - skipped"
+        return
+    }
+    $profileDir = Split-Path $profilePath -Parent
+    if (-not (Test-Path -LiteralPath $profileDir -PathType Container)) {
+        New-Item -ItemType Directory -Path $profileDir -Force | Out-Null
+    }
+    $envBlock = @"
+
+# Smooth DevEx - AI Decision Validation (added by install-skills)
+`$env:SMOOTH_DEVEX_DECISIONS_ENABLED = 'true'
+`$env:SMOOTH_DEVEX_DECISIONS_BASE_URL = 'http://127.0.0.1:1234'
+`$env:SMOOTH_DEVEX_DECISIONS_PATH = '/v1/systemone'
+`$env:SMOOTH_DEVEX_DECISIONS_MODEL = 'openjev'
+`$env:SMOOTH_DEVEX_DECISIONS_MIN_PROBABILITY = '0.70'
+`$env:SMOOTH_DEVEX_DECISIONS_MAX_ATTEMPTS = '3'
+`$env:SMOOTH_DEVEX_DECISIONS_TIMEOUT = '60'
+"@
+    Add-Content -LiteralPath $profilePath -Value $envBlock -Encoding UTF8
+    Write-Info "Wrote decision env vars to $profilePath"
+}
+
+# ---------------------------------------------------------------------------
 # 1. Find skills root
 # ---------------------------------------------------------------------------
 
@@ -211,7 +277,9 @@ function Build-InstallationJson {
         [string] $Updated,
         [string[]] $DiskSkills,
         [string[]] $SourceSkills,
-        [object[]] $ExistingSkills
+        [object[]] $ExistingSkills,
+        [bool] $DecisionsEnabled = $false,
+        [Nullable[bool]] $ExistingDecisionsEnabled = $null
     )
 
     # The catalogue is the union (source + disk) INTERSECTED with the owned set. Without the
@@ -245,10 +313,14 @@ function Build-InstallationJson {
         $items += '    ' + ($item | ConvertTo-Json -Compress -Depth 3)
     }
 
+    # Preserve decisions_enabled from existing JSON when present; otherwise use the current value.
+    $decisionsValue = if ($null -ne $ExistingDecisionsEnabled) { $ExistingDecisionsEnabled } else { $DecisionsEnabled }
+    $decisionsJson = if ($decisionsValue) { 'true' } else { 'false' }
+
     $updatedJson = $Updated | ConvertTo-Json -Compress
     $joined = $items -join ",`n"
     if ($joined) { $joined += "`n" }
-    return "{`n  `"updated`": $updatedJson,`n  `"skills`": [`n$joined  ]`n}"
+    return "{`n  `"updated`": $updatedJson,`n  `"decisions_enabled`": $decisionsJson,`n  `"skills`": [`n$joined  ]`n}"
 }
 
 function Remove-StaleEntries {
@@ -636,6 +708,19 @@ if ($script:DoSkills) {
     $existingSkills = @()
     if ($existing -and $existing.skills) { $existingSkills = @($existing.skills) }
 
+    # Decision validation opt-in. Only prompt when the flag is not already set — an operator
+    # who already answered keeps their choice. Idempotent: re-running never re-asks.
+    $existingDecisions = Test-DecisionsEnabled -ExistingJson $existing
+    if ($existingDecisions) {
+        $script:DecisionsEnabled = $true
+        Write-Info 'Decisions already enabled - skipping prompt'
+    } else {
+        Prompt-Decisions
+    }
+    if ($script:DecisionsEnabled) {
+        Write-DecisionsEnv
+    }
+
     $diskSkills = @(Get-Skills -Root $script:SkillsRootPath)
     $sourceSkills = @(Get-Skills -Root (Join-Path $script:TempRepo '.agents/skills'))
     # Escaped colons are deliberate. 'T' is a .NET custom-format *modifier* (time designator), so an
@@ -643,7 +728,8 @@ if ($script:DoSkills) {
     # which is '.' under one locale and ':' under another, producing a timestamp the bash port and this
     # port cannot agree on.
     $newJson = Build-InstallationJson -Updated ([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH\:mm\:ssZ')) `
-        -DiskSkills $diskSkills -SourceSkills $sourceSkills -ExistingSkills $existingSkills
+        -DiskSkills $diskSkills -SourceSkills $sourceSkills -ExistingSkills $existingSkills `
+        -DecisionsEnabled $script:DecisionsEnabled -ExistingDecisionsEnabled $(if ($existing.psobject.Properties['decisions_enabled']) { [bool]$existing.decisions_enabled } else { $null })
 
     Write-Info 'Syncing installation.json...'
     Write-Info 'Updating installed skills...'

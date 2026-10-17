@@ -121,6 +121,78 @@ OWNED_HOOKS=(
 die() { echo "install-skills: $*" >&2; exit 1; }
 log() { echo "install-skills: $*" >&2; }
 
+# ---------------------------------------------------------------------------
+# Decision validation opt-in
+# ---------------------------------------------------------------------------
+
+# check_decisions_enabled JSON — returns "true" or "false" from the decisions_enabled field.
+check_decisions_enabled() {
+  local json="$1"
+  if [ -z "$json" ]; then
+    printf 'false'
+    return
+  fi
+  printf '%s' "$json" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+print('true' if data.get('decisions_enabled', False) else 'false')
+"
+}
+
+# prompt_decisions — ask the user whether to enable decision validation.
+# Only prompts when stdin is a TTY (interactive). On piped input (curl | bash),
+# defaults to false so the one-liner stays non-interactive.
+# Sets DECISIONS_ENABLED to "true" or "false".
+prompt_decisions() {
+  if [ ! -t 0 ]; then
+    log "Non-interactive session — decisions disabled by default"
+    DECISIONS_ENABLED="false"
+    return
+  fi
+  echo ""
+  echo "  Enable AI decision validation for ralph loop?"
+  echo "  (Evaluates each fix via local OpenJEV model; requires openjev at localhost:1234)"
+  printf "  [y/N] "
+  read -r answer
+  case "$answer" in
+    [yY]|[yY][eE][sS])
+      DECISIONS_ENABLED="true"
+      log "Decisions enabled"
+      ;;
+    *)
+      DECISIONS_ENABLED="false"
+      log "Decisions disabled"
+      ;;
+  esac
+}
+
+# write_decisions_env — write SMOOTH_DEVEX_DECISIONS_* env vars to the user's shell profile.
+# Idempotent: skips when the sentinel marker is already present.
+write_decisions_env() {
+  local profile=""
+  case "$(uname -s)" in
+    Darwin) profile="$HOME/.zshrc" ;;
+    Linux)  profile="$HOME/.bashrc" ;;
+    *)      log "Unknown OS — env vars not written to profile"; return 0 ;;
+  esac
+  if grep -q "SMOOTH_DEVEX_DECISIONS" "$profile" 2>/dev/null; then
+    log "Decision env vars already in $profile — skipped"
+    return 0
+  fi
+  cat >> "$profile" <<'ENVEOF'
+
+# Smooth DevEx — AI Decision Validation (added by install-skills)
+export SMOOTH_DEVEX_DECISIONS_ENABLED=true
+export SMOOTH_DEVEX_DECISIONS_BASE_URL=http://127.0.0.1:1234
+export SMOOTH_DEVEX_DECISIONS_PATH=/v1/systemone
+export SMOOTH_DEVEX_DECISIONS_MODEL=openjev
+export SMOOTH_DEVEX_DECISIONS_MIN_PROBABILITY=0.70
+export SMOOTH_DEVEX_DECISIONS_MAX_ATTEMPTS=3
+export SMOOTH_DEVEX_DECISIONS_TIMEOUT=60
+ENVEOF
+  log "Wrote decision env vars to $profile"
+}
+
 # The owned set is the single source of truth for what this installer carries across. Mirrors
 # $script:OwnedList in install-skills.ps1 byte-for-byte (the harness compares the two).
 #
@@ -256,6 +328,7 @@ build_installation_json() {
   # nothing to install, and the operator's very first run leaves them with an empty folder and a
   # manifest listing nothing. The source is the catalogue; disk is what is already there.
   local skills_root="$1" existing_json="$2" source_skills_json="$3"
+  local decisions_enabled="${4:-false}"
   local disk_skills_json
 
   disk_skills_json="$(list_skills "$skills_root" | python3 -c "
@@ -272,7 +345,7 @@ import json, sys
 print(json.dumps(sorted(line.strip() for line in sys.stdin if line.strip())))
 ")"
 
-  python3 - "$disk_skills_json" "$existing_json" "$source_skills_json" "$owned_json" <<'PYEOF'
+  python3 - "$disk_skills_json" "$existing_json" "$source_skills_json" "$owned_json" "$decisions_enabled" <<'PYEOF'
 import json, sys
 from datetime import datetime, timezone
 
@@ -282,6 +355,7 @@ from datetime import datetime, timezone
 disk_skills = set(json.loads(sys.argv[1])) & set(json.loads(sys.argv[4]))
 existing_raw = sys.argv[2].strip()
 source_skills = set(json.loads(sys.argv[3])) & set(json.loads(sys.argv[4]))
+decisions_enabled = sys.argv[5] == "true"
 
 # The catalogue is the union: what the source offers, plus anything already here. A skill the operator
 # added by hand is in neither the source nor the manifest until it has a SKILL.md, and dropping it would
@@ -296,6 +370,7 @@ if not existing_raw:
     # before anything could ever update.
     data = {
         "updated": now,
+        "decisions_enabled": decisions_enabled,
         "skills": [{"name": s, "installed": True} for s in sorted(catalog)],
     }
 else:
@@ -307,7 +382,14 @@ else:
     merged = []
     for name in sorted(catalog):
         merged.append({"name": name, "installed": existing_map.get(name, True)})
-    data = {"updated": now, "skills": merged}
+    # Preserve decisions_enabled from existing JSON when present; otherwise use the current value.
+    # An operator who already answered the prompt keeps their choice across re-installs.
+    existing_decisions = existing.get("decisions_enabled")
+    data = {
+        "updated": now,
+        "decisions_enabled": decisions_enabled if existing_decisions is None else existing_decisions,
+        "skills": merged,
+    }
 
 print(json.dumps(data))
 PYEOF
@@ -655,12 +737,26 @@ main() {
     existing_json="$(json_read "$json_path")" \
       || die "cannot read $json_path — fix or delete it, then re-run"
 
+    # Decision validation opt-in. Only prompt when the flag is not already set — an operator
+    # who already answered keeps their choice. Idempotent: re-running never re-asks.
+    local existing_decisions
+    existing_decisions="$(check_decisions_enabled "$existing_json")"
+    if [ "$existing_decisions" = "true" ]; then
+      DECISIONS_ENABLED="true"
+      log "Decisions already enabled — skipping prompt"
+    else
+      prompt_decisions
+    fi
+    if [ "$DECISIONS_ENABLED" = "true" ]; then
+      write_decisions_env
+    fi
+
     log "Syncing installation.json…"
     new_json="$(build_installation_json "$skills_root" "$existing_json" \
       "$(list_skills "$INSTALL_TMP/repo/.agents/skills" | python3 -c "
 import json, sys
 print(json.dumps(sorted(line.strip() for line in sys.stdin if line.strip())))
-")")"
+")" "$DECISIONS_ENABLED")"
 
     log "Updating installed skills…"
     update_installed_skills "$new_json" "$skills_root" "$agent_root" "$shared_dir"

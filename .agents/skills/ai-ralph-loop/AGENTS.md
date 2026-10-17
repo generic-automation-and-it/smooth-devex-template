@@ -19,6 +19,10 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
   higher-priority rule can silently suppress the skill's testing findings.
 - **New switches narrow or tune; they never gate.** Behaviour the bare run already has stays
   available without any switch.
+- **Decision validation is opt-in and non-blocking.** When `SMOOTH_DEVEX_DECISIONS_ENABLED` is not
+  `true`, the decision script is never called. When the service is unreachable (after retries), the
+  loop falls back to existing behaviour — never blocks on decision availability. The `Decision`
+  column shows `N/A` in both cases.
 
 ## Changelog
 
@@ -29,3 +33,4 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
 | 2026-10-16 | `--spawn` switch: parallel subagent lenses; default stays sequential inline in the current pid | — |
 | 2026-10-16 | Test focus hand-off; DR-003 coupling | — |
 | 2026-10-16 | `--notests`: active-switch reviewer hand-off | — |
+| 2026-10-17 | Decision validation layer (opt-in via `SMOOTH_DEVEX_DECISIONS_ENABLED`); `Decision` column in output table | — |

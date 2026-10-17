@@ -33,6 +33,43 @@ No switch is needed — a bare invocation is the full run.
 Single-dash spellings (`-loops 5`) are accepted. An unrecognised switch or a non-positive `--loops` is
 not guessed at: say what was passed and ask.
 
+## Decision validation (opt-in)
+
+When `SMOOTH_DEVEX_DECISIONS_ENABLED=true` is set in the environment, each accepted finding's fix is
+evaluated by a local OpenJEV model before the loop records it. The evaluation produces a decision
+percentage — the probability that the fix provides clear or critical value — shown in the output
+table's `Decision` column.
+
+Full reference: [`decisions/README.md`](decisions/README.md).
+
+### When it runs
+
+After triage accepts a finding and the fix is written, call the decision script before recording the
+ledger row:
+
+```bash
+# Write before/after code to temp files, then:
+.agents/skills/ai-ralph-loop/decisions/scripts/decision-evaluate.sh \
+  --category <category> \
+  --before /tmp/ralph-before.txt \
+  --after /tmp/ralph-after.txt \
+  --context <file:line>
+```
+
+Parse the pipe-delimited output: `value=<label>|pct=<0-100>|keep=<bool>|confidence=<float>|fallback=<bool>`.
+
+### When decisions are disabled
+
+When `SMOOTH_DEVEX_DECISIONS_ENABLED` is unset or not `true`, skip the decision script entirely.
+Show `N/A` in the `Decision` column of the output table. The loop proceeds with existing behaviour
+unchanged.
+
+### When the service is unreachable
+
+On timeout or connection failure (after retries), the script outputs `fallback=true`. Treat this the
+same as disabled — show `N/A` in the output table and proceed. Never block the loop on decision
+service availability.
+
 ### `--notests` — no new tests
 
 With `--notests`, do not create new test files or test cases at any tier, including new parameterised
@@ -179,7 +216,9 @@ loop — never rely on recall of earlier loops.
    for it.
 2. **Triage.** Check each finding against the code yourself. Accept, reject or defer it with a reason.
    A finding matching a ledger row (same file, same issue) is dropped. With `--notests`, defer test
-   creation findings rather than accepting them for a fix; keep production fixes eligible.
+   creation findings rather than accepting them for a fix; keep production fixes eligible. When
+   decisions are enabled, run the decision script on each accepted finding's fix before recording
+   (see [Decision validation](#decision-validation-opt-in)).
 3. **Fix.** Accepted findings only, in order: potential bug → feature gap → architectural issue → the
    rest. Smallest change that resolves it, matching the surrounding code. A bug fix gets a regression
    test at the tier required by Test focus unless `--notests` is set; then fix the production issue and
@@ -229,10 +268,13 @@ set. This hand-off applies to both inline and spawned reviews.
 The final message is this table — `fixed` rows only, IDs from the ledger:
 
 ```markdown
-| ID | Category | File(s) fixed | Rationale | Loop |
-|----|----------|---------------|-----------|------|
-| RL-001 | Potential bug | `src/Project.Application/Features/Orders/CreateOrderHandler.cs` | Null customer id reached the repository; guard + regression test | 1 |
+| ID | Category | File(s) fixed | Rationale | Decision | Loop |
+|----|----------|---------------|-----------|----------|------|
+| RL-001 | Potential bug | `src/Project.Application/Features/Orders/CreateOrderHandler.cs` | Null customer id reached the repository; guard + regression test | 82% | 1 |
 ```
+
+The `Decision` column shows the decision percentage when `SMOOTH_DEVEX_DECISIONS_ENABLED=true` and
+the service responded, or `N/A` when decisions are disabled or the service is unreachable.
 
 Then three lines:
 
