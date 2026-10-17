@@ -30,3 +30,11 @@ File = `<name>.instructions.md` in this folder. Adding, renaming or rescoping a 
 | Date | Change | Ref |
 | :---- | :---- | :---- |
 | 2026-10-15 | Created: rule index for Codex; root `AGENTS.md` Rules section points here | — |
+
+## Installed subset (installer-owned-rules-subset)
+
+| Scope | Rules |
+| :---- | :---- |
+| `**` | `code-review-standards` · `git/git-policy` |
+| `**/*AGENTS.md` | `meta/knowledge-conventional-contexts-quality` |
+| `.agents/rules/**` | `meta/rules` |
