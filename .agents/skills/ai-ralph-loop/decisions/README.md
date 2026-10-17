@@ -17,7 +17,7 @@ export SMOOTH_DEVEX_DECISIONS_ENABLED=true
 export SMOOTH_DEVEX_DECISIONS_BASE_URL=http://127.0.0.1:1234
 export SMOOTH_DEVEX_DECISIONS_PATH=/v1/systemone
 export SMOOTH_DEVEX_DECISIONS_MODEL=openjev
-export SMOOTH_DEVEX_DECISIONS_MIN_PROBABILITY=0.70
+export SMOOTH_DEVEX_DECISIONS_MIN_PROBABILITY=0.60
 export SMOOTH_DEVEX_DECISIONS_MAX_ATTEMPTS=3
 export SMOOTH_DEVEX_DECISIONS_TIMEOUT=60
 ```
@@ -32,7 +32,7 @@ The installer also sets `decisions_enabled: true` in `_smooth-devex-shared/insta
 | `SMOOTH_DEVEX_DECISIONS_BASE_URL` | `http://127.0.0.1:1234` | OpenJEV service base URL |
 | `SMOOTH_DEVEX_DECISIONS_PATH` | `/v1/systemone` | API endpoint path |
 | `SMOOTH_DEVEX_DECISIONS_MODEL` | `openjev` | Model name to request |
-| `SMOOTH_DEVEX_DECISIONS_MIN_PROBABILITY` | `0.70` | Minimum probability (0-1) for the fix to be marked `keep=true` |
+| `SMOOTH_DEVEX_DECISIONS_MIN_PROBABILITY` | `0.60` | Minimum probability (0-1) for the fix to be marked `keep=true` |
 | `SMOOTH_DEVEX_DECISIONS_MAX_ATTEMPTS` | `3` | Retry count on timeout or connection failure |
 | `SMOOTH_DEVEX_DECISIONS_TIMEOUT` | `60` | Per-request timeout in seconds |
 | `SMOOTH_DEVEX_DECISIONS_TEMPLATE` | `templates/default.json` | Override template path (relative to script) |
