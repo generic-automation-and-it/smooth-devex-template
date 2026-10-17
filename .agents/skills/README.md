@@ -11,7 +11,7 @@ Skills live **flat**, one directory per skill directly under `.agents/skills/`. 
 | **agile-github-breakdown** | Turn a braindump or existing Feature into GitHub Feature + Task issues | `/agile-github-breakdown` |
 | **agile-github-task-from-diff** | Create a GitHub Task (sub-issue) from the current git diff vs main | `/agile-github-task-from-diff [--feature-issue <n> \| --noparentid]` |
 | **ai-brain-dump** | Listen-first capture session; synthesize on request | `/ai-brain-dump [--oktoask] [--thinking] [--oktoreaddocs] [--oktowebsearch] [--all]` |
-| **ai-ralph-loop** | Review → fix → verify the branch diff in fresh-eyes loops until clean; ends with a fix table | `/ai-ralph-loop [--loops <n>] [--scope <path\|glob>]` |
+| **ai-ralph-loop** | Review → fix → verify the branch diff (or a plan) in fresh-eyes loops until clean; ends with a fix table | `/ai-ralph-loop [--loops <n>] [--scope <path\|glob>] [--plan [path]]` |
 | **ai-terse** | Reformat this turn's reply into terse, high-density output with a TL;DR | `/ai-terse` |
 | **ai-template-sync** | UPSERT smooth-devex-template scaffold into an existing repo | `/ai-template-sync` |
 | **ai-asset-sync** | Dependabot-style OpenCode sync of skills/rules from `owner/repo@ref:path` | `/ai-asset-sync` |
@@ -56,7 +56,12 @@ and never commits.
 | _(none)_ | Full run over the branch diff, up to 10 loops | — |
 | `--loops <n>` | Loop cap; any positive integer | `10` |
 | `--scope <path\|glob>` | Review these files instead of the branch diff | branch diff vs `origin/main` |
+| `--plan [path]` | Review a plan or design document instead of code | off — code mode |
 | `--spawn` | Review lenses as parallel subagents | off — sequential inline in the current pid |
+
+`--plan` is additive — same loop, categories, evidence bar and convergence, with the plan document as the
+review target and requirement coverage / rule compliance / internal consistency / testability in place of
+build+test. With no path it captures the current session's requirements into a scratch plan first.
 
 ### ai-understanding switches
 

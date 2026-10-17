@@ -15,6 +15,9 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
   Renaming a heading breaks the hand-off silently.
 - **New switches narrow or tune; they never gate.** Behaviour the bare run already has stays
   available without any switch.
+- **Plan mode's ledger is keyed by section, not by file.** In the `File(s)` column the cell holds the plan
+  section heading. An agent matching ledger rows by literal file path finds no duplicate, re-raises a
+  settled section, and the run churns to the cap instead of converging.
 
 ## Changelog
 
@@ -23,3 +26,4 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
 | 2026-10-16 | Initial: Ralph review→fix→verify loop, `--loops` / `--scope`, fix table | — |
 | 2026-10-16 | Shipped by the installer (owned set) | #104 |
 | 2026-10-16 | `--spawn` switch: parallel subagent lenses; default stays sequential inline in the current pid | — |
+| 2026-10-17 | `--plan [path]` switch: plan/design mode, additive; same loop, evidence bar and convergence | — |

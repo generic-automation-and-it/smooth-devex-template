@@ -1,6 +1,6 @@
 ---
 name: ai-ralph-loop
-description: 'Ralph loop over the current change: review, fix and verify, repeated with fresh eyes until a full pass finds nothing or the loop cap (default 10) is hit. Findings are grounded in known Understandings, *AGENTS.md, rules and specs, limited to feature gaps, potential bugs, architectural issues, YAGNI, KISS and clean code consistency, and the run ends with a table of every fix. Trigger on "/ai-ralph-loop", "ralph loop", "loop until no findings", "review and fix until clean". Not a one-shot review (use /code-review); never commits.'
+description: 'Ralph loop over the current change: review, fix and verify, repeated with fresh eyes until a full pass finds nothing or the loop cap (default 10) is hit. Findings are grounded in known Understandings, *AGENTS.md, rules and specs, limited to feature gaps, potential bugs, architectural issues, YAGNI, KISS and clean code consistency, and the run ends with a table of every fix. Add --plan to iterate on a plan or design document instead of code. Trigger on "/ai-ralph-loop", "ralph loop", "loop until no findings", "review and fix until clean". Not a one-shot review (use /code-review); never commits.'
 effort: high  # multi-loop review, triage and fix judgment
 ---
 
@@ -13,10 +13,11 @@ every pass start clean and what stops a pass re-raising what an earlier one alre
 ## TL;DR
 
 1. Bare `/ai-ralph-loop` runs the full loop: branch diff vs `origin/main`, up to 10 loops, stop at the first clean full-scope pass.
-2. Only six categories count — see [Categories](#categories). Anything else is not a finding.
-3. A finding without evidence is rejected. The [Evidence bar](#evidence-bar) is what makes the loop converge instead of running to the cap.
-4. Every loop: review → triage → fix → verify → record. Loop 1 reviews the full scope; later loops review only what the last loop changed, then one full sweep confirms.
-5. Ends with the [fix table](#output). Never commits or pushes.
+2. `--plan [path]` runs the same loop over a plan or design document — see [Plan mode](#plan-mode).
+3. Only six categories count — see [Categories](#categories). Anything else is not a finding.
+4. A finding without evidence is rejected. The [Evidence bar](#evidence-bar) is what makes the loop converge instead of running to the cap.
+5. Every loop: review → triage → fix → verify → record. Loop 1 reviews the full scope; later loops review only what the last loop changed, then one full sweep confirms.
+6. Ends with the [fix table](#output). Never commits or pushes.
 
 ## Switches
 
@@ -27,10 +28,47 @@ No switch is needed — a bare invocation is the full run.
 | _(none)_ | Full run over the branch diff, up to 10 loops | — |
 | `--loops <n>` | Loop cap; any positive integer | `10` |
 | `--scope <path\|glob>` | Review these files instead of the branch diff | branch diff vs `origin/main` |
+| `--plan [path]` | Review a plan or design document instead of code ([Plan mode](#plan-mode)) | off — code mode |
 | `--spawn` | Run the two review lenses as parallel subagents with fresh context | off — both lenses run sequentially, inline, in the current agent pid |
 
 Single-dash spellings (`-loops 5`) are accepted. An unrecognised switch or a non-positive `--loops` is
 not guessed at: say what was passed and ask.
+
+## Plan mode
+
+`--plan` iterates on a plan — a brain dump, a worktask, an HLD — before any code exists. It is purely
+additive: it changes the review target, never the loop. Same six categories, same evidence bar, same
+ledger, same convergence rule, same `--loops` and `--spawn`. Only the three deltas below differ; where
+this section is silent, the [Workflow](#workflow) applies unchanged.
+
+### Target
+
+- `--plan <path>` — read that file. A path that does not exist is not guessed at: say so and ask.
+- `--plan` with no argument — create the plan, then loop over it:
+  1. `mkdir -p .context/temp` and write `.context/temp/plan-<yyyyMMdd-HHmm>-<pid>.md` (UTC stamp, current
+     pid — two runs in the same minute never collide). This is a working scratch file, never committed.
+  2. Capture the input: if the user has already brain-dumped in this session, read the last 5 conversation
+     turns for requirements and constraints; otherwise ask them to summarize. Do not invent requirements.
+  3. Write the initial plan with exactly these headings — **Title, Requirements, Approach, Testability,
+     Files to modify** — then enter the loop over it.
+- `--scope` is not consulted in plan mode: the plan document *is* the scope.
+
+### Verify
+
+No build, no tests — there is no code yet. A loop is verified by walking the plan against four checks,
+and recording each result in the ledger:
+
+| Check | Question |
+|-------|----------|
+| Requirement coverage | Is every cited requirement (worktask criterion, HLD requirement, `*AGENTS.md` Requirements, stated constraint) addressed by some plan step? |
+| Rule compliance | Does the plan break an ADR/LADR, a rule, or a layer boundary it would have to cross? |
+| Internal consistency | Do two plan sections contradict each other, or contradict a stated requirement? |
+| Testability | Does every step name a test tier (L0/L1/L2) or a testable outcome? A step with neither is not done-able |
+
+### Report
+
+The same fix table with `Section(s) fixed` in place of `File(s) fixed`. The **Verify** line under it
+reports the four checks above instead of build/test commands.
 
 ## Categories
 
@@ -48,7 +86,8 @@ not guessed at: say what was passed and ask.
 A finding carries all four, or it is rejected:
 
 - **Category** — one of the six above.
-- **Location** — `file:line`.
+- **Location** — `file:line`, or in [plan mode](#plan-mode) `section:paragraph` (heading + the paragraph's
+  opening words).
 - **Evidence** — the failure scenario (input → wrong outcome), or the path of the rule, ADR, `*AGENTS.md`, Understanding or spec it breaks.
 - **Fix** — one sentence.
 
@@ -69,14 +108,16 @@ without a citation, YAGNI wins.
    ```
 
    With `--scope`, expand the path or glob instead. Drop binaries, lock files and generated code
-   (EF migration designers, snapshots). Empty scope → stop and say so.
+   (EF migration designers, snapshots). Empty scope → stop and say so. In [plan mode](#plan-mode) the
+   scope is the plan document — no diff, no git.
 2. **Known context**, loaded once and listed in the ledger so every reviewer reads the same pack:
    - `*AGENTS.md` chain for each scope file (`.agents/skills/context-load-agents-context/scripts/load-agents-context.sh --file <path>`, or walk ancestor directories).
    - Rules whose scope matches a scope file (index: `.agents/rules/AGENTS.md`).
    - `.context/understandings/INDEX.md` → every unit whose question matches the scope's subject. No store → continue without it.
    - Specs: active worktask under `.context/work-tasks/`, referenced `docs/hlds/`, PR body (`gh pr view --json body`) when a PR exists.
 3. **Baseline verify.** Build and run the tests covering the scope (commands from root `AGENTS.md`).
-   Record failures as baseline — a loop is judged on *new* failures only.
+   Record failures as baseline — a loop is judged on *new* failures only. Skipped in plan mode: the
+   baseline is the plan document as read in the first pass.
 4. **Open the ledger** (below).
 
 ### Ledger
@@ -89,7 +130,8 @@ context pack paths, baseline verify result. Body:
 ```
 
 `Status` is `fixed`, `rejected`, `deferred` or `oscillation`. Re-read the ledger at the start of every
-loop — never rely on recall of earlier loops.
+loop — never rely on recall of earlier loops. The table is the same in plan mode, where the `File(s)`
+cell holds the plan section the finding was fixed in.
 
 ### Loop n (1 … cap)
 
@@ -110,8 +152,10 @@ loop — never rely on recall of earlier loops.
 3. **Fix.** Accepted findings only, in order: potential bug → feature gap → architectural issue → the
    rest. Smallest change that resolves it, matching the surrounding code. A bug fix gets a regression
    test in the tier where that code's tests already live. A fix that would leave the scope is `deferred`.
+   In plan mode the edit lands on the plan document and **nowhere else** — never on code.
 4. **Verify.** Build and run the tests for every touched project. A new failure → fix forward, at most
-   two attempts; still red → stop the run, report the failing command, leave the tree as it is.
+   two attempts; still red → stop the run, report the failing command, leave the tree as it is. In plan
+   mode, the [four checks](#verify) instead.
 5. **Record.** One ledger row per finding, then a summary line:
    `Loop n: target=<full|delta k files> accepted a / rejected r / deferred d`.
 6. **Exit check.**
@@ -132,6 +176,7 @@ list and the ledger path.
 - Review only the target files; read other files only for evidence.
 - Report only your lens's categories, and only findings that meet the Evidence bar.
 - Reply with table rows `| Category | file:line | Evidence | Fix |`, most severe first, or the single word `none`.
+  In plan mode the location column is `section:paragraph`.
 - No praise, no summary, no formatting nits.
 
 ### Finish
@@ -153,7 +198,8 @@ The final message is this table — `fixed` rows only, IDs from the ledger:
 Then three lines:
 
 - **Result** — `converged at loop k` · `cap reached (n loops)` · `stopped: verify red at loop k`.
-- **Verify** — build/test commands and state, against baseline.
+- **Verify** — build/test commands and state, against baseline. In plan mode, the four check results and
+  the plan document's path.
 - **Not fixed** — rejected / deferred / oscillation counts, one line per deferred or oscillation item, and the ledger path.
 
 No fixes at all → say `no findings` and give the Result and Verify lines only.
