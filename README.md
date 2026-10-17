@@ -19,12 +19,26 @@ Reuse in another repo. One command — ships owned set only (7 skills, 4 rules, 
 ```bash
 # Mac/Linux
 curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -r -s -h
+# Add -d to enable AI decision validation for ralph loop (no prompt):
+curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -r -s -h -d
 ```
 
 ```powershell
 # Windows
 $script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.ps1)); & $script -r -s -h
+# Add -d to enable AI decision validation (no prompt):
+$script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.ps1)); & $script -r -s -h -d
 ```
+
+| Switch | Meaning |
+|---|---|
+| `-r` | Install the owned rules (`.github/instructions/` subset) |
+| `-s` | Install the owned skills (`.agents/skills/` flat folders) |
+| `-h` | Install the owned hooks (`.agents/hooks/`) |
+| `-d` | Enable AI decision validation for the ralph loop — writes `SMOOTH_DEVEX_DECISIONS_*` env vars and sets `decisions_enabled: true` in `installation.json` |
+| _(none)_ | All of the above (rules + skills + hooks) — the default; decisions are then prompted for, or disabled with no terminal |
+
+Switches filter the run only; nothing about the selection is persisted. `-d` is an opt-in flag (not a category) — it never defaults on.
 
 ---
 

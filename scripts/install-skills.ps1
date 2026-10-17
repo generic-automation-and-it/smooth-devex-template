@@ -53,7 +53,9 @@ param(
     [Alias('s')]
     [switch] $Skills,
     [Alias('h')]
-    [switch] $Hooks
+    [switch] $Hooks,
+    [Alias('d')]
+    [switch] $Decisions
 )
 
 Set-StrictMode -Version Latest
@@ -167,10 +169,11 @@ function Get-DecisionsEnabled {
 }
 
 function Prompt-Decisions {
-    # Ask the user whether to enable decision validation.
-    # Only prompts when stdin is a terminal (interactive). On piped input, defaults to false.
+    # Ask the user whether to enable decision validation. Read-Host reads from the console, so the
+    # question is asked even when stdin is redirected (a typical `irm | iex`). On a host with no
+    # interactive terminal the read fails and we fall back to disabled.
     # Sets $script:DecisionsEnabled to $true or $false.
-    if (-not [Console]::IsInputRedirected) {
+    try {
         Write-Host ''
         Write-Host '  Enable AI decision validation for ralph loop?'
         Write-Host '  (Evaluates each fix via local OpenJEV model; requires openjev at localhost:1234)'
@@ -182,8 +185,8 @@ function Prompt-Decisions {
             $script:DecisionsEnabled = $false
             Write-Info 'Decisions disabled'
         }
-    } else {
-        Write-Info 'Non-interactive session - decisions disabled by default'
+    } catch {
+        Write-Info 'No terminal available - decisions disabled by default'
         $script:DecisionsEnabled = $false
     }
 }
@@ -286,8 +289,7 @@ function Build-InstallationJson {
         [string[]] $DiskSkills,
         [string[]] $SourceSkills,
         [object[]] $ExistingSkills,
-        [bool] $DecisionsEnabled = $false,
-        [Nullable[bool]] $ExistingDecisionsEnabled = $null
+        [bool] $DecisionsEnabled = $false
     )
 
     # The catalogue is the union (source + disk) INTERSECTED with the owned set. Without the
@@ -321,9 +323,10 @@ function Build-InstallationJson {
         $items += '    ' + ($item | ConvertTo-Json -Compress -Depth 3)
     }
 
-    # Preserve decisions_enabled from existing JSON when present; otherwise use the current value.
-    $decisionsValue = if ($null -ne $ExistingDecisionsEnabled) { $ExistingDecisionsEnabled } else { $DecisionsEnabled }
-    $decisionsJson = if ($decisionsValue) { 'true' } else { 'false' }
+    # decisions_enabled is the resolved preference already computed by the caller (main) —
+    # a -d override, a reused saved value, a prompt answer, or the no-terminal default. Write it
+    # as-is so a -d override actually persists across re-installs.
+    $decisionsJson = if ($DecisionsEnabled) { 'true' } else { 'false' }
 
     $updatedJson = $Updated | ConvertTo-Json -Compress
     $joined = $items -join ",`n"
@@ -662,9 +665,11 @@ function Install-OwnedHooks {
 
 # Category switches. No switches means everything is on; any switch narrows the run to
 # exactly what was named. Switches filter the run only — nothing is persisted.
+# -d "decision validation" is a separate opt-in flag, not a category: it does not default on.
 $script:DoRules = [bool]$Rules
 $script:DoSkills = [bool]$Skills
 $script:DoHooks = [bool]$Hooks
+$script:DoDecisions = [bool]$Decisions
 if (-not ($script:DoRules -or $script:DoSkills -or $script:DoHooks)) {
     $script:DoRules = $true
     $script:DoSkills = $true
@@ -716,10 +721,15 @@ if ($script:DoSkills) {
     $existingSkills = @()
     if ($existing -and $existing.skills) { $existingSkills = @($existing.skills) }
 
-    # Decision validation opt-in. Only prompt when the preference is not yet recorded.
-    # A saved true or false is reused without re-asking — idempotent across re-installs.
+    # Decision validation opt-in. Prompt only when the preferences entry is missing and -d is not
+    # given — a saved true or false is reused without re-asking (idempotent). -d forces decisions on
+    # (no prompt, overrides a saved false). Read-Host reads from the console, so the prompt is asked
+    # even on a piped `irm | iex` run; falls back to disabled if no host.
     $hasDecisionsPref = Test-DecisionsPropertyExists -ExistingJson $existing
-    if ($hasDecisionsPref) {
+    if ($script:DoDecisions) {
+        $script:DecisionsEnabled = $true
+        Write-Info 'Decisions enabled via -d'
+    } elseif ($hasDecisionsPref) {
         $script:DecisionsEnabled = [bool] (Get-DecisionsEnabled -ExistingJson $existing)
         Write-Info "Decisions preference saved ($($script:DecisionsEnabled)) - skipping prompt"
     } else {
@@ -737,7 +747,7 @@ if ($script:DoSkills) {
     # port cannot agree on.
     $newJson = Build-InstallationJson -Updated ([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH\:mm\:ssZ')) `
         -DiskSkills $diskSkills -SourceSkills $sourceSkills -ExistingSkills $existingSkills `
-        -DecisionsEnabled $script:DecisionsEnabled -ExistingDecisionsEnabled $(if ($null -ne $existing -and $existing.psobject.Properties['decisions_enabled']) { [bool]$existing.decisions_enabled } else { $null })
+        -DecisionsEnabled $script:DecisionsEnabled
 
     Write-Info 'Syncing installation.json...'
     Write-Info 'Updating installed skills...'

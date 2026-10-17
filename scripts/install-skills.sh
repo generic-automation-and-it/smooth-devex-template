@@ -146,12 +146,17 @@ else:
 }
 
 # prompt_decisions — ask the user whether to enable decision validation.
-# Only prompts when stdin is a TTY (interactive). On piped input (curl | bash),
-# defaults to false so the one-liner stays non-interactive.
-# Sets DECISIONS_ENABLED to "true" or "false".
+# Reads from the controlling terminal (/dev/tty), so the question is asked even when
+# stdin is piped (a typical `curl | bash`). Falls back to disabled when no terminal
+# exists (CI, cron). Sets DECISIONS_ENABLED to "true" or "false".
 prompt_decisions() {
-  if [ ! -t 0 ]; then
-    log "Non-interactive session — decisions disabled by default"
+  local answer=""
+  # `-r` only checks the file mode: /dev/tty is world-readable on a CI runner that has no controlling
+  # terminal, and opening it there fails with ENXIO. Open it for real before trusting it, then guard
+  # the read itself — a failed open, a failed read, or EOF all fall back to disabled (never abort
+  # the install under `set -e`).
+  if ! { : < /dev/tty; } 2>/dev/null; then
+    log "No terminal available — decisions disabled by default"
     DECISIONS_ENABLED="false"
     return
   fi
@@ -159,7 +164,11 @@ prompt_decisions() {
   echo "  Enable AI decision validation for ralph loop?"
   echo "  (Evaluates each fix via local OpenJEV model; requires openjev at localhost:1234)"
   printf "  [y/N] "
-  read -r answer
+  if ! read -r answer < /dev/tty 2>/dev/null; then
+    log "Could not read terminal — decisions disabled by default"
+    DECISIONS_ENABLED="false"
+    return
+  fi
   case "$answer" in
     [yY]|[yY][eE][sS])
       DECISIONS_ENABLED="true"
@@ -229,9 +238,12 @@ owned_set() {
 
 # Category switches. No switches means everything is on; any switch narrows the run to exactly
 # what was named. Switches filter the run only — nothing about the selection is persisted.
+# -d "decision validation" is a separate opt-in flag, not a category: it does not default on and
+# is not part of the "no switches = all categories" rule.
 DO_RULES=0
 DO_SKILLS=0
 DO_HOOKS=0
+DO_DECISIONS=0
 
 parse_categories() {
   local arg
@@ -240,8 +252,9 @@ parse_categories() {
       -r) DO_RULES=1 ;;
       -s) DO_SKILLS=1 ;;
       -h) DO_HOOKS=1 ;;
-      -*) die "unknown option: $arg (use -r for rules, -s for skills, -h for hooks)" ;;
-      *) die "unexpected argument: $arg (use -r for rules, -s for skills, -h for hooks)" ;;
+      -d) DO_DECISIONS=1 ;;
+      -*) die "unknown option: $arg (use -r for rules, -s for skills, -h for hooks, -d for decisions)" ;;
+      *) die "unexpected argument: $arg (use -r for rules, -s for skills, -h for hooks, -d for decisions)" ;;
     esac
   done
   if [ "$DO_RULES$DO_SKILLS$DO_HOOKS" = "000" ]; then
@@ -388,12 +401,12 @@ else:
     merged = []
     for name in sorted(catalog):
         merged.append({"name": name, "installed": existing_map.get(name, True)})
-    # Preserve decisions_enabled from existing JSON when present; otherwise use the current value.
-    # An operator who already answered the prompt keeps their choice across re-installs.
-    existing_decisions = existing.get("decisions_enabled")
+    # decisions_enabled is the resolved preference already computed by the caller (main) —
+    # -d override, a reused saved value, a prompt answer, or the no-terminal default. Write it
+    # as-is so a -d override actually persists across re-installs.
     data = {
         "updated": now,
-        "decisions_enabled": decisions_enabled if existing_decisions is None else existing_decisions,
+        "decisions_enabled": decisions_enabled,
         "skills": merged,
     }
 
@@ -743,15 +756,20 @@ main() {
     existing_json="$(json_read "$json_path")" \
       || die "cannot read $json_path — fix or delete it, then re-run"
 
-    # Decision validation opt-in. Only prompt when the preference is not yet recorded.
-    # A saved true or false is reused without re-asking — idempotent across re-installs.
+    # Decision validation opt-in. Prompt only when the preferences entry is missing and -d is not
+    # given — a saved true or false is reused without re-asking (idempotent). -d forces decisions on
+    # (no prompt, overrides a saved false). The prompt reads from /dev/tty, so it is asked even on a
+    # piped `curl | bash` run; falls back to disabled when no terminal.
     local existing_decisions
     existing_decisions="$(check_decisions_enabled "$existing_json")"
-    if [ "$existing_decisions" = "missing" ]; then
-      prompt_decisions
-    else
+    if [ "$DO_DECISIONS" = "1" ]; then
+      DECISIONS_ENABLED="true"
+      log "Decisions enabled via -d"
+    elif [ "$existing_decisions" != "missing" ]; then
       DECISIONS_ENABLED="$existing_decisions"
       log "Decisions preference saved ($DECISIONS_ENABLED) — skipping prompt"
+    else
+      prompt_decisions
     fi
     if [ "$DECISIONS_ENABLED" = "true" ]; then
       write_decisions_env

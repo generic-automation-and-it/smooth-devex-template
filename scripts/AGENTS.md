@@ -34,7 +34,7 @@ documentation.
 | --- | --- |
 | `install-skills.sh` | bash port. macOS / Linux. Needs `bash`, `git`, `python3`. |
 | `install-skills.ps1` | PowerShell 7 port. Windows or anywhere `pwsh` runs. Needs `pwsh`, `git`. |
-| `test-install-skills.sh` | Harness. 48 cases, bash port only (the ps1 port is read, not run). |
+| `test-install-skills.sh` | Harness. 51 cases, bash port only (the ps1 port is read, not run). |
 
 The installer pulls a flat list of folders from `.agents/skills/` in this repository into a consumer
 repository, controlled by a per-skill `installed` flag in
@@ -84,3 +84,6 @@ Two known gaps:
 | 2026-10-16 | `ai-ralph-loop` added to the owned set (seven skills) | #104 |
 | 2026-10-16 | README owned-set table before Tech Stack (7 skills, 4 rules, 2 hooks); matches `OWNED_LIST`/`OWNED_RULES`/`OWNED_HOOKS` | — |
 | 2026-10-16 | README top install section shows both Mac/Linux `curl` and Windows `irm` one-liners; full details stay in `docs/wiki/reuse.md` | — |
+| 2026-10-17 | Installer decision prompt reads `/dev/tty`/console so it is asked even on piped `curl \| bash` / `irm \| iex`; falls back to disabled with no terminal | — |
+| 2026-10-17 | `-d` switch: opt into decision validation without prompting (writes env vars, sets `decisions_enabled: true`) | — |
+| 2026-10-17 | Decision prompt probes `/dev/tty` by opening it (`-r` passes on CI runners with no controlling terminal, then `read` died under `set -e`); harness adds a no-controlling-terminal case | — |

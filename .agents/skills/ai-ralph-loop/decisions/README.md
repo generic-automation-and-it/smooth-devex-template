@@ -9,10 +9,23 @@ Opt-in decision validation for ralph loop findings. Evaluates each fix via a loc
 
 ## Enable
 
-Set via the skills installer interactive prompt, or manually:
+The skills installer asks whether to enable decision validation **the first time it installs** —
+when the `decisions_enabled` entry is missing from `_smooth-devex-shared/installation.json`. On a
+later re-install it reuses the saved value without re-asking.
+
+The prompt reads from the controlling terminal, so it is asked even on a piped `curl | bash` run.
+It only falls back to disabled when no terminal is available (CI, cron).
+
+To opt in without the prompt, pass `-d` to the installer:
 
 ```bash
-# Add to ~/.zshrc (macOS) or ~/.bashrc (Linux):
+curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -r -s -h -d
+```
+
+Set manually, or edit your shell profile directly:
+
+```bash
+# Add to ~/.zshrc (macOS) / ~/.bashrc (Linux):
 export SMOOTH_DEVEX_DECISIONS_ENABLED=true
 export SMOOTH_DEVEX_DECISIONS_BASE_URL=http://127.0.0.1:1234
 export SMOOTH_DEVEX_DECISIONS_PATH=/v1/systemone
@@ -22,7 +35,7 @@ export SMOOTH_DEVEX_DECISIONS_MAX_ATTEMPTS=3
 export SMOOTH_DEVEX_DECISIONS_TIMEOUT=60
 ```
 
-The installer also sets `decisions_enabled: true` in `_smooth-devex-shared/installation.json`.
+The installer sets `decisions_enabled: true` in `_smooth-devex-shared/installation.json` when enabled.
 
 ## Environment Variables
 

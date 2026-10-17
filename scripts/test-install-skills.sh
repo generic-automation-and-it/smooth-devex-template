@@ -201,6 +201,20 @@ esac
 
 ok "first run: manifest from owned source ∪ disk, all installed:true, ISO-8601 UTC stamp"
 
+# No controlling terminal (CI, cron): /dev/tty is still world-readable there but cannot be opened, so
+# a mode check alone lets the decision prompt through and `set -e` kills the run. setsid() in the
+# child drops the harness's own terminal, which a developer machine has and the gate does not.
+root="$(make_root "no-tty" alpha)"
+if SKILLS_ROOT="$root/skills" SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
+  SKILLS_TEST_OWNED_EXTRA="alpha" \
+  python3 -c 'import os, sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])' \
+  bash "$installer_sh" >"$scratch/out" 2>"$scratch/err" </dev/null \
+  && [ "$(python3 -c "import json, sys; print(json.load(open(sys.argv[1]))['decisions_enabled'])" "$root/_smooth-devex-shared/installation.json")" = "False" ]; then
+  ok "no controlling terminal: install succeeds and decisions default to disabled"
+else
+  no "no controlling terminal: install succeeds and decisions default to disabled" "$(tail -n 3 "$scratch/err")"
+fi
+
 # ---------------------------------------------------------------------------------------------
 # 2. reconcile: keep an operator's false, add new skills, drop removed ones
 # ---------------------------------------------------------------------------------------------
