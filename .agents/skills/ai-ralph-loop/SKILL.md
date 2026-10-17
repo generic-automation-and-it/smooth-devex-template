@@ -55,11 +55,14 @@ excludes nothing.
 - `--plan` with no argument — create the plan, then loop over it:
   1. `mkdir -p .context/temp` and write `.context/temp/plan-<yyyyMMdd-HHmm>-<pid>.md` (UTC stamp, current
      pid — two runs in the same minute never collide). This is a working scratch file, never committed.
-  2. Capture the input: if the user has already brain-dumped in this session, read the last 5 conversation
-     turns for requirements and constraints; otherwise ask them to summarize. Do not invent requirements.
+  2. Capture the input: if the user has already brain-dumped in this session, read the last 5 turns for
+     requirements and constraints — a turn is one user message plus the assistant reply it produced;
+     tool calls and their output are not turns. Otherwise ask them to summarize. Do not invent requirements.
   3. Write the initial plan with exactly these headings — **Title, Requirements, Approach, Testability,
      Files to modify** — then enter the loop over it.
 - `--scope` is not consulted in plan mode: the plan document *is* the scope.
+- **Delta** — a plan has no callers or importers. The delta for loop n is the sections edited in loop
+  n−1, plus any section that states a requirement those edits touch.
 
 ### Verify
 
