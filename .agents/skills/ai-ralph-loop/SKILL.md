@@ -71,13 +71,20 @@ excludes nothing.
   so and ask.
 - `--plan` with no argument — create the plan, then loop over it:
   1. `mkdir -p .context/temp` and write `.context/temp/plan-<yyyyMMdd-HHmm>-<pid>.md` (UTC stamp, current
-     pid — two runs in the same minute never collide). This is a working scratch file, never committed.
+     pid — distinct processes never collide). The stamp and pid do **not** separate two runs in the same
+     process within one minute: create the file exclusively and, on collision, retry with an incrementing
+     suffix (`-2`, `-3`, …) rather than overwriting. A working scratch file, never committed.
   2. Capture the input: if the user has already brain-dumped in this session, read the last 5 turns for
      requirements and constraints — a turn is one user message plus the assistant reply it produced;
      tool calls and their output are not turns. Otherwise ask them to summarize. Do not invent requirements.
   3. Write the initial plan with exactly these headings — **Title, Requirements, Approach, Testability,
      Files to modify** — then enter the loop over it.
 - `--scope` is not consulted in plan mode: the plan document *is* the scope.
+- **Context** — Step 0 loads context for the plan file. Also load, as **read-only evidence**, the
+  `*AGENTS.md` chain and rules scoped to the source paths the plan proposes to change — including
+  path-scoped rules that apply to files that do not exist yet. Without this the Rule compliance check
+  misses implementation constraints such as a `backend/*.cs`-scoped rule. Loading context never widens
+  the fix boundary: the plan document remains the only editable target.
 - **Delta** — a plan has no callers or importers. The delta for loop n is the sections edited in loop
   n−1, plus any section that states a requirement those edits touch.
 
@@ -264,6 +271,12 @@ stands and both are named in the report. A finding whose fix failed verification
 Hand this section, the Categories table, the Evidence bar and Test focus to each reviewer, with the
 target file list, active switches and the ledger path. Include the `--notests` switch instructions when
 set. This hand-off applies to both inline and spawned reviews.
+
+When `--plan` is active, also hand over the whole [Plan mode](#plan-mode) section and treat it as
+overriding this one: reviewers get the Categories-to-plan translation, the `section:paragraph` location
+format and the four plan checks. Test focus and the ledger's test inventory are replaced by the
+plan-mode **Testability** check, and the test-specific instructions below do not apply — a fresh
+reviewer given only this section would review a plan as if it were code.
 
 - Read-only. Read the ledger first; never re-raise an item it lists.
 - Read the context pack paths in the ledger header.
