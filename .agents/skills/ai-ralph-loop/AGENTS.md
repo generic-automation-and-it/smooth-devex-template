@@ -19,6 +19,9 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
   higher-priority rule can silently suppress the skill's testing findings.
 - **New switches narrow or tune; they never gate.** Behaviour the bare run already has stays
   available without any switch.
+- **Plan mode's ledger is keyed by section, not by file.** In the `File(s)` column the cell holds the plan
+  section heading. An agent matching ledger rows by literal file path finds no duplicate, re-raises a
+  settled section, and the run churns to the cap instead of converging.
 
 ## Changelog
 
@@ -29,3 +32,4 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
 | 2026-10-16 | `--spawn` switch: parallel subagent lenses; default stays sequential inline in the current pid | — |
 | 2026-10-16 | Test focus hand-off; DR-003 coupling | — |
 | 2026-10-16 | `--notests`: active-switch reviewer hand-off | — |
+| 2026-10-17 | `--plan [path]` switch: plan/design mode, additive; same loop, evidence bar and convergence | — |

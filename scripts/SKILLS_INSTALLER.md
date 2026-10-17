@@ -91,7 +91,7 @@ match byte-for-byte (the harness holds them to each other).
 |---|---|
 | `ai-asset-sync` | Syncs AI assets across projects; core template mechanism |
 | `ai-template-sync` | Syncs this template into consumer repos; literal purpose of the template |
-| `ai-ralph-loop` | Review → fix → verify loop over any branch diff; generally useful across consumer projects |
+| `ai-ralph-loop` | Review → fix → verify loop over a branch diff, or over a plan with `--plan`; generally useful across consumer projects |
 | `ai-terse` | Token compression; generally useful across consumer projects |
 | `create-hld` | Design workflow authoring |
 | `create-worktask` | Task authoring workflow |
