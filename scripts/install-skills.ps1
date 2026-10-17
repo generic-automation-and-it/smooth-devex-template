@@ -149,13 +149,21 @@ function Fail { param([string] $Message) [Console]::Error.WriteLine("install-ski
 # Decision validation opt-in
 # ---------------------------------------------------------------------------
 
-function Test-DecisionsEnabled {
-    # Returns $true or $false from the decisions_enabled field in the existing JSON.
+function Test-DecisionsPropertyExists {
+    # Returns $true if the decisions_enabled property exists in the JSON (regardless of value).
     param([object] $ExistingJson)
     if ($null -eq $ExistingJson) { return $false }
-    $val = $ExistingJson.psobject.Properties['decisions_enabled']
-    if ($null -eq $val) { return $false }
-    return [bool] $val.Value
+    $prop = $ExistingJson.psobject.Properties['decisions_enabled']
+    return ($null -ne $prop)
+}
+
+function Get-DecisionsEnabled {
+    # Returns the decisions_enabled value from existing JSON, or $null if not present.
+    param([object] $ExistingJson)
+    if ($null -eq $ExistingJson) { return $null }
+    $prop = $ExistingJson.psobject.Properties['decisions_enabled']
+    if ($null -eq $prop) { return $null }
+    return [bool] $prop.Value
 }
 
 function Prompt-Decisions {
@@ -708,12 +716,12 @@ if ($script:DoSkills) {
     $existingSkills = @()
     if ($existing -and $existing.skills) { $existingSkills = @($existing.skills) }
 
-    # Decision validation opt-in. Only prompt when the flag is not already set — an operator
-    # who already answered keeps their choice. Idempotent: re-running never re-asks.
-    $existingDecisions = Test-DecisionsEnabled -ExistingJson $existing
-    if ($existingDecisions) {
-        $script:DecisionsEnabled = $true
-        Write-Info 'Decisions already enabled - skipping prompt'
+    # Decision validation opt-in. Only prompt when the preference is not yet recorded.
+    # A saved true or false is reused without re-asking — idempotent across re-installs.
+    $hasDecisionsPref = Test-DecisionsPropertyExists -ExistingJson $existing
+    if ($hasDecisionsPref) {
+        $script:DecisionsEnabled = [bool] (Get-DecisionsEnabled -ExistingJson $existing)
+        Write-Info "Decisions preference saved ($($script:DecisionsEnabled)) - skipping prompt"
     } else {
         Prompt-Decisions
     }
@@ -729,7 +737,7 @@ if ($script:DoSkills) {
     # port cannot agree on.
     $newJson = Build-InstallationJson -Updated ([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH\:mm\:ssZ')) `
         -DiskSkills $diskSkills -SourceSkills $sourceSkills -ExistingSkills $existingSkills `
-        -DecisionsEnabled $script:DecisionsEnabled -ExistingDecisionsEnabled $(if ($existing.psobject.Properties['decisions_enabled']) { [bool]$existing.decisions_enabled } else { $null })
+        -DecisionsEnabled $script:DecisionsEnabled -ExistingDecisionsEnabled $(if ($null -ne $existing -and $existing.psobject.Properties['decisions_enabled']) { [bool]$existing.decisions_enabled } else { $null })
 
     Write-Info 'Syncing installation.json...'
     Write-Info 'Updating installed skills...'

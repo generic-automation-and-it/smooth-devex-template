@@ -130,7 +130,53 @@ payload = {
 
 data = json.dumps(payload).encode("utf-8")
 
-response_text = None
+def validate_response(response_text):
+    """Validate response structure and required fields. Returns parsed dict or None."""
+    if not response_text:
+        return None
+    try:
+        result = json.loads(response_text)
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+    answers = result.get("answers")
+    if not isinstance(answers, dict):
+        return None
+
+    # Detect template mode and validate required fields
+    if "developer_value" in answers:
+        # Code mode: validate developer_value structure
+        dev = answers.get("developer_value")
+        if not isinstance(dev, dict):
+            return None
+        probs = dev.get("probabilities")
+        if not isinstance(probs, dict):
+            return None
+        # Check that probability values are numeric
+        for key in ["closes_gap", "improves_quality"]:
+            val = probs.get(key)
+            if val is not None and not isinstance(val, (int, float)):
+                return None
+        return result
+
+    elif "architectural_value" in answers:
+        # Plan mode: validate architectural_value structure
+        arch = answers.get("architectural_value")
+        if not isinstance(arch, dict):
+            return None
+        probs = arch.get("probabilities")
+        if not isinstance(probs, dict):
+            return None
+        # Check that probability values are numeric
+        for key in ["2", "3"]:
+            val = probs.get(key)
+            if val is not None and not isinstance(val, (int, float)):
+                return None
+        return result
+
+    return None
+
+parsed_result = None
 for attempt in range(1, max_attempts + 1):
     try:
         req = urllib.request.Request(
@@ -141,20 +187,20 @@ for attempt in range(1, max_attempts + 1):
         )
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             response_text = resp.read().decode("utf-8")
-        break
+        parsed_result = validate_response(response_text)
+        if parsed_result is not None:
+            break
     except Exception:
-        if attempt == max_attempts:
-            # All attempts exhausted — fallback
-            print("value=fallback|pct=0|keep=false|confidence=0|fallback=true")
-            sys.exit(0)
+        pass
+    # Invalid response or exception — retry
 
-if not response_text:
+if parsed_result is None:
+    # All attempts exhausted or no valid response
     print("value=fallback|pct=0|keep=false|confidence=0|fallback=true")
     sys.exit(0)
 
 try:
-    result = json.loads(response_text)
-    answers = result["answers"]
+    answers = parsed_result["answers"]
 
     # Detect template mode from which questions are present in the response.
     # Code mode: developer_value (choice) + necessity (choice) + primary_value_category (choice)

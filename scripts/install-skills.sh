@@ -125,17 +125,23 @@ log() { echo "install-skills: $*" >&2; }
 # Decision validation opt-in
 # ---------------------------------------------------------------------------
 
-# check_decisions_enabled JSON — returns "true" or "false" from the decisions_enabled field.
+# check_decisions_enabled JSON — returns "true", "false", or "missing" from the decisions_enabled field.
+# "missing" means the property is not present (prompt needed); "true"/"false" means saved preference.
 check_decisions_enabled() {
   local json="$1"
   if [ -z "$json" ]; then
-    printf 'false'
+    printf 'missing'
     return
   fi
   printf '%s' "$json" | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
-print('true' if data.get('decisions_enabled', False) else 'false')
+if 'decisions_enabled' not in data:
+    print('missing')
+elif data['decisions_enabled']:
+    print('true')
+else:
+    print('false')
 "
 }
 
@@ -737,15 +743,15 @@ main() {
     existing_json="$(json_read "$json_path")" \
       || die "cannot read $json_path — fix or delete it, then re-run"
 
-    # Decision validation opt-in. Only prompt when the flag is not already set — an operator
-    # who already answered keeps their choice. Idempotent: re-running never re-asks.
+    # Decision validation opt-in. Only prompt when the preference is not yet recorded.
+    # A saved true or false is reused without re-asking — idempotent across re-installs.
     local existing_decisions
     existing_decisions="$(check_decisions_enabled "$existing_json")"
-    if [ "$existing_decisions" = "true" ]; then
-      DECISIONS_ENABLED="true"
-      log "Decisions already enabled — skipping prompt"
-    else
+    if [ "$existing_decisions" = "missing" ]; then
       prompt_decisions
+    else
+      DECISIONS_ENABLED="$existing_decisions"
+      log "Decisions preference saved ($DECISIONS_ENABLED) — skipping prompt"
     fi
     if [ "$DECISIONS_ENABLED" = "true" ]; then
       write_decisions_env
