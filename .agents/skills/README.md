@@ -11,7 +11,7 @@ Skills live **flat**, one directory per skill directly under `.agents/skills/`. 
 | **agile-github-breakdown** | Turn a braindump or existing Feature into GitHub Feature + Task issues | `/agile-github-breakdown` |
 | **agile-github-task-from-diff** | Create a GitHub Task (sub-issue) from the current git diff vs main | `/agile-github-task-from-diff [--feature-issue <n> \| --noparentid]` |
 | **ai-brain-dump** | Listen-first capture session; synthesize on request | `/ai-brain-dump [--oktoask] [--thinking] [--oktoreaddocs] [--oktowebsearch] [--all]` |
-| **ai-ralph-loop** | Review → fix → verify the branch diff in fresh-eyes loops until clean; ends with a fix table | `/ai-ralph-loop [--loops <n>] [--scope <path\|glob>]` |
+| **ai-ralph-loop** | Review → fix → verify code and L0/L1/L2 test coverage, placement and quality until clean; ends with a fix table | `/ai-ralph-loop [--loops <n>] [--scope <path\|glob>] [--notests]` |
 | **ai-terse** | Reformat this turn's reply into terse, high-density output with a TL;DR | `/ai-terse` |
 | **ai-template-sync** | UPSERT smooth-devex-template scaffold into an existing repo | `/ai-template-sync` |
 | **ai-asset-sync** | Dependabot-style OpenCode sync of skills/rules from `owner/repo@ref:path` | `/ai-asset-sync` |
@@ -48,8 +48,9 @@ listen-first default avoids — use deliberately.
 Default (no switch) is the full run: branch diff vs `origin/main`, up to 10 loops, stopping at the first
 full-scope pass with no accepted finding. Findings are limited to feature gaps, potential bugs,
 architectural issues, YAGNI, KISS and clean code consistency, each grounded in known Understandings,
-`*AGENTS.md`, rules or specs. The run ends with an `ID | Category | File(s) fixed | Rationale | Loop` table
-and never commits.
+`*AGENTS.md`, rules or specs. Every run also applies the skill's [Test focus](ai-ralph-loop/SKILL.md#test-focus)
+to L0/L1/L2 coverage, placement and quality within those categories. The run ends with an
+`ID | Category | File(s) fixed | Rationale | Loop` table and tier-specific verification status; it never commits.
 
 | Switch | Effect | Default |
 |--------|--------|---------|
@@ -57,6 +58,7 @@ and never commits.
 | `--loops <n>` | Loop cap; any positive integer | `10` |
 | `--scope <path\|glob>` | Review these files instead of the branch diff | branch diff vs `origin/main` |
 | `--spawn` | Review lenses as parallel subagents | off — sequential inline in the current pid |
+| `--notests` | Skip new test files/cases; still review coverage, repair existing tests and run verification | off — create required tests |
 
 ### ai-understanding switches
 
