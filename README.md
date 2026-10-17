@@ -26,6 +26,8 @@ curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-de
 ```powershell
 # Windows
 $script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.ps1)); & $script -r -s -h
+# Add -d to enable AI decision validation (no prompt):
+$script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.ps1)); & $script -r -s -h -d
 ```
 
 | Switch | Meaning |
