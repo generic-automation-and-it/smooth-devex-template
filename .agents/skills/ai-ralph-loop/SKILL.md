@@ -54,8 +54,9 @@ Without `--notests`, required test creation remains part of the normal loop.
 
 `--plan` iterates on a plan — a brain dump, a worktask, an HLD — before any code exists. It is purely
 additive: it changes the review target, never the loop. Same six categories, same evidence bar, same
-ledger, same convergence rule, same `--loops` and `--spawn`. Only the three deltas below differ; where
-this section is silent, the [Workflow](#workflow) applies unchanged.
+ledger, same convergence rule, same `--loops`, `--spawn` and `--notests`. Only the deltas stated below
+differ; where this section is silent, the [Workflow](#workflow) and [Test focus](#test-focus) apply
+unchanged.
 
 The Categories table is read against the plan, not the code. Each row's *Qualifies when* translates by
 swapping its subject — a potential bug is a step that produces a wrong result, YAGNI is a section no
@@ -97,9 +98,6 @@ and recording each result in the ledger:
 The same fix table with `Section(s) fixed` in place of `File(s) fixed`. The **Verify** line reports the
 four checks above instead of build/test commands, and names the plan document's path.
 
-A plan has no tests to place, so [Test focus](#test-focus) and `--notests` do not apply here: the
-**Testability** check above is their plan-mode equivalent.
-
 ## Categories
 
 | Category | Qualifies when | Not a finding |
@@ -132,6 +130,9 @@ Check test **existence, placement and quality** on every bare Ralph run, within 
 scope. On full-scope passes, inspect all affected features; on delta passes, revisit features affected
 by the delta. Existing tests count when they exercise current behaviour; do not create duplicates to
 satisfy a count. Documentation-only changes do not require feature tests.
+
+This section is for code scope. In [plan mode](#plan-mode) there are no tests to place, run or verify:
+the plan-mode **Testability** check replaces this section, and `--notests` has no effect there.
 
 ### Required coverage
 
@@ -178,7 +179,7 @@ across tiers.
    { git diff --name-only --diff-filter=d "$base"; git ls-files --others --exclude-standard; } | sort -u
    ```
 
-With `--scope`, expand the path or glob instead. Drop binaries, lock files and generated code
+   With `--scope`, expand the path or glob instead. Drop binaries, lock files and generated code
    (EF migration designers, snapshots). Empty scope → stop and say so. In the default scope, related
    tests for affected features are also permitted fix targets, including new test files unless
    `--notests` is set. An explicit `--scope` remains the fix boundary; related tests outside it may be
@@ -202,8 +203,9 @@ With `--scope`, expand the path or glob instead. Drop binaries, lock files and g
 ### Ledger
 
 `.context/ralph-loop/<yyyyMMdd-HHmm>/ledger.md` (UTC stamp, one folder per run). Header: scope list,
-active switches (including `--notests`), context pack paths, baseline verify result. Keep the test
-inventory current in a separate table:
+active switches (including `--notests`), context pack paths, baseline verify result. For code scope,
+keep the test inventory current in a separate table — [Test focus](#test-focus) does not apply in
+plan mode, so that table is omitted there:
 
 ```markdown
 | Feature | Requirement/scenario | Tier | Test name and file / searched locations | Coverage/quality gap or N/A reason | Verify command and pass/fail/skip/blocked result |
@@ -250,7 +252,7 @@ test at the tier required by Test focus unless `--notests` is set; then fix the 
 5. **Record.** One ledger row per finding, then a summary line:
    `Loop n: target=<full|delta k files> accepted a / rejected r / deferred d`.
 6. **Exit check.**
-   - 0 accepted on a full-scope pass → review **converged**, stop; unresolved test gaps or verification blockers still prevent a test-complete verdict.
+   - 0 accepted on a full-scope pass → review **converged**, stop; unresolved test gaps or verification blockers still prevent a test-complete verdict. In plan mode there are no test gaps — the plan-mode **Testability** check stands in for the test-complete verdict.
    - 0 accepted on a delta pass → the next loop is a full-scope confirmation sweep.
    - n = cap → stop and report what is still open.
 
