@@ -167,12 +167,11 @@ function Get-DecisionsEnabled {
 }
 
 function Prompt-Decisions {
-    # Ask the user whether to enable decision validation.
-    # Only prompts when stdin is a terminal (interactive). On piped input it default to false
-    # so the one-liner stays non-interactive; to opt in without a prompt, set
-    # $env:SMOOTH_DEVEX_DECISIONS_ENABLED = 'true' in the environment first.
+    # Ask the user whether to enable decision validation. Read-Host reads from the console, so the
+    # question is asked even when stdin is redirected (a typical `irm | iex`). On a host with no
+    # interactive terminal the read fails and we fall back to disabled.
     # Sets $script:DecisionsEnabled to $true or $false.
-    if (-not [Console]::IsInputRedirected) {
+    try {
         Write-Host ''
         Write-Host '  Enable AI decision validation for ralph loop?'
         Write-Host '  (Evaluates each fix via local OpenJEV model; requires openjev at localhost:1234)'
@@ -184,9 +183,8 @@ function Prompt-Decisions {
             $script:DecisionsEnabled = $false
             Write-Info 'Decisions disabled'
         }
-    } else {
-        Write-Info 'Non-interactive session - decisions disabled by default'
-        Write-Info 'To enable, re-run with $env:SMOOTH_DEVEX_DECISIONS_ENABLED = ''true'''
+    } catch {
+        Write-Info 'No terminal available - decisions disabled by default'
         $script:DecisionsEnabled = $false
     }
 }
@@ -719,15 +717,11 @@ if ($script:DoSkills) {
     $existingSkills = @()
     if ($existing -and $existing.skills) { $existingSkills = @($existing.skills) }
 
-    # Decision validation opt-in. Priority: explicit env var > saved preference > interactive
-    # prompt > (non-interactive with no pref) disabled. The env var lets an `irm | iex` run opt
-    # in without a TTY ($env:SMOOTH_DEVEX_DECISIONS_ENABLED = 'true') and flips a previously-saved
-    # preference without re-prompting.
+    # Decision validation opt-in. Prompt only when the preferences entry is missing — a saved
+    # true or false is reused without re-asking (idempotent). Read-Host reads from the console,
+    # so the prompt is asked even on a piped `irm | iex` run; falls back to disabled if no host.
     $hasDecisionsPref = Test-DecisionsPropertyExists -ExistingJson $existing
-    if ($null -ne $env:SMOOTH_DEVEX_DECISIONS_ENABLED -and $env:SMOOTH_DEVEX_DECISIONS_ENABLED -ne '') {
-        $script:DecisionsEnabled = ($env:SMOOTH_DEVEX_DECISIONS_ENABLED -eq 'true')
-        Write-Info "Decisions via env: $($script:DecisionsEnabled)"
-    } elseif ($hasDecisionsPref) {
+    if ($hasDecisionsPref) {
         $script:DecisionsEnabled = [bool] (Get-DecisionsEnabled -ExistingJson $existing)
         Write-Info "Decisions preference saved ($($script:DecisionsEnabled)) - skipping prompt"
     } else {

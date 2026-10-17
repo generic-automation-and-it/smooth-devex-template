@@ -40,4 +40,4 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
 | 2026-10-17 | Decision validation layer (opt-in via `SMOOTH_DEVEX_DECISIONS_ENABLED`); `Decision` column in output table | — |
 | 2026-10-17 | Code-mode template rewritten (developer_value/necessity/primary_value_category); plan-mode template added; script auto-detects mode | — |
 | 2026-10-17 | `--nodecisions` switch: bypass decision validation even when env var is set | — |
-| 2026-10-17 | Installer env-var opt-in for non-interactive runs (`SMOOTH_DEVEX_DECISIONS_ENABLED=true curl \| bash`) | — |
+| 2026-10-17 | Installer decision prompt reads /dev/tty so it is asked even on piped `curl \| bash`; falls back to disabled with no terminal | — |

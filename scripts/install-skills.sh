@@ -146,14 +146,13 @@ else:
 }
 
 # prompt_decisions — ask the user whether to enable decision validation.
-# Only prompts when stdin is a TTY (interactive). On piped input (curl | bash) it
-# defaults to false so the one-liner stays non-interactive; to opt in without a
-# prompt, set SMOOTH_DEVEX_DECISIONS_ENABLED=true in the environment first.
-# Sets DECISIONS_ENABLED to "true" or "false".
+# Reads from the controlling terminal (/dev/tty), so the question is asked even when
+# stdin is piped (a typical `curl | bash`). Falls back to disabled when no terminal
+# exists (CI, cron). Sets DECISIONS_ENABLED to "true" or "false".
 prompt_decisions() {
-  if [ ! -t 0 ]; then
-    log "Non-interactive session — decisions disabled by default"
-    log "To enable, re-run with SMOOTH_DEVEX_DECISIONS_ENABLED=true (e.g. SMOOTH_DEVEX_DECISIONS_ENABLED=true curl -fsSL ... | bash)"
+  local answer
+  if [ ! -r /dev/tty ]; then
+    log "No terminal available — decisions disabled by default"
     DECISIONS_ENABLED="false"
     return
   fi
@@ -161,7 +160,7 @@ prompt_decisions() {
   echo "  Enable AI decision validation for ralph loop?"
   echo "  (Evaluates each fix via local OpenJEV model; requires openjev at localhost:1234)"
   printf "  [y/N] "
-  read -r answer
+  read -r answer < /dev/tty
   case "$answer" in
     [yY]|[yY][eE][sS])
       DECISIONS_ENABLED="true"
@@ -745,20 +744,16 @@ main() {
     existing_json="$(json_read "$json_path")" \
       || die "cannot read $json_path — fix or delete it, then re-run"
 
-    # Decision validation opt-in. Priority: explicit env var > saved preference > interactive
-    # prompt > (non-interactive with no pref) disabled. The env var lets a `curl | bash` run opt
-    # in without a TTY (e.g. SMOOTH_DEVEX_DECISIONS_ENABLED=true curl -fsSL ... | bash) and flips a
-    # previously-saved preference without re-prompting.
+    # Decision validation opt-in. Prompt only when the preferences entry is missing — a saved
+    # true or false is reused without re-asking (idempotent). The prompt reads from /dev/tty, so
+    # it is asked even on a piped `curl | bash` run; falls back to disabled when no terminal.
     local existing_decisions
     existing_decisions="$(check_decisions_enabled "$existing_json")"
-    if [ -n "${SMOOTH_DEVEX_DECISIONS_ENABLED:-}" ]; then
-      DECISIONS_ENABLED="$SMOOTH_DEVEX_DECISIONS_ENABLED"
-      log "Decisions via env: $DECISIONS_ENABLED"
-    elif [ "$existing_decisions" != "missing" ]; then
+    if [ "$existing_decisions" = "missing" ]; then
+      prompt_decisions
+    else
       DECISIONS_ENABLED="$existing_decisions"
       log "Decisions preference saved ($DECISIONS_ENABLED) — skipping prompt"
-    else
-      prompt_decisions
     fi
     if [ "$DECISIONS_ENABLED" = "true" ]; then
       write_decisions_env
