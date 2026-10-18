@@ -41,3 +41,4 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
 | 2026-10-17 | Code-mode template rewritten (developer_value/necessity/primary_value_category); plan-mode template added; script auto-detects mode | — |
 | 2026-10-17 | `--nodecisions` switch: bypass decision validation even when env var is set | — |
 | 2026-10-17 | Installer decision prompt reads /dev/tty so it is asked even on piped `curl \| bash`; falls back to disabled with no terminal | — |
+| 2026-10-18 | SKILL.md wired to the decision layer: `--nodecisions` row + subsection, fix-step evaluation, `Decision` column in ledger + output (these were claimed in changelog but absent from SKILL.md — drift fix) | — |

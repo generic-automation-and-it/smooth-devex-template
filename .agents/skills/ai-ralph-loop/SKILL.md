@@ -291,8 +291,8 @@ stands and both are named in the report. A finding whose fix failed verification
 ### Reviewer brief
 
 Hand this section, the Categories table, the Evidence bar and Test focus to each reviewer, with the
-target file list, active switches and the ledger path. Include the `--notests` switch instructions when
-set. This hand-off applies to both inline and spawned reviews.
+target file list, active switches and the ledger path. Include the `--notests` and `--nodecisions` switch
+instructions when set. This hand-off applies to both inline and spawned reviews.
 
 When `--plan` is active, also hand over the whole [Plan mode](#plan-mode) section and treat it as
 overriding this one: reviewers get the Categories-to-plan translation, the `section:paragraph` location
@@ -324,12 +324,16 @@ reviewer given only this section would review a plan as if it were code.
 The final message is this table — `fixed` rows only, IDs from the ledger:
 
 ```markdown
-| ID | Category | File(s) fixed | Rationale | Loop |
-|----|----------|---------------|-----------|------|
-| RL-001 | Potential bug | `src/Project.Application/Features/Orders/CreateOrderHandler.cs` | Null customer id reached the repository; guard + regression test | 1 |
+| ID | Category | File(s) fixed | Decision | Rationale | Loop |
+|----|----------|---------------|----------|-----------|------|
+| RL-001 | Potential bug | `src/Project.Application/Features/Orders/CreateOrderHandler.cs` | n/a | Null customer id reached the repository; guard + regression test | 1 |
 ```
 
-Then three lines:
+`Decision` is the decision-validation outcome for that fix — `keep` / `reject` (`pct` appended when
+useful) — or `n/a` when the layer is off (no `SMOOTH_DEVEX_DECISIONS_ENABLED=true`, or `--nodecisions`,
+or a `fallback=true`). It never gates a fix; a `reject` is reported, not undone.
+
+Then four lines:
 
 - **Result** — `converged at loop k` · `cap reached (n loops)` · `stopped: verify red at loop k`.
 - **Verify** — build/test commands and state against baseline, L0/L1/L2 coverage and execution status,
@@ -338,6 +342,9 @@ Then three lines:
   documentation-only exemption is `not applicable`, not a fabricated test pass. With `--notests`, state
   `test creation disabled (--notests)`; this is not itself a coverage failure when existing tests suffice.
   In plan mode, see [Report](#report).
+- **Decisions** — `n/a (decision validation not enabled)` when `SMOOTH_DEVEX_DECISIONS_ENABLED` is not
+  `true` or `--nodecisions` is set; otherwise a summary of the `Decision` column, e.g.
+  `enabled — keep k / reject r / fallback f`.
 - **Not fixed** — rejected / deferred / oscillation counts, one line per deferred or oscillation item,
   unresolved test gaps (including scenario, tier and `--notests` reason for deferred test creation), and
   the ledger path.
