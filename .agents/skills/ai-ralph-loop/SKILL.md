@@ -54,7 +54,8 @@ Without `--notests`, required test creation remains part of the normal loop.
 ### `--nodecisions` — no decision validation
 
 Decision validation is an **opt-in, non-blocking** layer: when `SMOOTH_DEVEX_DECISIONS_ENABLED=true`,
-each accepted fix is evaluated by `decisions/scripts/decision-evaluate.sh` (an OpenJEV model) and the
+each accepted fix is evaluated by `.agents/skills/ai-ralph-loop/decisions/scripts/decision-evaluate.sh`
+(an OpenJEV model, repo-root-relative like the skill's other script references) and the
 result is surfaced in the `Decision` column of the [output](#output). It never gates a fix — a
 `keep=false` is reported, not undone, and a service that stays unreachable after `MAX_ATTEMPTS` falls
 back to running as if decisions were disabled.
@@ -269,9 +270,10 @@ test at the tier required by Test focus unless `--notests` is set; then fix the 
    document and **nowhere else** — never on code.
    When decision validation is active (not `--nodecisions` and `SMOOTH_DEVEX_DECISIONS_ENABLED=true`),
    capture the before/after of the accepted fix and run
-   `decisions/scripts/decision-evaluate.sh --category <cat> --before <before-file> --after <after-file>
-   --context <file:line>`; record the outcome as the finding's `Decision`. Non-blocking: a `keep=false`
-   or a `fallback=true` result is reported, never undone.
+   `.agents/skills/ai-ralph-loop/decisions/scripts/decision-evaluate.sh --category <cat>
+   --before <before-file> --after <after-file> --context <file:line>`; record the outcome as the
+   finding's `Decision`. Non-blocking: a `keep=false` or a `fallback=true` result is reported, never
+   undone.
 4. **Verify.** Build touched projects and run relevant L0/L1/L2 suites for affected behaviour, including
    required feature tests in otherwise untouched test projects. Update the inventory with commands and
    pass/fail/skip/blocked results; unrun or blocked suites never count as passing. A new failure → fix
