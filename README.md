@@ -21,6 +21,10 @@ Reuse in another repo. One command — ships owned set only (7 skills, 4 rules, 
 curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -r -s -h
 # Add -d to enable AI decision validation for ralph loop (no prompt):
 curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -r -s -h -d
+# Add -g to install the owned set globally for Codex (store at ~/.smooth-ai-devex, wired into ~/.codex):
+curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -r -s -h -d -g
+# Remove that global install (Codex wiring; Claude/OpenCode not wired yet):
+curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -g --uninstall
 ```
 
 ```powershell
@@ -28,6 +32,10 @@ curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-de
 $script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.ps1)); & $script -r -s -h
 # Add -d to enable AI decision validation (no prompt):
 $script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.ps1)); & $script -r -s -h -d
+# Add -g to install the owned set globally for Codex (store + ~/.codex wiring):
+$script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.ps1)); & $script -r -s -h -d -g
+# Remove that global install:
+$script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.ps1)); & $script -g --uninstall
 ```
 
 | Switch | Meaning |
@@ -36,9 +44,11 @@ $script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-a
 | `-s` | Install the owned skills (`.agents/skills/` flat folders) |
 | `-h` | Install the owned hooks (`.agents/hooks/`) |
 | `-d` | Enable AI decision validation for the ralph loop — writes `SMOOTH_DEVEX_DECISIONS_*` env vars and sets `decisions_enabled: true` in `installation.json` |
+| `-g` | Install the owned set **globally** — `~/.smooth-ai-devex/{skills,rules,hooks}` store, wired into Codex's `~/.codex/` (skills symlinks, `AGENTS.md` import, `hooks.json` merge) |
+| `--uninstall` | Remove the global install (`-g --uninstall`) — removes only manifest-recorded links/edits, restores `smooth-devex-<datetime>` snapshots, leaves `.system/`, `gk` hooks, and the RTK line intact |
 | _(none)_ | All of the above (rules + skills + hooks) — the default; decisions are then prompted for, or disabled with no terminal |
 
-Switches filter the run only; nothing about the selection is persisted. `-d` is an opt-in flag (not a category) — it never defaults on.
+Switches filter the run only; nothing about the selection is persisted. `-d` is an opt-in flag (not a category) — it never defaults on. `-g` and `--uninstall` are a separate **global** mode: `-g` refuses to combine with `SKILLS_ROOT`, and `--uninstall` only applies together with `-g`.
 
 ---
 
