@@ -208,8 +208,8 @@ category switches (`-g -s -r -h`), so you can install just skills, just rules, o
 
 | Layer | Where it lands |
 |---|---|
-| Skills | copied into `~/.smooth-ai-devex/skills/` (skill `AGENTS.md` stripped), then symlinked into `~/.codex/skills/<name>` — coexisting with Codex's own `.system/`, which is never touched. When OpenCode is installed, each is also referenced as an OpenCode command at `~/.config/opencode/commands/<name>.md` (never copied into the opencode skills folder) |
-| Rules | copied into `~/.smooth-ai-devex/rules/` and imported by a generated `~/.smooth-ai-devex/AGENTS.md`; `~/.codex/AGENTS.md` pulls that file in with one marker-guarded `@`-line. No `*.instructions.md` is written into `~/.codex/rules/` — Codex treats that directory as a Starlark `prefix_rule` namespace, and the `@`-import chain is the supported delivery shape |
+| Skills | copied into `~/.smooth-ai-devex/skills/` (skill `AGENTS.md` stripped), then symlinked into `~/.codex/skills/<name>` — coexisting with Codex's own `.system/`, which is never touched. When Claude is installed, each is also symlinked into `~/.claude/skills/<name>`; when OpenCode is installed, each is referenced from a `~/.config/opencode/commands` folder symlink to the store's `opencode-commands/` (`<name>.md` → `SKILL.md`) and the store's rules are added to `opencode.json` `instructions` (never copied into the opencode skills folder) |
+| Rules | copied into `~/.smooth-ai-devex/rules/` and imported by a generated `~/.smooth-ai-devex/AGENTS.md`; `~/.codex/AGENTS.md` pulls that file in with one marker-guarded `@`-line. No `*.instructions.md` is written into `~/.codex/rules/` — Codex treats that directory as a Starlark `prefix_rule` namespace, and the `@`-import chain is the supported delivery shape. When Claude is installed the rules are also symlinked into `~/.claude/rules/`; when OpenCode is installed they are added to `opencode.json` `instructions` |
 | Hooks | copied into `~/.smooth-ai-devex/hooks/` and JSON-merged into `~/.codex/hooks.json` under `UserPromptSubmit` only, with absolute store commands (relative `.agents/...` commands would break outside the repo), deduped by command match, preserving the `gk` and `code-review-graph` entries already there |
 
 State is `~/.smooth-ai-devex/installation.json` — the same `skills`/`decisions_enabled` shape as the
@@ -296,7 +296,7 @@ and payload purposes.
 bash scripts/test-install-skills.sh
 ```
 
-67 cases against the bash port, no network and no container engine needed: the clone source is the
+70 cases against the bash port, no network and no container engine needed: the clone source is the
 checkout itself (`SKILLS_REPO` pointed at the repo, `SKILLS_BRANCH` at the current branch), so a harness
 that reached GitHub would be red for reasons unrelated to the code. Runs in the PR gate. The shared
 payload, canonical links, stale-entry sweep, legacy-manifest ignore, and real-dir-at-link-path cases

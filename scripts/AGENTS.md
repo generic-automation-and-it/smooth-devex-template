@@ -14,7 +14,8 @@ repository's source outside its declared contract.
   `<agent-root>/hooks/` files, the owned `.github/instructions/` subset, and canonical symlinks —
   or, when force-pinned via `SKILLS_ROOT`, into exactly that path and its siblings. The `-g`
   global mode is the explicit exception: it writes `$HOME/.smooth-ai-devex/` (its store + manifest)
-  and wires into Codex's `$HOME/.codex/` (skills symlinks, an `AGENTS.md` import, `hooks.json`).
+  and wires into Codex's `$HOME/.codex/` (skills symlinks, an `AGENTS.md` import, `hooks.json`), plus
+  Claude's `$HOME/.claude/skills` and OpenCode's `$HOME/.config/opencode/commands`.
   Anything else that wants to touch the calling repo's `src/`, `tests/`, `.github/` or other
   top-level directories belongs elsewhere — most likely as a workflow under `.github/workflows/` or an
   action under `.github/actions/`.
@@ -36,7 +37,7 @@ documentation.
 | --- | --- |
 | `install-skills.sh` | bash port. macOS / Linux. Needs `bash`, `git`, `python3`. |
 | `install-skills.ps1` | PowerShell 7 port. Windows or anywhere `pwsh` runs. Needs `pwsh`, `git`. |
-| `test-install-skills.sh` | Harness. 67 cases, bash port only (the ps1 port is read, not run). |
+| `test-install-skills.sh` | Harness. 70 cases, bash port only (the ps1 port is read, not run). |
 
 The installer pulls a flat list of folders from `.agents/skills/` in this repository into a consumer
 repository, controlled by a per-skill `installed` flag in
@@ -65,13 +66,20 @@ without planting real source-owned names. Production installers never set it.
 **`-g` is a separate global mode.** Instead of scoping to `<agent-root>` in the repo you are in, it
 installs the same owned set once, machine-wide, into `~/.smooth-ai-devex/` and wires it into Codex's
 `~/.codex/`: owned skills are symlinked into `~/.codex/skills/` (coexisting with Codex's `.system/`),
+and made vendorable into any agent tree; the skills' own `SKILL.md` files reference a repo-local
+`.agents/...` tree (own scripts, rules, `.context/`), so a globally-installed skill is *discoverable*
+but its scripts only run when the consumer has that tree (a per-repo install, or this template).
 the owned rules are imported through a generated `~/.smooth-ai-devex/AGENTS.md` that
 `~/.codex/AGENTS.md` pulls in with one marker-guarded `@`-line (never written into `~/.codex/rules/`,
-a Starlark `prefix_rule` namespace), and the owned hooks are JSON-merged into `~/.codex/hooks.json`
-under `UserPromptSubmit` only, with absolute store commands. When OpenCode is installed, each owned
-skill is instead referenced from `~/.config/opencode/commands/<name>.md` (a command symlink to the
-skill's `SKILL.md`, not a copy into the skills folder — OpenCode already sees them via the
-Claude/agents interface). State is `~/.smooth-ai-devex/installation.json` (a `links[]` record of what
+a Starlark `prefix_rule` namespace), symlinked into `~/.claude/rules/` when Claude is installed, and
+added to `opencode.json` `instructions` when OpenCode is installed; and the owned hooks are
+JSON-merged into `~/.codex/hooks.json`
+under `UserPromptSubmit` only, with absolute store commands. When Claude is installed, owned skills
+are also symlinked into `~/.claude/skills/`. When OpenCode is installed, each owned skill is
+referenced from `~/.config/opencode/commands` (a folder symlink to the store's `opencode-commands/`,
+whose `<name>.md` links point at the skill's `SKILL.md`), and the store's rules are added to the
+operator's `opencode.json` `instructions` (with a backup). State
+is `~/.smooth-ai-devex/installation.json` (a `links[]` record of what
 was installed); `-g --uninstall` removes exactly that — never `.system/`, an operator's `gk` hooks, or
 their `RTK.md` `@`-import line. Every pre-existing config file the installer appends to
 (`~/.codex/AGENTS.md`, `~/.codex/hooks.json`, and the shell profile when decision env vars are written)
@@ -119,3 +127,6 @@ Two known gaps:
 | 2026-10-18 | Harness global cases pin `SMOOTH_DEVEX_HOME`/`OPENCODE_CONFIG` and clear inherited `SKILLS_ROOT` (operator env vars cannot leak into an isolated `-g` run) | — |
 | 2026-10-18 | `-g` review fixes: uninstall restores from a snapshot and **retires** it (so install→uninstall→reinstall snapshots fresh, never data-loss); global store copy/symlink honor `installed:false` (preserve edits, keep discoverable); harness cases 8m/8n | — |
 | 2026-10-18 | `-g --uninstall` snapshots each content file's current (post-install) state as `*.smooth-devex-uninstall-<stamp>` before restoring/removing it, so operator edits made after install are not lost; symlinks are safe (target content stays in the store); harness case 8o | — |
+| 2026-10-18 | `-g` wires Claude Code: owned skills symlinked into `~/.claude/skills` when Claude is installed (removed on `--uninstall`); harness case 8p | — |
+| 2026-10-18 | `-g` OpenCode: owned skills symlinked into OpenCode's skills dir, and the store's rules added to `opencode.json` `instructions` with a backup; harness cases 8k/8q | — |
+| 2026-10-18 | `-g` Claude rules: owned rules symlinked into `~/.claude/rules` so Claude Code loads them across sessions; harness case 8r | — |

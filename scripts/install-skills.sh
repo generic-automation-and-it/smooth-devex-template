@@ -755,6 +755,7 @@ GLOBAL_MARKER="installer-owned-global-instructions"
 GLOBAL_CODEX_MARKER_LINE="# $GLOBAL_MARKER (added by install-skills)"
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 OPENCODE_CONFIG="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
+CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
 LINKS=()
 
 # record_link TYPE PATH [DETAIL] — append a link/edit record for the uninstall
@@ -793,13 +794,13 @@ ensure_global_store() {
   mkdir -p "$GLB_ROOT/skills" "$GLB_ROOT/rules" "$GLB_ROOT/hooks"
 }
 
-# symlink_global_skill NAME — link the store's copy of NAME into Codex's skills
-# dir. An existing correct link is kept; a real file/dir or a foreign symlink at
-# the path is reported and left untouched. Codex's own .system/ and .DS_Store
-# are never iterated, so they are never touched.
-symlink_global_skill() {
-  local name="$1"
-  local link="$CODEX_HOME/skills/$name"
+# link_skill_into DEST_DIR NAME LINKTYPE — link the store's copy of NAME into
+# DEST_DIR/NAME (Codex and Claude both call this). Keeps a correct existing link;
+# a real file/dir or a foreign link at the path is reported and left untouched.
+# Never aborts the run for one failed link; records the link for --uninstall.
+link_skill_into() {
+  local destdir="$1" name="$2" linktype="$3"
+  local link="$destdir/$name"
   local target="$GLB_ROOT/skills/$name"
   if [ ! -e "$target" ]; then
     log "WARNING: $target missing — no global skill symlink for $name"
@@ -807,7 +808,7 @@ symlink_global_skill() {
   fi
   if [ -L "$link" ]; then
     if [ "$(readlink "$link")" = "$target" ]; then
-      log "Global skill $name already linked into Codex"
+      log "Global skill $name already linked into $(basename "$destdir")"
       return 0
     fi
     log "WARNING: $link is a symlink to somewhere else — left untouched"
@@ -817,17 +818,66 @@ symlink_global_skill() {
     log "WARNING: $link already exists — left untouched"
     return 0
   fi
-  mkdir -p "$CODEX_HOME/skills"
-  # Never abort the run for one failed link: a paused/exhausted filesystem or a
-  # link path taken between the check and the create would otherwise kill a run
-  # with the store half-populated and no manifest write. Warn and move on, like
-  # the other link helpers. The ps1 port's junction fallback covers the same case.
+  mkdir -p "$destdir"
   if ! ln -s "$target" "$link"; then
     log "WARNING: could not create symlink $link -> $target — left untouched (or it appeared between the check and the create)"
     return 0
   fi
-  record_link "skill-link" "$link" "$target"
+  record_link "$linktype" "$link" "$target"
   log "Linked global skill $name -> $target"
+}
+
+# symlink_global_skill NAME — link the store's copy of NAME into Codex's skills dir.
+symlink_global_skill() {
+  link_skill_into "$CODEX_HOME/skills" "$1" "skill-link"
+}
+
+# symlink_global_claude NAME — link the store's copy of NAME into Claude Code's
+# skills dir (~/.claude/skills).
+symlink_global_claude() {
+  link_skill_into "$CLAUDE_HOME/skills" "$1" "claude-skill"
+}
+
+# install_global_claude MANIFEST_JSON — symlink each installed owned skill into
+# Claude Code's skills dir for global availability, when Claude's config dir
+# exists. Wired in addition to Codex/OpenCode, never instead of.
+install_global_claude() {
+  local manifest="$1"
+  if [ ! -d "$CLAUDE_HOME" ]; then
+    log "Claude Code config not found ($CLAUDE_HOME) — skipping global Claude wiring"
+    return 0
+  fi
+  local installed name
+  installed="$(printf '%s' "$manifest" | python3 -c "
+import json, sys
+for s in json.load(sys.stdin).get('skills', []):
+    if s.get('installed'):
+        print(s['name'])
+")"
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    is_owned_skill "$name" || continue
+    symlink_global_claude "$name"
+  done <<< "$installed"
+}
+
+# install_global_claude_rules — symlink the owned rules into Claude Code's global
+# rules dir (~/.claude/rules) so Claude Code loads them across sessions.
+install_global_claude_rules() {
+  if [ ! -d "$CLAUDE_HOME" ]; then
+    log "Claude Code config not found ($CLAUDE_HOME) — skipping global Claude rules"
+    return 0
+  fi
+  local rel target link
+  for rel in "${OWNED_RULES[@]}"; do
+    target="$GLB_ROOT/rules/$rel"
+    if [ ! -f "$target" ]; then
+      log "WARNING: rule $rel not in store — not linked into Claude"
+      continue
+    fi
+    link="$CLAUDE_HOME/rules/$rel"
+    link_store_file "$link" "$target" "claude-rule"
+  done
 }
 
 # link_store_file DESTLINK TARGET LINKTYPE — symlink a store file at DESTLINK.
@@ -863,13 +913,17 @@ link_store_file() {
 # Claude/agents interface, so we do NOT copy them into ~/.config/opencode/skills/;
 # instead we reference each skill's SKILL.md from the commands folder (filename =
 # command name). Skipped when OpenCode's config dir is absent.
+# install_global_opencode MANIFEST_JSON — symlink each installed owned skill into
+# OpenCode's own skills dir (~/.config/opencode/skills), so OpenCode loads the full
+# skill (SKILL.md + scripts) via the native skill tool. Skipped when OpenCode's
+# config dir is absent.
 install_global_opencode() {
   local manifest="$1"
   if [ ! -d "$OPENCODE_CONFIG" ]; then
     log "OpenCode config not found ($OPENCODE_CONFIG) — skipping global OpenCode wiring"
     return 0
   fi
-  local installed name target link
+  local installed name
   installed="$(printf '%s' "$manifest" | python3 -c "
 import json, sys
 for s in json.load(sys.stdin).get('skills', []):
@@ -879,14 +933,49 @@ for s in json.load(sys.stdin).get('skills', []):
   while IFS= read -r name; do
     [ -n "$name" ] || continue
     is_owned_skill "$name" || continue
-    target="$GLB_ROOT/skills/$name/SKILL.md"
-    if [ ! -f "$target" ]; then
-      log "WARNING: $target missing — no OpenCode command for $name"
-      continue
-    fi
-    link="$OPENCODE_CONFIG/commands/$name.md"
-    link_store_file "$link" "$target" "opencode-command"
+    link_skill_into "$OPENCODE_CONFIG/skills" "$name" "opencode-skill"
   done <<< "$installed"
+}
+
+# install_global_opencode_config — add an `instructions` glob to the operator's
+# opencode.json so OpenCode loads the global rules from the store. Snapshots the
+# file before writing, merges + dedupes, records the edit for --uninstall.
+install_global_opencode_config() {
+  local config="$OPENCODE_CONFIG/opencode.json"
+  if [ ! -f "$config" ]; then
+    log "opencode.json not found ($config) — skipping global rules instructions"
+    return 0
+  fi
+  local backup_path altered
+  backup_path="$(backup_inplace "$config")"
+  [ -n "$backup_path" ] && log "Backed up $config -> $backup_path"
+  altered="$(python3 - "$config" "$GLB_ROOT" <<'PYEOF'
+import json, sys
+path, glb_root = sys.argv[1], sys.argv[2]
+data = json.load(open(path, encoding='utf-8'))
+inst = data.get('instructions', [])
+if not isinstance(inst, list):
+    inst = []
+add = [glb_root + '/rules/*.instructions.md', glb_root + '/rules/**/*.instructions.md']
+changed = False
+for g in add:
+    if g not in inst:
+        inst.append(g)
+        changed = True
+if changed:
+    data['instructions'] = inst
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2)
+        f.write('\n')
+print('1' if changed else '0')
+PYEOF
+)"
+  if [ "$altered" = "1" ]; then
+    record_link "opencode-config" "$config" "$backup_path"
+    log "Added global rules instructions to $config"
+  else
+    log "OpenCode instructions already present in $config"
+  fi
 }
 
 # install_global_skills MANIFEST_JSON — copy the owned skills into the central
@@ -1212,6 +1301,10 @@ print(json.dumps(sorted(line.strip() for line in sys.stdin if line.strip())))
     install_global_skills "$new_json"
     log "Registering global OpenCode commands…"
     install_global_opencode "$new_json"
+    log "Adding global rules to OpenCode instructions…"
+    install_global_opencode_config
+    log "Registering global Claude skills…"
+    install_global_claude "$new_json"
   fi
 
   if [ "$DO_RULES" = "1" ]; then
@@ -1219,6 +1312,8 @@ print(json.dumps(sorted(line.strip() for line in sys.stdin if line.strip())))
     install_global_rules
     log "Writing global instructions…"
     install_global_instructions
+    log "Wiring Claude global rules…"
+    install_global_claude_rules
   fi
 
   if [ "$DO_HOOKS" = "1" ]; then
@@ -1259,10 +1354,30 @@ for link in links:
         bak = path + '.smooth-devex-uninstall-' + stamp
         shutil.copyfile(path, bak)
         print('snapshotted pre-uninstall', bak)
-    if typ in ('skill-link', 'opencode-command'):
+    if typ in ('skill-link', 'opencode-command', 'opencode-commands-link', 'opencode-skill', 'claude-skill', 'claude-rule'):
         if os.path.islink(path) and os.readlink(path) == detail:
             os.unlink(path)
             print('removed link', path)
+    elif typ == 'opencode-config':
+        if detail and os.path.exists(detail):
+            with open(detail, 'rb') as f:
+                content = f.read()
+            with open(path, 'wb') as f:
+                f.write(content)
+            os.remove(detail)
+            print('restored opencode config backup', path)
+        elif os.path.exists(path):
+            # No snapshot: drop the store-rule instruction globs we added.
+            with open(path, encoding='utf-8') as f:
+                data3 = json.load(f)
+            inst = data3.get('instructions', [])
+            data3['instructions'] = [g for g in inst if not g.startswith(glb_root + '/rules/')]
+            if not data3['instructions']:
+                data3.pop('instructions', None)
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(data3, f, indent=2)
+                f.write('\n')
+            print('removed opencode instructions', path)
     elif typ == 'profile-edit':
         if detail and os.path.exists(detail):
             # Restore the pre-append profile snapshot, then retire it so a later

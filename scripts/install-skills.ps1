@@ -694,6 +694,7 @@ $script:GlobalMarker = 'installer-owned-global-instructions'
 $script:GlobalCodexMarkerLine = "# $($script:GlobalMarker) (added by install-skills)"
 $script:CodexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
 $script:OpenCodeConfig = if ($env:OPENCODE_CONFIG) { $env:OPENCODE_CONFIG } else { Join-Path $HOME '.config/opencode' }
+$script:ClaudeHome = if ($env:CLAUDE_HOME) { $env:CLAUDE_HOME } else { Join-Path $HOME '.claude' }
 $script:Links = [System.Collections.Generic.List[string]]::new()
 
 function Add-GlobalLink {
@@ -752,14 +753,14 @@ function Read-GlobalManifest {
     }
 }
 
-function Sync-GlobalSkill {
-    # Link the store's copy of NAME into Codex's skills dir. An existing correct
-    # link is kept; a real file/dir or a foreign link at the path is reported and
-    # left untouched. Codex's own .system/ is never iterated, so it is never
-    # touched. On Windows without symlink privilege, falls back to a junction
-    # (degraded: git records the junction target's contents as real files).
-    param([string] $Name)
-    $link = Join-Path (Join-Path $script:CodexHome 'skills') $Name
+function Link-SkillInto {
+    # Link the store's copy of NAME into DestDir/NAME (Codex and Claude both call
+    # this). An existing correct link is kept; a real file/dir or a foreign link at
+    # the path is reported and left untouched. On Windows without symlink
+    # privilege, falls back to a junction (degraded: git records the junction
+    # target's contents as real files).
+    param([string] $DestDir, [string] $Name, [string] $LinkType)
+    $link = Join-Path $DestDir $Name
     $target = Join-Path (Join-Path $script:GlbRoot 'skills') $Name
     if (-not (Test-Path -LiteralPath $target)) {
         Write-Info "WARNING: $target missing - no global skill symlink for $Name"
@@ -773,18 +774,63 @@ function Sync-GlobalSkill {
     if ($linkTaken) {
         $item = Get-Item -LiteralPath $link -Force
         if ($item.LinkType) {
-            if ($item.Target -eq $target) { Write-Info "Global skill $Name already linked into Codex"; return }
+            if ($item.Target -eq $target) { Write-Info "Global skill $Name already linked into $(Split-Path -Leaf $DestDir)"; return }
             Write-Info "WARNING: $link is a link to somewhere else - left untouched"
             return
         }
         Write-Info "WARNING: $link already exists - left untouched"
         return
     }
-    New-Item -ItemType Directory -Path (Join-Path $script:CodexHome 'skills') -Force | Out-Null
+    New-Item -ItemType Directory -Path $DestDir -Force | Out-Null
     try { New-Item -ItemType SymbolicLink -Path $link -Target $target | Out-Null }
     catch { New-Item -ItemType Junction -Path $link -Target $target | Out-Null }
-    Add-GlobalLink 'skill-link' $link $target
+    Add-GlobalLink $LinkType $link $target
     Write-Info "Linked global skill $Name -> $target"
+}
+
+function Sync-GlobalSkill {
+    param([string] $Name)
+    Link-SkillInto -DestDir (Join-Path $script:CodexHome 'skills') -Name $Name -LinkType 'skill-link'
+}
+
+function Sync-GlobalClaude {
+    param([string] $Name)
+    Link-SkillInto -DestDir (Join-Path $script:ClaudeHome 'skills') -Name $Name -LinkType 'claude-skill'
+}
+
+function Install-GlobalClaude {
+    # Symlink each installed owned skill into Claude Code's skills dir for global
+    # availability, when Claude's config dir exists. Wired in addition to
+    # Codex/OpenCode, never instead of.
+    param([object] $Manifest)
+    if (-not (Test-Path -LiteralPath $script:ClaudeHome -PathType Container)) {
+        Write-Info "Claude Code config not found ($($script:ClaudeHome)) - skipping global Claude wiring"
+        return
+    }
+    if (-not $Manifest -or -not $Manifest.skills) { return }
+    foreach ($skill in $Manifest.skills) {
+        if ($skill.installed -and (Test-OwnedSkill -Name $skill.name)) {
+            Sync-GlobalClaude -Name $skill.name
+        }
+    }
+}
+
+function Install-GlobalClaudeRules {
+    # Symlink the owned rules into Claude Code's global rules dir
+    # (~/.claude/rules) so Claude Code loads them across sessions.
+    if (-not (Test-Path -LiteralPath $script:ClaudeHome -PathType Container)) {
+        Write-Info "Claude Code config not found ($($script:ClaudeHome)) - skipping global Claude rules"
+        return
+    }
+    foreach ($rel in $script:OwnedRules) {
+        $target = Join-Path (Join-Path $script:GlbRoot 'rules') $rel
+        if (Test-Path -LiteralPath $target -PathType Leaf) {
+            $link = Join-Path (Join-Path $script:ClaudeHome 'rules') $rel
+            Link-StoreFile -DestLink $link -Target $target -LinkType 'claude-rule'
+        } else {
+            Write-Info "WARNING: rule $rel not in store - not linked into Claude"
+        }
+    }
 }
 
 function Link-StoreFile {
@@ -814,26 +860,53 @@ function Link-StoreFile {
 }
 
 function Install-GlobalOpencode {
-    # Register each installed owned skill as an OpenCode command. OpenCode already
-    # discovers the owned skills through the Claude/agents interface, so we do NOT
-    # copy them into ~/.config/opencode/skills/; instead we reference each skill's
-    # SKILL.md from the commands folder (filename = command name). Skipped when
-    # OpenCode's config dir is absent.
+    # Symlink each installed owned skill into OpenCode's own skills dir so OpenCode
+    # loads the full skill (SKILL.md + scripts) via the native skill tool. Skipped
+    # when OpenCode's config dir is absent.
     param([object] $Manifest)
     if (-not (Test-Path -LiteralPath $script:OpenCodeConfig -PathType Container)) {
         Write-Info "OpenCode config not found ($($script:OpenCodeConfig)) - skipping global OpenCode wiring"
         return
     }
-    if (-not $Manifest -or -not $Manifest.skills) { return }
-    foreach ($skill in $Manifest.skills) {
-        if (-not $skill.installed -or -not (Test-OwnedSkill -Name $skill.name)) { continue }
-        $target = Join-Path (Join-Path (Join-Path $script:GlbRoot 'skills') $skill.name) 'SKILL.md'
-        if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
-            Write-Info "WARNING: $target missing - no OpenCode command for $($skill.name)"
-            continue
+    if ($Manifest -and $Manifest.skills) {
+        foreach ($skill in $Manifest.skills) {
+            if ($skill.installed -and (Test-OwnedSkill -Name $skill.name)) {
+                Link-SkillInto -DestDir (Join-Path $script:OpenCodeConfig 'skills') -Name $skill.name -LinkType 'opencode-skill'
+            }
         }
-        $link = Join-Path (Join-Path $script:OpenCodeConfig 'commands') "$($skill.name).md"
-        Link-StoreFile -DestLink $link -Target $target -LinkType 'opencode-command'
+    }
+}
+
+function Install-GlobalOpencodeConfig {
+    # Add an instructions glob to the operator's opencode.json so OpenCode loads the
+    # global rules from the store. Snapshots the file, merges + dedupes, records the
+    # edit for --uninstall. instructions must stay a JSON array (a List<string>, never
+    # a bare string), and globs use forward slashes on every platform.
+    $config = Join-Path $script:OpenCodeConfig 'opencode.json'
+    if (-not (Test-Path -LiteralPath $config -PathType Leaf)) {
+        Write-Info "opencode.json not found ($config) - skipping global rules instructions"
+        return
+    }
+    $backup = Backup-Inplace -Path $config
+    if ($backup) { Write-Info "Backed up $config -> $backup" }
+    $data = Get-Content -LiteralPath $config -Raw | ConvertFrom-Json -AsHashtable
+    $inst = [System.Collections.Generic.List[string]]::new()
+    if ($data.ContainsKey('instructions')) {
+        foreach ($g in @($data['instructions'])) { if ($g) { $inst.Add([string]$g) } }
+    }
+    $rules = (Join-Path $script:GlbRoot 'rules') -replace '\\', '/'
+    $add = @(($rules + '/*.instructions.md'), ($rules + '/**/*.instructions.md'))
+    $changed = $false
+    foreach ($g in $add) {
+        if ($g -notin $inst) { $inst.Add($g); $changed = $true }
+    }
+    if ($changed) {
+        $data['instructions'] = @($inst)
+        [System.IO.File]::WriteAllText($config, (($data | ConvertTo-Json -Depth 10) + "`n"), [System.Text.UTF8Encoding]::new($false))
+        Add-GlobalLink 'opencode-config' $config $backup
+        Write-Info "Added global rules instructions to $config"
+    } else {
+        Write-Info "OpenCode instructions already present in $config"
     }
 }
 
@@ -1119,6 +1192,9 @@ function Invoke-GlobalInstall {
         Install-GlobalSkills -Manifest ($newJson | ConvertFrom-Json)
         Write-Info 'Registering global OpenCode commands...'
         Install-GlobalOpencode -Manifest ($newJson | ConvertFrom-Json)
+        Install-GlobalOpencodeConfig
+        Write-Info 'Registering global Claude skills...'
+        Install-GlobalClaude -Manifest ($newJson | ConvertFrom-Json)
     }
 
     if ($script:DoRules) {
@@ -1126,6 +1202,8 @@ function Invoke-GlobalInstall {
         Install-GlobalRules
         Write-Info 'Writing global instructions...'
         Install-GlobalInstructions
+        Write-Info 'Wiring Claude global rules...'
+        Install-GlobalClaudeRules
     }
 
     if ($script:DoHooks) {
@@ -1163,10 +1241,24 @@ function Uninstall-Global {
             Copy-Item -LiteralPath $path -Destination $bak -Force
             Write-Info "Snapshotted pre-uninstall $bak"
         }
-        if ($typ -eq 'skill-link' -or $typ -eq 'opencode-command') {
+        if ($typ -eq 'skill-link' -or $typ -eq 'opencode-command' -or $typ -eq 'opencode-commands-link' -or $typ -eq 'opencode-skill' -or $typ -eq 'claude-skill' -or $typ -eq 'claude-rule') {
             $item = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
             if ($null -ne $item -and $item.LinkType -and $item.Target -eq $detail) {
                 Remove-Item -LiteralPath $path -Force
+            }
+        } elseif ($typ -eq 'opencode-config') {
+            if ($detail -and (Test-Path -LiteralPath $detail -PathType Leaf)) {
+                Copy-Item -LiteralPath $detail -Destination $path -Force
+                Remove-Item -LiteralPath $detail -Force
+            } elseif (Test-Path -LiteralPath $path -PathType Leaf) {
+                $data3 = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json -AsHashtable
+                if ($data3.ContainsKey('instructions')) {
+                    $glbRules = (Join-Path $script:GlbRoot 'rules') -replace '\\', '/'
+                    $rawInstr = @($data3['instructions'])
+                    $kept = @($rawInstr | Where-Object { $_ -and -not ([string]$_).StartsWith($glbRules) })
+                    if ($kept.Count -eq 0) { $data3.Remove('instructions') } else { $data3['instructions'] = $kept }
+                    [System.IO.File]::WriteAllText($path, (($data3 | ConvertTo-Json -Depth 10) + "`n"), [System.Text.UTF8Encoding]::new($false))
+                }
             }
         } elseif ($typ -eq 'profile-edit') {
             if ($detail -and (Test-Path -LiteralPath $detail -PathType Leaf)) {

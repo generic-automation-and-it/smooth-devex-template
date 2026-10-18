@@ -23,7 +23,7 @@ curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-de
 curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -r -s -h -d
 # Add -g to install the owned set globally for Codex (store at ~/.smooth-ai-devex, wired into ~/.codex):
 curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -r -s -h -d -g
-# Remove that global install (Codex + OpenCode commands; Claude not wired yet):
+# Remove that global install (Codex + Claude skills, OpenCode commands):
 curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -g --uninstall
 ```
 
@@ -44,7 +44,7 @@ $script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-a
 | `-s` | Install the owned skills (`.agents/skills/` flat folders) |
 | `-h` | Install the owned hooks (`.agents/hooks/`) |
 | `-d` | Enable AI decision validation for the ralph loop — writes `SMOOTH_DEVEX_DECISIONS_*` env vars and sets `decisions_enabled: true` in `installation.json` |
-| `-g` | Install the owned set **globally** — `~/.smooth-ai-devex/{skills,rules,hooks}` store, wired into Codex's `~/.codex/` (skills symlinks, `AGENTS.md` import, `hooks.json` merge) and, when OpenCode is installed, into OpenCode's `commands/` folder as skill references |
+| `-g` | Install the owned set **globally** — `~/.smooth-ai-devex/{skills,rules,hooks}` store, wired into Codex's `~/.codex/` (skills symlinks, `AGENTS.md` import, `hooks.json` merge), Claude's `~/.claude/skills` + `~/.claude/rules` (when Claude is installed), and OpenCode's `skills/` dir + `opencode.json` `instructions` (when OpenCode is installed) |
 | `--uninstall` | Remove the global install (`-g --uninstall`) — removes only manifest-recorded links/edits, restores `smooth-devex-<datetime>` snapshots, leaves `.system/`, `gk` hooks, and the RTK line intact |
 | _(none)_ | All of the above (rules + skills + hooks) — the default; decisions are then prompted for, or disabled with no terminal |
 

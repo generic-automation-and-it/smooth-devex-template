@@ -892,29 +892,44 @@ else
   no "global skill copy strips AGENTS.md, keeps SKILL.md and payload" "$(find "$(glb_root "$ghome")/skills" -name 'AGENTS.md' 2>/dev/null)"
 fi
 
-# 8k. OpenCode wiring: skills are referenced from the commands folder
-# (commands/<name>.md -> SKILL.md), NOT copied into ~/.config/opencode/skills/
-# (OpenCode already sees them via the Claude/agents interface). Removed on
-# uninstall; skipped when OpenCode's config dir is absent.
+# 8k. OpenCode wiring: owned skills are symlinked into OpenCode's own skills dir
+# (~/.config/opencode/skills/<name>), so OpenCode loads the full skill (SKILL.md +
+# scripts) via the native skill tool. Removed on uninstall.
 ghome="$(make_ghome "opencode")"
 mkdir -p "$ghome/.config/opencode"
 OPENCODE_CONFIG="$ghome/.config/opencode" run_sh_global "$ghome" >/dev/null 2>&1
 gok=1
 for s in ai-ralph-loop ai-terse create-worktask; do
-  [ -L "$ghome/.config/opencode/commands/$s.md" ] || gok=0
-  [ "$(readlink "$ghome/.config/opencode/commands/$s.md")" = "$(glb_root "$ghome")/skills/$s/SKILL.md" ] || gok=0
+  [ -L "$ghome/.config/opencode/skills/$s" ] || gok=0
+  [ "$(readlink "$ghome/.config/opencode/skills/$s")" = "$(glb_root "$ghome")/skills/$s" ] || gok=0
 done
-[ ! -d "$ghome/.config/opencode/skills" ] || gok=0
 if [ "$gok" = "1" ]; then
-  ok "global OpenCode wiring: skills referenced as commands, not copied to skills/"
+  ok "global OpenCode wiring: skills symlinked into OpenCode's skills dir"
 else
-  no "global OpenCode wiring: skills referenced as commands, not copied to skills/" "$(find "$ghome/.config/opencode" -maxdepth 2 2>/dev/null | sed "s|$ghome|HOME|")"
+  no "global OpenCode wiring: skills symlinked into OpenCode's skills dir" "$(find "$ghome/.config/opencode" -maxdepth 2 2>/dev/null | sed "s|$ghome|HOME|")"
 fi
 OPENCODE_CONFIG="$ghome/.config/opencode" run_sh_global "$ghome" --uninstall >/dev/null 2>&1
-if [ "$(ls "$ghome/.config/opencode/commands/"*.md 2>/dev/null | wc -l | tr -d ' ')" = "0" ]; then
-  ok "global OpenCode commands removed on uninstall"
+if [ "$(ls "$ghome/.config/opencode/skills" 2>/dev/null | wc -l | tr -d ' ')" = "0" ]; then
+  ok "global OpenCode skills removed on uninstall"
 else
-  no "global OpenCode commands removed on uninstall" "$(ls "$ghome/.config/opencode/commands/" 2>/dev/null)"
+  no "global OpenCode skills removed on uninstall" "$(ls "$ghome/.config/opencode/skills" 2>/dev/null)"
+fi
+
+# 8q. OpenCode opencode.json gets the store-rule instructions glob (backup first)
+# so OpenCode loads the global rules; restored on uninstall.
+ghome="$(make_ghome "opencode-instr")"
+mkdir -p "$ghome/.config/opencode"
+printf '{"$schema":"https://opencode.ai/config.json","provider":{"name":"x"}}\n' >"$ghome/.config/opencode/opencode.json"
+OPENCODE_CONFIG="$ghome/.config/opencode" run_sh_global "$ghome" >/dev/null 2>&1
+gok=1
+python3 -c "import json,sys; d=json.load(open('$ghome/.config/opencode/opencode.json')); i=d.get('instructions',[]); sys.exit(0 if any('$(glb_root "$ghome")/rules/*.instructions.md' in g for g in i) and any('$(glb_root "$ghome")/rules/**/*.instructions.md' in g for g in i) else 1)" || gok=0
+ls "$ghome"/.config/opencode/opencode.json.smooth-devex-* >/dev/null 2>&1 || gok=0
+OPENCODE_CONFIG="$ghome/.config/opencode" run_sh_global "$ghome" --uninstall >/dev/null 2>&1
+python3 -c "import json,sys; d=json.load(open('$ghome/.config/opencode/opencode.json')); sys.exit(0 if not any('$(glb_root "$ghome")/rules/' in g for g in d.get('instructions',[])) else 1)" || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global OpenCode opencode.json: store-rule instructions added with a backup, restored on uninstall"
+else
+  no "global OpenCode opencode.json: store-rule instructions added with a backup, restored on uninstall" "$(cat "$ghome/.config/opencode/opencode.json" 2>/dev/null)"
 fi
 
 # 8l. -g -d tracks the shell-profile edit and restores it on uninstall (backup first).
@@ -1128,6 +1143,43 @@ if [ "$gok" = "1" ]; then
   ok "global uninstall snapshots current state before restore (post-install edit preserved)"
 else
   no "global uninstall snapshots current state before restore (post-install edit preserved)" "$(ls "$ghome"/.codex/*.smooth-devex-uninstall-* 2>/dev/null)"
+fi
+
+# 8p. Claude wiring: owned skills are symlinked into ~/.claude/skills when
+# Claude's config dir exists; removed on uninstall; skipped when absent.
+ghome="$(make_ghome "claude")"
+mkdir -p "$ghome/.claude"
+run_sh_global "$ghome" >/dev/null 2>&1
+gok=1
+for s in ai-ralph-loop ai-terse create-worktask; do
+  [ -L "$ghome/.claude/skills/$s" ] || gok=0
+  [ "$(readlink "$ghome/.claude/skills/$s")" = "$(glb_root "$ghome")/skills/$s" ] || gok=0
+done
+run_sh_global "$ghome" --uninstall >/dev/null 2>&1
+[ "$(ls "$ghome/.claude/skills" 2>/dev/null | wc -l | tr -d ' ')" = "0" ] || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global Claude wiring: skills symlinked into ~/.claude/skills, removed on uninstall"
+else
+  no "global Claude wiring: skills symlinked into ~/.claude/skills, removed on uninstall" "$(ls "$ghome/.claude/skills" 2>/dev/null)"
+fi
+
+# 8r. Claude global rules: owned rules are symlinked into ~/.claude/rules when
+# Claude is installed; removed on uninstall.
+ghome="$(make_ghome "claude-rules")"
+mkdir -p "$ghome/.claude"
+run_sh_global "$ghome" >/dev/null 2>&1
+gok=1
+for r in code-review-standards.instructions.md git/git-policy.instructions.md \
+  meta/knowledge-conventional-contexts-quality.instructions.md meta/rules.instructions.md; do
+  [ -L "$ghome/.claude/rules/$r" ] || gok=0
+  [ "$(readlink "$ghome/.claude/rules/$r")" = "$(glb_root "$ghome")/rules/$r" ] || gok=0
+done
+run_sh_global "$ghome" --uninstall >/dev/null 2>&1
+[ "$(find "$ghome/.claude/rules" -type l 2>/dev/null | wc -l | tr -d ' ')" = "0" ] || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global Claude rules: owned rules symlinked into ~/.claude/rules, removed on uninstall"
+else
+  no "global Claude rules: owned rules symlinked into ~/.claude/rules, removed on uninstall" "$(find "$ghome/.claude/rules" -type l 2>/dev/null)"
 fi
 
 # 8i. A global install that created ~/.codex/AGENTS.md from nothing removes it on
