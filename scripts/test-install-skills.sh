@@ -1108,6 +1108,28 @@ else
   no "global installed:false skill is preserved (not refreshed) but stays discoverable" "$(cat "$(glb_root "$ghome")/skills/ai-terse/SKILL.md" 2>/dev/null)"
 fi
 
+# 8o. Uninstall snapshots the current (post-install) state of content files before
+# restoring/removing them, so an operator edit made after install is not lost.
+ghome="$(make_ghome "uninstall-preserve")"
+printf '@%s/.codex/RTK.md\n\noperator AGENTS\n' "$ghome" >"$ghome/.codex/AGENTS.md"
+printf '# RTK\n' >"$ghome/.codex/RTK.md"
+printf '{"hooks":{"UserPromptSubmit":[{"hooks":[{"command":"gk ai hook run --host codex","type":"command"}],"matcher":""}]}}\n' >"$ghome/.codex/hooks.json"
+run_sh_global "$ghome" >/dev/null 2>&1
+# Operator edits AGENTS.md after install, before uninstall.
+printf '@%s/.codex/RTK.md\n\noperator AGENTS\nPOST-INSTALL EDIT\n' "$ghome" >"$ghome/.codex/AGENTS.md"
+run_sh_global "$ghome" --uninstall >/dev/null 2>&1
+gok=1
+unbak="$(ls "$ghome"/.codex/AGENTS.md.smooth-devex-uninstall-* 2>/dev/null | head -n 1)"
+[ -n "$unbak" ] || gok=0
+grep -q 'POST-INSTALL EDIT' "$unbak" 2>/dev/null || gok=0
+# The restore still returned the operator's pre-install content to the live file.
+grep -q 'POST-INSTALL EDIT' "$ghome/.codex/AGENTS.md" && gok=0
+if [ "$gok" = "1" ]; then
+  ok "global uninstall snapshots current state before restore (post-install edit preserved)"
+else
+  no "global uninstall snapshots current state before restore (post-install edit preserved)" "$(ls "$ghome"/.codex/*.smooth-devex-uninstall-* 2>/dev/null)"
+fi
+
 # 8i. A global install that created ~/.codex/AGENTS.md from nothing removes it on
 # uninstall — no RTK-only leftover — while .system/ and the store stay.
 ghome="$(make_ghome "uninstall-fresh")"

@@ -714,7 +714,10 @@ function Backup-Inplace {
     if (-not (Test-Path -LiteralPath $Path)) { return '' }
     $dir = Split-Path -Parent $Path
     $name = [System.IO.Path]::GetFileName($Path)
-    $prior = Get-ChildItem -LiteralPath $dir -Filter "$name.smooth-devex-*" -ErrorAction SilentlyContinue
+    # Only numeric install-time snapshots count as "already backed up"; an
+    # uninstall-time snapshot (smooth-devex-uninstall-*) must not suppress a fresh
+    # install backup on the next run.
+    $prior = Get-ChildItem -LiteralPath $dir -Filter "$name.smooth-devex-[0-9]*" -ErrorAction SilentlyContinue
     if ($prior) { return '' }
     $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss')
     $backup = "$Path.smooth-devex-$stamp"
@@ -1149,6 +1152,17 @@ function Uninstall-Global {
         # agents-import records carry no detail; a StrictMode dot-access on a
         # missing property throws, so read it through the property collection.
         $detail = if ($link.PSObject.Properties['detail']) { $link.detail } else { '' }
+        # Before uninstall restores or removes a content file, snapshot its current
+        # (post-install, possibly operator-edited) state so the removal is
+        # reversible and post-install edits are not lost. Symlinks are excluded:
+        # their content lives in the preserved store.
+        if (($typ -eq 'agents-import' -or $typ -eq 'hooks-merge' -or $typ -eq 'profile-edit') -and
+            (Test-Path -LiteralPath $path -PathType Leaf)) {
+            $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss')
+            $bak = "$path.smooth-devex-uninstall-$stamp"
+            Copy-Item -LiteralPath $path -Destination $bak -Force
+            Write-Info "Snapshotted pre-uninstall $bak"
+        }
         if ($typ -eq 'skill-link' -or $typ -eq 'opencode-command') {
             $item = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
             if ($null -ne $item -and $item.LinkType -and $item.Target -eq $detail) {

@@ -777,7 +777,10 @@ record_link() {
 backup_inplace() {
   local file="$1" b
   [ -e "$file" ] || return 0
-  for b in "$file".smooth-devex-*; do
+  # Only the numeric install-time snapshots count as "already backed up"; an
+  # uninstall-time snapshot (smooth-devex-uninstall-*) must not suppress a fresh
+  # install backup on the next run.
+  for b in "$file".smooth-devex-[0-9]*; do
     [ -e "$b" ] && return 0
   done
   local stamp
@@ -1063,7 +1066,7 @@ new = [{'command': c, 'type': 'command'} for c in cmds if c not in existing]
 # --uninstall restore our own change). A file we created from nothing has no
 # pre-install state to capture and is left for surgical removal at uninstall.
 backup_path = ''
-if new and os.path.exists(path) and not glob.glob(path + '.smooth-devex-*'):
+if new and os.path.exists(path) and not glob.glob(path + '.smooth-devex-[0-9]*'):
     stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')
     backup_path = path + '.smooth-devex-' + stamp
     shutil.copyfile(path, backup_path)
@@ -1238,7 +1241,7 @@ print(json.dumps(sorted(line.strip() for line in sys.stdin if line.strip())))
 unglobalize() {
   [ -f "$GLOBAL_MANIFEST" ] || { log "No global install manifest at $GLOBAL_MANIFEST — nothing to uninstall"; return 0; }
   python3 - "$GLB_ROOT" "$GLOBAL_MANIFEST" <<'PYEOF'
-import json, sys, os
+import json, sys, os, shutil, datetime
 glb_root, manifest_path = sys.argv[1:3]
 data = json.load(open(manifest_path, encoding='utf-8'))
 links = data.get('links', [])
@@ -1246,6 +1249,16 @@ for link in links:
     typ = link.get('type')
     path = link.get('path', '')
     detail = link.get('detail', '')
+    # Before uninstall restores or removes a content file, snapshot its *current*
+    # state (post-install, possibly operator-edited) as a smooth-devex-uninstall-
+    # <stamp> backup so the removal is reversible and post-install edits are not
+    # lost. Symlinks (skill-link / opencode-command) are excluded: their content
+    # lives in the preserved store, so removing the link loses nothing.
+    if typ in ('agents-import', 'hooks-merge', 'profile-edit') and os.path.exists(path) and os.path.isfile(path):
+        stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%d-%H%M%S')
+        bak = path + '.smooth-devex-uninstall-' + stamp
+        shutil.copyfile(path, bak)
+        print('snapshotted pre-uninstall', bak)
     if typ in ('skill-link', 'opencode-command'):
         if os.path.islink(path) and os.readlink(path) == detail:
             os.unlink(path)

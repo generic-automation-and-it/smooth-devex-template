@@ -36,7 +36,7 @@ documentation.
 | --- | --- |
 | `install-skills.sh` | bash port. macOS / Linux. Needs `bash`, `git`, `python3`. |
 | `install-skills.ps1` | PowerShell 7 port. Windows or anywhere `pwsh` runs. Needs `pwsh`, `git`. |
-| `test-install-skills.sh` | Harness. 66 cases, bash port only (the ps1 port is read, not run). |
+| `test-install-skills.sh` | Harness. 67 cases, bash port only (the ps1 port is read, not run). |
 
 The installer pulls a flat list of folders from `.agents/skills/` in this repository into a consumer
 repository, controlled by a per-skill `installed` flag in
@@ -118,3 +118,4 @@ Two known gaps:
 | 2026-10-18 | `-g` wires OpenCode: owned skills referenced as `~/.config/opencode/commands/<name>.md` (command, not skills-folder copy); `-g -d` profile edit tracked and restored on uninstall; harness cases 8k/8l | — |
 | 2026-10-18 | Harness global cases pin `SMOOTH_DEVEX_HOME`/`OPENCODE_CONFIG` and clear inherited `SKILLS_ROOT` (operator env vars cannot leak into an isolated `-g` run) | — |
 | 2026-10-18 | `-g` review fixes: uninstall restores from a snapshot and **retires** it (so install→uninstall→reinstall snapshots fresh, never data-loss); global store copy/symlink honor `installed:false` (preserve edits, keep discoverable); harness cases 8m/8n | — |
+| 2026-10-18 | `-g --uninstall` snapshots each content file's current (post-install) state as `*.smooth-devex-uninstall-<stamp>` before restoring/removing it, so operator edits made after install are not lost; symlinks are safe (target content stays in the store); harness case 8o | — |
