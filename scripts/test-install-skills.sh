@@ -613,7 +613,9 @@ fi
 # Echoes the exit status instead of failing the harness, so a case can assert on it.
 run_in_dir_searched() {
   local dir="$1"
-  ( cd "$dir" && SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" bash "$installer_sh" ) >/dev/null 2>&1
+  # SKILLS_ROOT="" so a leaked operator env var cannot force a fixed root and
+  # silently short-circuit the agent-root search this helper exists to test.
+  ( cd "$dir" && SKILLS_ROOT="" SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" bash "$installer_sh" ) >/dev/null 2>&1
 }
 
 # A tree with .claude/skills and .codex/skills but no .agents: the search must land on
@@ -815,7 +817,12 @@ fi
 # run_sh_global GHOME ARGS... — run the installer in global mode (always -g).
 run_sh_global() {
   local ghome="$1"; shift
-  HOME="$ghome" CODEX_HOME="$ghome/.codex" SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
+  # Pin the store/config overrides to the temp home and clear inherited SKILLS_ROOT,
+  # so an operator's SMOOTH_DEVEX_HOME / OPENCODE_CONFIG / SKILLS_ROOT env vars cannot
+  # leak into an isolated run (and a leaked SKILLS_ROOT would trip -g's refusal).
+  HOME="$ghome" CODEX_HOME="$ghome/.codex" SMOOTH_DEVEX_HOME="$ghome/.smooth-ai-devex" \
+    OPENCODE_CONFIG="$ghome/.config/opencode" SKILLS_ROOT="" \
+    SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
     SKILLS_TEST_OWNED_EXTRA="alpha beta gamma delta epsilon" \
     bash "$installer_sh" -g "$@" >"$scratch/out" 2>"$scratch/err"
 }
@@ -914,12 +921,14 @@ fi
 ghome="$(make_ghome "profiledit")"
 mkdir -p "$ghome/.config/opencode"
 printf '# operator shell\nexport MY_CHECK=1\n' >"$ghome/.zshrc"
-HOME="$ghome" CODEX_HOME="$ghome/.codex" OPENCODE_CONFIG="$ghome/.config/opencode" SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
+HOME="$ghome" CODEX_HOME="$ghome/.codex" SMOOTH_DEVEX_HOME="$ghome/.smooth-ai-devex" \
+  OPENCODE_CONFIG="$ghome/.config/opencode" SKILLS_ROOT="" SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
   SKILLS_TEST_OWNED_EXTRA="alpha beta gamma delta epsilon" bash "$installer_sh" -g -d >/dev/null 2>&1
 gok=1
 grep -q 'SMOOTH_DEVEX_DECISIONS' "$ghome/.zshrc" || gok=0
 ls "$ghome"/.zshrc.smooth-devex-* >/dev/null 2>&1 || gok=0
-HOME="$ghome" CODEX_HOME="$ghome/.codex" OPENCODE_CONFIG="$ghome/.config/opencode" SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
+HOME="$ghome" CODEX_HOME="$ghome/.codex" SMOOTH_DEVEX_HOME="$ghome/.smooth-ai-devex" \
+  OPENCODE_CONFIG="$ghome/.config/opencode" SKILLS_ROOT="" SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
   bash "$installer_sh" -g --uninstall >/dev/null 2>&1
 grep -q 'SMOOTH_DEVEX_DECISIONS' "$ghome/.zshrc" && gok=0
 grep -q 'MY_CHECK=1' "$ghome/.zshrc" || gok=0

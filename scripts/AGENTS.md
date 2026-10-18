@@ -116,3 +116,4 @@ Two known gaps:
 | 2026-10-18 | Review fixes: `-g --uninstall` removes an installer-created `AGENTS.md` from nothing (exact inverse, no leftover), `symlink_global_skill` guards a failed `ln -s` instead of aborting the run, `-g` usage string reworded; harness adds case 8i (60 total) | — |
 | 2026-10-18 | Skill `AGENTS.md` files are no longer copied over (owner local-dev context; stripped from per-repo and `-g` skill copies); harness case 8j | — |
 | 2026-10-18 | `-g` wires OpenCode: owned skills referenced as `~/.config/opencode/commands/<name>.md` (command, not skills-folder copy); `-g -d` profile edit tracked and restored on uninstall; harness cases 8k/8l | — |
+| 2026-10-18 | Harness global cases pin `SMOOTH_DEVEX_HOME`/`OPENCODE_CONFIG` and clear inherited `SKILLS_ROOT` (operator env vars cannot leak into an isolated `-g` run) | — |
