@@ -294,7 +294,7 @@ and payload purposes.
 bash scripts/test-install-skills.sh
 ```
 
-59 cases against the bash port, no network and no container engine needed: the clone source is the
+60 cases against the bash port, no network and no container engine needed: the clone source is the
 checkout itself (`SKILLS_REPO` pointed at the repo, `SKILLS_BRANCH` at the current branch), so a harness
 that reached GitHub would be red for reasons unrelated to the code. Runs in the PR gate. The shared
 payload, canonical links, stale-entry sweep, legacy-manifest ignore, and real-dir-at-link-path cases

@@ -1089,23 +1089,10 @@ function Uninstall-Global {
                 # content, never our own append.
                 Copy-Item -LiteralPath $detail -Destination $path -Force
             } elseif (Test-Path -LiteralPath $path -PathType Leaf) {
-                $lines = Get-Content -LiteralPath $path
-                $output = New-Object System.Collections.Generic.List[string]
-                for ($i = 0; $i -lt $lines.Count; $i++) {
-                    if ($lines[$i] -match [regex]::Escape($script:GlobalCodexMarkerLine)) {
-                        if ($output.Count -gt 0 -and $output[$output.Count - 1].Trim() -eq '') { $output.RemoveAt($output.Count - 1) }
-                        $i++
-                        while ($i -lt $lines.Count -and $lines[$i].Trim() -eq '') { $i++ }
-                        if ($i -lt $lines.Count -and ($lines[$i].Trim() -eq ('@' + ((Join-Path $script:GlbRoot 'AGENTS.md') -replace '\\', '/')))) {
-                            $i++
-                            if ($i -lt $lines.Count -and $lines[$i].Trim() -eq '') { $i++ }
-                        }
-                        $i--
-                        continue
-                    }
-                    $output.Add($lines[$i])
-                }
-                [System.IO.File]::WriteAllLines($path, $output, [System.Text.UTF8Encoding]::new($false))
+                # No snapshot means the installer created the file from nothing;
+                # removing it is the exact inverse of the install (a splice would
+                # leave an empty AGENTS.md behind with our RTK header).
+                Remove-Item -LiteralPath $path -Force
             }
         } elseif ($typ -eq 'hooks-merge') {
             if ($detail -and (Test-Path -LiteralPath $detail -PathType Leaf)) {

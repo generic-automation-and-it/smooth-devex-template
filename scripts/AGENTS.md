@@ -36,7 +36,7 @@ documentation.
 | --- | --- |
 | `install-skills.sh` | bash port. macOS / Linux. Needs `bash`, `git`, `python3`. |
 | `install-skills.ps1` | PowerShell 7 port. Windows or anywhere `pwsh` runs. Needs `pwsh`, `git`. |
-| `test-install-skills.sh` | Harness. 59 cases, bash port only (the ps1 port is read, not run). |
+| `test-install-skills.sh` | Harness. 60 cases, bash port only (the ps1 port is read, not run). |
 
 The installer pulls a flat list of folders from `.agents/skills/` in this repository into a consumer
 repository, controlled by a per-skill `installed` flag in
@@ -104,3 +104,4 @@ Two known gaps:
 | 2026-10-17 | `-d` switch: opt into decision validation without prompting (writes env vars, sets `decisions_enabled: true`) | — |
 | 2026-10-17 | Decision prompt probes `/dev/tty` by opening it (`-r` passes on CI runners with no controlling terminal, then `read` died under `set -e`); harness adds a no-controlling-terminal case | — |
 | 2026-10-17 | `-g` global mode: `~/.smooth-ai-devex/{skills,rules,hooks}` store + manifest with `links[]`; Codex wiring — skills symlinks, marker-guarded `~/.codex/AGENTS.md` import, UserPromptSubmit `hooks.json` merge; snaps pre-existing appended files as `<file>.smooth-devex-<datetime>` and restores on `-g --uninstall`; harness adds 8 `-g` cases | — |
+| 2026-10-18 | Review fixes: `-g --uninstall` removes an installer-created `AGENTS.md` from nothing (exact inverse, no leftover), `symlink_global_skill` guards a failed `ln -s` instead of aborting the run, `-g` usage string reworded; harness adds case 8i (60 total) | — |

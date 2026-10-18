@@ -259,7 +259,7 @@ parse_categories() {
       -d) DO_DECISIONS=1 ;;
       -g) DO_GLOBAL=1 ;;
       --uninstall) DO_UNINSTALL=1 ;;
-      *) die "unknown option: $arg (use -r for rules, -s for skills, -h for hooks, -d for decisions, -g for global install -g to ~/.smooth-ai-devex with --uninstall to remove it)" ;;
+      *) die "unknown option: $arg (use -r for rules, -s for skills, -h for hooks, -d for decisions, -g for a global install to ~/.smooth-ai-devex, --uninstall to remove it)" ;;
     esac
   done
   if [ "$DO_RULES$DO_SKILLS$DO_HOOKS" = "000" ] && [ "$DO_UNINSTALL" = "0" ]; then
@@ -799,7 +799,14 @@ symlink_global_skill() {
     return 0
   fi
   mkdir -p "$CODEX_HOME/skills"
-  ln -s "$target" "$link"
+  # Never abort the run for one failed link: a paused/exhausted filesystem or a
+  # link path taken between the check and the create would otherwise kill a run
+  # with the store half-populated and no manifest write. Warn and move on, like
+  # the other link helpers. The ps1 port's junction fallback covers the same case.
+  if ! ln -s "$target" "$link"; then
+    log "WARNING: could not create symlink $link -> $target — left untouched (or it appeared between the check and the create)"
+    return 0
+  fi
   record_link "skill-link" "$link" "$target"
   log "Linked global skill $name -> $target"
 }
@@ -1149,9 +1156,9 @@ print(json.dumps(sorted(line.strip() for line in sys.stdin if line.strip())))
 # operator who wants it gone removes ~/.smooth-ai-devex.
 unglobalize() {
   [ -f "$GLOBAL_MANIFEST" ] || { log "No global install manifest at $GLOBAL_MANIFEST — nothing to uninstall"; return 0; }
-  python3 - "$CODEX_HOME" "$GLB_ROOT" "$GLOBAL_MANIFEST" "$GLOBAL_CODEX_MARKER_LINE" <<'PYEOF'
+  python3 - "$GLB_ROOT" "$GLOBAL_MANIFEST" <<'PYEOF'
 import json, sys, os
-codex_home, glb_root, manifest_path, codemarker = sys.argv[1:5]
+glb_root, manifest_path = sys.argv[1:3]
 data = json.load(open(manifest_path, encoding='utf-8'))
 links = data.get('links', [])
 for link in links:
@@ -1172,27 +1179,11 @@ for link in links:
                 f.write(content)
             print('restored agents import backup', path)
         elif os.path.exists(path):
-            with open(path, encoding='utf-8') as f:
-                lines = f.readlines()
-            out = []
-            i = 0
-            while i < len(lines):
-                if codemarker in lines[i]:
-                    if out and out[-1].strip() == '':
-                        out.pop()
-                    i += 1
-                    while i < len(lines) and lines[i].strip() == '':
-                        i += 1
-                    if i < len(lines) and lines[i].rstrip() == '@%s/AGENTS.md' % glb_root:
-                        i += 1
-                        if i < len(lines) and lines[i].strip() == '':
-                            i += 1
-                    continue
-                out.append(lines[i])
-                i += 1
-            with open(path, 'w', encoding='utf-8') as f:
-                f.writelines(out)
-            print('cleaned agents import', path)
+            # No snapshot means the installer created the file from nothing, so
+            # removing it is the exact inverse of the install — not a splice that
+            # leaves behind an empty AGENTS.md with our RTK header.
+            os.remove(path)
+            print('removed agents import file created by installer', path)
     elif typ == 'hooks-merge':
         if detail and os.path.exists(detail):
             with open(detail, 'rb') as f:

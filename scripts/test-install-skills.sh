@@ -980,6 +980,22 @@ else
   no "global uninstall removes only owned links/edits, restores hooks + AGENTS snapshots byte-for-byte, keeps RTK + .system" "$(tail -n 6 "$scratch/err")"
 fi
 
+# 8i. A global install that created ~/.codex/AGENTS.md from nothing removes it on
+# uninstall — no RTK-only leftover — while .system/ and the store stay.
+ghome="$(make_ghome "uninstall-fresh")"
+run_sh_global "$ghome" >/dev/null 2>&1
+gok=1
+[ -f "$ghome/.codex/AGENTS.md" ] || gok=0
+run_sh_global "$ghome" --uninstall >/dev/null 2>&1
+[ -f "$ghome/.codex/AGENTS.md" ] && gok=0
+[ -d "$(glb_root "$ghome")/skills" ] || gok=0
+[ -f "$ghome/.codex/skills/.system/cfg.md" ] || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global uninstall removes an installer-created AGENTS.md from nothing (no leftover)"
+else
+  no "global uninstall removes an installer-created AGENTS.md from nothing (no leftover)" "$(ls -la "$ghome/.codex" 2>/dev/null)"
+fi
+
 # ---------------------------------------------------------------------------------------------
 
 echo
