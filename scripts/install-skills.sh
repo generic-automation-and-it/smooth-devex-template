@@ -632,8 +632,8 @@ rules_index_table() {
   cat <<'EOF'
 | Scope | Rules |
 | :---- | :---- |
-| `**` | `ai-workflow-rules` · `clean-code` · `code-review-standards` · `solid-principles` |
-| `**/*.cs` | `project-overview` · `backend/api-mediator-validation` · `backend/architecture-slices` · `backend/backend-logging-conventions` · `backend/collection-types` · `backend/external-api-clients` · `backend/readonly-collections` |
+| `**` | `ai-workflow-rules` · `clean-code` · `code-review-standards` |
+| `**/*.cs` | `project-overview` · `solid-principles` · `backend/api-mediator-validation` · `backend/architecture-slices` · `backend/backend-logging-conventions` · `backend/collection-types` · `backend/external-api-clients` · `backend/readonly-collections` |
 | `src/*.Infrastructure/Persistence/Migrations/**/*.cs` | `backend/migrations` |
 | `tests/*.TestFramework.Aspire/**/*.cs` | `backend/wiremock-stubbing` |
 | `**` | `git/git-policy` · `git/pr-standards` |
