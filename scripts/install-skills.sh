@@ -194,6 +194,8 @@ write_decisions_env() {
     log "Decision env vars already in $profile — skipped"
     return 0
   fi
+  # Snapshot the shell profile before appending to it — it is operator-owned.
+  backup_inplace "$profile" >/dev/null || true
   cat >> "$profile" <<'ENVEOF'
 
 # Smooth DevEx — AI Decision Validation (added by install-skills)
@@ -244,6 +246,8 @@ DO_RULES=0
 DO_SKILLS=0
 DO_HOOKS=0
 DO_DECISIONS=0
+DO_GLOBAL=0
+DO_UNINSTALL=0
 
 parse_categories() {
   local arg
@@ -253,11 +257,12 @@ parse_categories() {
       -s) DO_SKILLS=1 ;;
       -h) DO_HOOKS=1 ;;
       -d) DO_DECISIONS=1 ;;
-      -*) die "unknown option: $arg (use -r for rules, -s for skills, -h for hooks, -d for decisions)" ;;
-      *) die "unexpected argument: $arg (use -r for rules, -s for skills, -h for hooks, -d for decisions)" ;;
+      -g) DO_GLOBAL=1 ;;
+      --uninstall) DO_UNINSTALL=1 ;;
+      *) die "unknown option: $arg (use -r for rules, -s for skills, -h for hooks, -d for decisions, -g for global install -g to ~/.smooth-ai-devex with --uninstall to remove it)" ;;
     esac
   done
-  if [ "$DO_RULES$DO_SKILLS$DO_HOOKS" = "000" ]; then
+  if [ "$DO_RULES$DO_SKILLS$DO_HOOKS" = "000" ] && [ "$DO_UNINSTALL" = "0" ]; then
     DO_RULES=1
     DO_SKILLS=1
     DO_HOOKS=1
@@ -703,11 +708,544 @@ install_hooks() {
 }
 
 # ---------------------------------------------------------------------------
+# Global install (-g): a ~/.smooth-ai-devex central store wired into Codex.
+#
+# The per-repo install above scopes everything to <agent-root> in the repo you
+# are standing in. -g instead installs the same owned set once, machine-wide,
+# into a store and then wires it into Codex's own config dir (~/.codex by
+# default, or $CODEX_HOME):
+#   - skills:  copied into the store and symlinked into ~/.codex/skills/<name>,
+#              which coexists with Codex's own .system/ (never touched).
+#   - rules:   copied into the store and imported by the generated
+#              $GLB_ROOT/AGENTS.md; ~/.codex/AGENTS.md pulls that in with one
+#              @-line. No *.instructions.md is written into ~/.codex/rules/ --
+#              Codex treats that dir as a Starlark prefix_rule namespace, and
+#              the @-import chain is the supported delivery shape.
+#   - hooks:   JSON-merged into ~/.codex/hooks.json (UserPromptSubmit only) with
+#              absolute store commands; relative .agents/... commands would
+#              break outside the repo and from subdirectories.
+# A manifest at $GLB_ROOT/installation.json records every link and edit, and
+# `-g --uninstall` removes exactly that -- never .system/, the gk hooks, or the
+# operator's RTK @-import line.
+#
+# The store is HOME-scoped and per-machine, like the consumer manifest is
+# per-repo: two machines cannot confuse two installers' state. $SMOOTH_DEVEX_HOME
+# overrides the store location and $CODEX_HOME overrides Codex's config dir
+# (both are how the test harness isolates a run from a real ~/.codex).
+# ---------------------------------------------------------------------------
+
+GLB_ROOT="${SMOOTH_DEVEX_HOME:-$HOME/.smooth-ai-devex}"
+GLOBAL_MANIFEST="$GLB_ROOT/installation.json"
+GLOBAL_MARKER="installer-owned-global-instructions"
+GLOBAL_CODEX_MARKER_LINE="# $GLOBAL_MARKER (added by install-skills)"
+CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+LINKS=()
+
+# record_link TYPE PATH [DETAIL] — append a link/edit record for the uninstall
+# manifest. A tab cannot appear in a path on any supported OS, so the tab split
+# is unambiguous.
+record_link() {
+  if [ -n "${3:-}" ]; then
+    LINKS+=("$1	$2	$3")
+  else
+    LINKS+=("$1	$2")
+  fi
+}
+
+# backup_inplace FILE — snapshot an operator-owned file the installer is about to
+# append to, as <FILE>.smooth-devex-<UTC YYYYMMDD-HHMMSS>. Snaps exactly once per
+# file (a re-run sees the first snapshot and leaves it), so what --uninstall
+# restores is the genuinely pre-install content — never our own earlier append.
+# Echoes the backup path, or nothing when there is no pre-existing file to
+# protect (a file the installer is about to create is not snapshotted).
+backup_inplace() {
+  local file="$1" b
+  [ -e "$file" ] || return 0
+  for b in "$file".smooth-devex-*; do
+    [ -e "$b" ] && return 0
+  done
+  local stamp
+  stamp="$(date -u +%Y%m%d-%H%M%S)"
+  cp "$file" "$file.smooth-devex-$stamp"
+  printf '%s\n' "$file.smooth-devex-$stamp"
+}
+
+ensure_global_store() {
+  mkdir -p "$GLB_ROOT/skills" "$GLB_ROOT/rules" "$GLB_ROOT/hooks"
+}
+
+# symlink_global_skill NAME — link the store's copy of NAME into Codex's skills
+# dir. An existing correct link is kept; a real file/dir or a foreign symlink at
+# the path is reported and left untouched. Codex's own .system/ and .DS_Store
+# are never iterated, so they are never touched.
+symlink_global_skill() {
+  local name="$1"
+  local link="$CODEX_HOME/skills/$name"
+  local target="$GLB_ROOT/skills/$name"
+  if [ ! -e "$target" ]; then
+    log "WARNING: $target missing — no global skill symlink for $name"
+    return 0
+  fi
+  if [ -L "$link" ]; then
+    if [ "$(readlink "$link")" = "$target" ]; then
+      log "Global skill $name already linked into Codex"
+      return 0
+    fi
+    log "WARNING: $link is a symlink to somewhere else — left untouched"
+    return 0
+  fi
+  if [ -e "$link" ]; then
+    log "WARNING: $link already exists — left untouched"
+    return 0
+  fi
+  mkdir -p "$CODEX_HOME/skills"
+  ln -s "$target" "$link"
+  record_link "skill-link" "$link" "$target"
+  log "Linked global skill $name -> $target"
+}
+
+# install_global_skills MANIFEST_JSON — copy the owned skills into the central
+# store, then symlink each installed:true owned skill into Codex's skills dir.
+install_global_skills() {
+  local installation_json="$1" name
+  for name in "${OWNED_LIST[@]}"; do
+    is_owned_skill "$name" || continue
+    if [ -d "$INSTALL_TMP/repo/.agents/skills/$name" ]; then
+      rm -rf "$GLB_ROOT/skills/$name"
+      cp -R "$INSTALL_TMP/repo/.agents/skills/$name" "$GLB_ROOT/skills/$name"
+      log "Stored global skill $name"
+    else
+      log "WARNING: skill $name not found in repo — not stored"
+    fi
+  done
+  local installed
+  installed="$(printf '%s' "$installation_json" | python3 -c "
+import json, sys
+for s in json.load(sys.stdin).get('skills', []):
+    if s.get('installed'):
+        print(s['name'])
+")"
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    is_owned_skill "$name" || continue
+    symlink_global_skill "$name"
+  done <<< "$installed"
+}
+
+# install_global_rules — copy the owned rule files into the store, preserving
+# relative paths. Overwrite, never delete.
+install_global_rules() {
+  local source_rules="$INSTALL_TMP/repo/.github/instructions"
+  if [ ! -d "$source_rules" ]; then
+    log "No .github/instructions in source — nothing to install for global rules"
+    return 0
+  fi
+  local rel
+  for rel in "${OWNED_RULES[@]}"; do
+    if [ -f "$source_rules/$rel" ]; then
+      mkdir -p "$(dirname "$GLB_ROOT/rules/$rel")"
+      cp "$source_rules/$rel" "$GLB_ROOT/rules/$rel"
+      log "Stored global rule $rel"
+    else
+      log "WARNING: rule $rel not found in repo — not stored"
+    fi
+  done
+}
+
+# write_global_agents — generate the store-level AGENTS.md that imports each
+# owned rule by absolute @-line. This is the single delivery shape for global
+# rules: ~/.codex/AGENTS.md @-imports this file, which @-imports each rule.
+write_global_agents() {
+  local file="$GLB_ROOT/AGENTS.md"
+  {
+    printf '# Smooth DevEx — installed global instructions\n'
+    printf '# (managed by install-skills -g; do not edit)\n\n'
+    printf '<!-- %s: regenerated by install-skills -->\n\n' "$GLOBAL_MARKER"
+    local rel
+    for rel in "${OWNED_RULES[@]}"; do
+      printf '@%s/rules/%s\n' "$GLB_ROOT" "$rel"
+    done
+  } > "$file"
+  log "Wrote global instructions importer $file"
+}
+
+# install_global_instructions — append one @-import of $GLB_ROOT/AGENTS.md to
+# $CODEX_HOME/AGENTS.md, marker-guarded so a re-run does not duplicate it and an
+# operator's existing @-imports (notably @.../RTK.md) are never touched. A
+# missing AGENTS.md is created with an RTK-preserving header.
+install_global_instructions() {
+  write_global_agents
+  local codex_agents="$CODEX_HOME/AGENTS.md" backup_path
+  if [ ! -f "$codex_agents" ]; then
+    {
+      if [ -f "$CODEX_HOME/RTK.md" ]; then
+        printf '@%s/RTK.md\n\n' "$CODEX_HOME"
+      fi
+      printf '%s\n@%s/AGENTS.md\n' "$GLOBAL_CODEX_MARKER_LINE" "$GLB_ROOT"
+    } > "$codex_agents"
+    record_link "agents-import" "$codex_agents"
+    log "Created $codex_agents with global instructions import"
+    return 0
+  fi
+  if grep -q "$GLOBAL_MARKER" "$codex_agents"; then
+    log "Global instructions already imported into $codex_agents"
+    return 0
+  fi
+  # We are about to append to a pre-existing operator-owned file: snapshot it
+  # first so --uninstall can restore the operator's content.
+  backup_path="$(backup_inplace "$codex_agents")"
+  if [ -n "$backup_path" ]; then
+    log "Backed up $codex_agents -> $backup_path"
+  fi
+  {
+    printf '\n%s\n@%s/AGENTS.md\n' "$GLOBAL_CODEX_MARKER_LINE" "$GLB_ROOT"
+  } >> "$codex_agents"
+  record_link "agents-import" "$codex_agents" "$backup_path"
+  log "Appended global instructions import to $codex_agents"
+}
+
+# install_global_hooks — JSON-merge the owned hooks into $CODEX_HOME/hooks.json
+# under UserPromptSubmit only, with absolute store commands, deduped by exact
+# command match. Preserves the gk and code-review-graph entries that already
+# live there. Backs the file up once (as <file>.smooth-devex-<UTC datetime>) so
+# --uninstall can restore the pre-install state. UserPromptSubmit is a
+# matcher-ignored event per the Codex hooks docs, so the new chunk omits matcher.
+install_global_hooks() {
+  local hooks_file="$CODEX_HOME/hooks.json"
+  local source_hooks="$INSTALL_TMP/repo/.agents/hooks"
+  local owned_cmds=() name
+  if [ -d "$source_hooks" ]; then
+    for name in "${OWNED_HOOKS[@]}"; do
+      if [ -e "$source_hooks/$name" ]; then
+        cp -R "$source_hooks/$name" "$GLB_ROOT/hooks/$name"
+        case "$name" in
+          *.sh) [ -x "$source_hooks/$name" ] && chmod +x "$GLB_ROOT/hooks/$name" ;;
+        esac
+        log "Stored global hook $name"
+      else
+        log "WARNING: hook $name not found in repo — not stored"
+      fi
+    done
+  else
+    log "No .agents/hooks in source — nothing to install for global hooks"
+    return 0
+  fi
+  for name in "${OWNED_HOOKS[@]}"; do
+    if [ -f "$GLB_ROOT/hooks/$name" ]; then
+      owned_cmds+=("$GLB_ROOT/hooks/$name")
+    else
+      log "WARNING: owned hook $name not in store — not registered"
+    fi
+  done
+  if [ "${#owned_cmds[@]}" -eq 0 ]; then
+    log "No owned hooks to register globally"
+    return 0
+  fi
+  local result added backup
+  result="$(python3 - "$hooks_file" "${owned_cmds[@]}" <<'PYEOF'
+import json, sys, os, shutil, glob
+from datetime import datetime, timezone
+path = sys.argv[1]
+cmds = sys.argv[2:]
+data = {}
+if os.path.exists(path):
+    raw = open(path, encoding='utf-8').read()
+    if raw.strip():
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            sys.stderr.write('install-skills: %s is not valid JSON (%s); fix or delete it\n' % (path, exc))
+            raise SystemExit(2)
+hooks = data.setdefault('hooks', {})
+if not isinstance(hooks, dict):
+    hooks = {}
+    data['hooks'] = hooks
+ups = hooks.setdefault('UserPromptSubmit', [])
+if not isinstance(ups, list):
+    ups = []
+    hooks['UserPromptSubmit'] = ups
+existing = set()
+for group in ups:
+    if isinstance(group, dict) and isinstance(group.get('hooks'), list):
+        for h in group['hooks']:
+            if isinstance(h, dict) and 'command' in h:
+                existing.add(h['command'])
+new = [{'command': c, 'type': 'command'} for c in cmds if c not in existing]
+# Snapshot a pre-existing file we are about to modify, as
+# <file>.smooth-devex-<UTC YYYYMMDD-HHMMSS>, once: on a re-run the dedupe above
+# makes new empty, so we never snapshot our own earlier hooks (which would make
+# --uninstall restore our own change). A file we created from nothing has no
+# pre-install state to capture and is left for surgical removal at uninstall.
+backup_path = ''
+if new and os.path.exists(path) and not glob.glob(path + '.smooth-devex-*'):
+    stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')
+    backup_path = path + '.smooth-devex-' + stamp
+    shutil.copyfile(path, backup_path)
+if new:
+    # UserPromptSubmit is a matcher-ignored event, so the new chunk omits matcher.
+    ups.append({'hooks': new})
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2)
+        f.write('\n')
+print('%s\t%s' % (len(new), backup_path))
+PYEOF
+)"
+  IFS=$'\t' read -r added backup <<< "$result"
+  if [ -n "${backup:-}" ]; then
+    log "Backed up $hooks_file -> $backup"
+  fi
+  if [ "${added:-0}" -gt 0 ]; then
+    record_link "hooks-merge" "$hooks_file" "$backup"
+    log "Registered $added owned hook(s) in $hooks_file"
+  else
+    log "Owned hooks already registered in $hooks_file"
+  fi
+  log "Trust the newly registered Codex hooks with: /hooks"
+}
+
+# write_global_manifest SKILLS_JSON — write the global manifest. SKILLS_JSON is
+# the reconciled skills document (or an existing one for a rules/hooks-only run);
+# 'updated' is refreshed and the links array is attached.
+write_global_manifest() {
+  local skills_json="$1"
+  local links_json
+  links_json="$(python3 -c '
+import json, sys
+links = []
+for line in sys.argv[1:]:
+    if line == "":
+        continue
+    parts = line.split("\t")
+    entry = {"type": parts[0], "path": parts[1]}
+    if len(parts) > 2 and parts[2]:
+        entry["detail"] = parts[2]
+    links.append(entry)
+print(json.dumps(links))
+' ${LINKS[@]+"${LINKS[@]}"})" || links_json="[]"
+  python3 - "$GLOBAL_MANIFEST" "$skills_json" "$links_json" <<'PYEOF'
+import json, sys, os
+from datetime import datetime, timezone
+path, skills_json, links_json = sys.argv[1], sys.argv[2], sys.argv[3]
+new_links = json.loads(links_json)
+now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+# The existing manifest carries the links[] recorded on earlier runs. A re-run
+# where nothing new was linked must not wipe that history (uninstall reads it),
+# so links are merged: existing entries keep their order, new ones upsert in
+# place by (type, path). json_read already rejected a corrupt manifest upstream.
+existing = {}
+if os.path.exists(path):
+    try:
+        with open(path, encoding='utf-8') as f:
+            raw = f.read()
+        if raw.strip():
+            loaded = json.loads(raw)
+            if isinstance(loaded, dict):
+                existing = loaded
+    except json.JSONDecodeError:
+        existing = {}
+data = {}
+if skills_json:
+    try:
+        data = json.loads(skills_json)
+    except json.JSONDecodeError:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+else:
+    data = existing
+if 'skills' not in data:
+    data['skills'] = existing.get('skills', [])
+if 'decisions_enabled' not in data:
+    data['decisions_enabled'] = existing.get('decisions_enabled', False)
+merged = []
+seen = set()
+for link in existing.get('links', []):
+    merged.append(link)
+    seen.add((link.get('type'), link.get('path')))
+for link in new_links:
+    key = (link.get('type'), link.get('path'))
+    if key in seen:
+        for i, m in enumerate(merged):
+            if (m.get('type'), m.get('path')) == key:
+                merged[i] = link
+                break
+    else:
+        merged.append(link)
+        seen.add(key)
+data['updated'] = now
+data['links'] = merged
+with open(path, 'w') as f:
+    json.dump(data, f, indent=2)
+    f.write('\n')
+PYEOF
+  log "Wrote global manifest $GLOBAL_MANIFEST"
+}
+
+# run_global_install — the -g entry point: build the central store, wire skills,
+# rules/instructions and hooks into Codex, and write the manifest last.
+run_global_install() {
+  local existing_json new_json
+  ensure_global_store
+  # The wiring below writes into Codex's config dir; ensure it exists even on a
+  # bare -g -h / -g -r run against a fresh machine (Codex normally creates it).
+  mkdir -p "$CODEX_HOME"
+  clone_source
+
+  # A corrupt global manifest is a hard error in every category run, never a
+  # silent reset from defaults — same rule as the per-repo manifest.
+  existing_json="$(json_read "$GLOBAL_MANIFEST")" \
+    || die "cannot read $GLOBAL_MANIFEST — fix or delete it, then re-run"
+
+  if [ "$DO_SKILLS" = "1" ]; then
+    local existing_decisions
+    existing_decisions="$(check_decisions_enabled "$existing_json")"
+    if [ "$DO_DECISIONS" = "1" ]; then
+      DECISIONS_ENABLED="true"
+      log "Decisions enabled via -d"
+    elif [ "$existing_decisions" != "missing" ]; then
+      DECISIONS_ENABLED="$existing_decisions"
+      log "Decisions preference saved ($DECISIONS_ENABLED) — skipping prompt"
+    else
+      prompt_decisions
+    fi
+    if [ "$DECISIONS_ENABLED" = "true" ]; then
+      write_decisions_env
+    fi
+
+    log "Syncing global installation.json…"
+    new_json="$(build_installation_json "$GLB_ROOT/skills" "$existing_json" \
+      "$(list_skills "$INSTALL_TMP/repo/.agents/skills" | python3 -c "
+import json, sys
+print(json.dumps(sorted(line.strip() for line in sys.stdin if line.strip())))
+")" "$DECISIONS_ENABLED")"
+
+    log "Storing and wiring global skills…"
+    install_global_skills "$new_json"
+  fi
+
+  if [ "$DO_RULES" = "1" ]; then
+    log "Storing global rules…"
+    install_global_rules
+    log "Writing global instructions…"
+    install_global_instructions
+  fi
+
+  if [ "$DO_HOOKS" = "1" ]; then
+    log "Registering global hooks…"
+    install_global_hooks
+  fi
+
+  log "Writing global manifest…"
+  if [ "$DO_SKILLS" = "1" ]; then
+    write_global_manifest "$new_json"
+  else
+    write_global_manifest "$existing_json"
+  fi
+}
+
+# unglobalize — remove only what the manifest recorded, and restore the hooks
+# backup if the installer made one. Leaves Codex's .system/, the gk hooks, and
+# the operator's RTK @-import line alone. The store itself is left in place; an
+# operator who wants it gone removes ~/.smooth-ai-devex.
+unglobalize() {
+  [ -f "$GLOBAL_MANIFEST" ] || { log "No global install manifest at $GLOBAL_MANIFEST — nothing to uninstall"; return 0; }
+  python3 - "$CODEX_HOME" "$GLB_ROOT" "$GLOBAL_MANIFEST" "$GLOBAL_CODEX_MARKER_LINE" <<'PYEOF'
+import json, sys, os
+codex_home, glb_root, manifest_path, codemarker = sys.argv[1:5]
+data = json.load(open(manifest_path, encoding='utf-8'))
+links = data.get('links', [])
+for link in links:
+    typ = link.get('type')
+    path = link.get('path', '')
+    detail = link.get('detail', '')
+    if typ == 'skill-link':
+        if os.path.islink(path) and os.readlink(path) == detail:
+            os.unlink(path)
+            print('removed link', path)
+    elif typ == 'agents-import':
+        if detail and os.path.exists(detail):
+            # Restore the pre-append snapshot, which is strictly the operator's
+            # earlier content (never our own append).
+            with open(detail, 'rb') as f:
+                content = f.read()
+            with open(path, 'wb') as f:
+                f.write(content)
+            print('restored agents import backup', path)
+        elif os.path.exists(path):
+            with open(path, encoding='utf-8') as f:
+                lines = f.readlines()
+            out = []
+            i = 0
+            while i < len(lines):
+                if codemarker in lines[i]:
+                    if out and out[-1].strip() == '':
+                        out.pop()
+                    i += 1
+                    while i < len(lines) and lines[i].strip() == '':
+                        i += 1
+                    if i < len(lines) and lines[i].rstrip() == '@%s/AGENTS.md' % glb_root:
+                        i += 1
+                        if i < len(lines) and lines[i].strip() == '':
+                            i += 1
+                    continue
+                out.append(lines[i])
+                i += 1
+            with open(path, 'w', encoding='utf-8') as f:
+                f.writelines(out)
+            print('cleaned agents import', path)
+    elif typ == 'hooks-merge':
+        if detail and os.path.exists(detail):
+            with open(detail, 'rb') as f:
+                content = f.read()
+            with open(path, 'wb') as f:
+                f.write(content)
+            print('restored hooks backup', path)
+        elif os.path.exists(path):
+            with open(path, encoding='utf-8') as f:
+                data2 = json.load(f)
+            hooks2 = data2.setdefault('hooks', {})
+            ups2 = hooks2.get('UserPromptSubmit', [])
+            kept = []
+            for group in ups2:
+                cmds = [h.get('command', '') for h in group.get('hooks', []) if isinstance(h, dict)]
+                if cmds and all(c.startswith(glb_root + '/hooks/') for c in cmds):
+                    continue
+                kept.append(group)
+            hooks2['UserPromptSubmit'] = kept
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(data2, f, indent=2)
+                f.write('\n')
+            print('removed owned hooks', path)
+PYEOF
+  log "Uninstalled global install — store left at $GLB_ROOT (remove it to reclaim space)"
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 main() {
   parse_categories "$@"
+
+  if [ "$DO_UNINSTALL" = "1" ]; then
+    [ "$DO_GLOBAL" = "1" ] || die "--uninstall only applies to the global install — use: install-skills -g --uninstall"
+    if [ -n "${SKILLS_ROOT:-}" ]; then
+      die "-g cannot be combined with SKILLS_ROOT — the global install owns $HOME/.smooth-ai-devex"
+    fi
+    unglobalize
+    log "Done."
+    return 0
+  fi
+
+  if [ "$DO_GLOBAL" = "1" ]; then
+    if [ -n "${SKILLS_ROOT:-}" ]; then
+      die "-g cannot be combined with SKILLS_ROOT — use the per-repo install (no -g) or unset SKILLS_ROOT"
+    fi
+    run_global_install
+    log "Done."
+    return 0
+  fi
+
   local agent_root skills_root shared_dir json_path legacy_json existing_json new_json
 
   if [ -n "${SKILLS_ROOT:-}" ]; then

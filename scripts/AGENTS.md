@@ -12,9 +12,11 @@ repository's source outside its declared contract.
 - **Read-only by default.** Scripts write only into the paths their contract declares: the
   installer writes the resolved skills root, `<agent-root>/_smooth-devex-shared/`, the owned
   `<agent-root>/hooks/` files, the owned `.github/instructions/` subset, and canonical symlinks —
-  or, when force-pinned via `SKILLS_ROOT`, into exactly that path and its siblings. Anything else
-  that wants to touch the calling repo's `src/`, `tests/`, `.github/` or other top-level
-  directories belongs elsewhere — most likely as a workflow under `.github/workflows/` or an
+  or, when force-pinned via `SKILLS_ROOT`, into exactly that path and its siblings. The `-g`
+  global mode is the explicit exception: it writes `$HOME/.smooth-ai-devex/` (its store + manifest)
+  and wires into Codex's `$HOME/.codex/` (skills symlinks, an `AGENTS.md` import, `hooks.json`).
+  Anything else that wants to touch the calling repo's `src/`, `tests/`, `.github/` or other
+  top-level directories belongs elsewhere — most likely as a workflow under `.github/workflows/` or an
   action under `.github/actions/`.
 - **Idempotent runs.** Re-running a script with the same inputs must converge on the same state — that
   is the contract the [test harness](test-install-skills.sh) verifies, and the property that makes a
@@ -34,7 +36,7 @@ documentation.
 | --- | --- |
 | `install-skills.sh` | bash port. macOS / Linux. Needs `bash`, `git`, `python3`. |
 | `install-skills.ps1` | PowerShell 7 port. Windows or anywhere `pwsh` runs. Needs `pwsh`, `git`. |
-| `test-install-skills.sh` | Harness. 51 cases, bash port only (the ps1 port is read, not run). |
+| `test-install-skills.sh` | Harness. 59 cases, bash port only (the ps1 port is read, not run). |
 
 The installer pulls a flat list of folders from `.agents/skills/` in this repository into a consumer
 repository, controlled by a per-skill `installed` flag in
@@ -54,6 +56,20 @@ and the owned-set gate stops that here.
 `SKILLS_TEST_OWNED_EXTRA` is a test-only env var the harness sets to extend the owned list with
 synthetic names (`alpha beta gamma delta epsilon`) so the harness can exercise add/drop cases
 without planting real source-owned names. Production installers never set it.
+
+**`-g` is a separate global mode.** Instead of scoping to `<agent-root>` in the repo you are in, it
+installs the same owned set once, machine-wide, into `~/.smooth-ai-devex/` and wires it into Codex's
+`~/.codex/`: owned skills are symlinked into `~/.codex/skills/` (coexisting with Codex's `.system/`),
+the owned rules are imported through a generated `~/.smooth-ai-devex/AGENTS.md` that
+`~/.codex/AGENTS.md` pulls in with one marker-guarded `@`-line (never written into `~/.codex/rules/`,
+a Starlark `prefix_rule` namespace), and the owned hooks are JSON-merged into `~/.codex/hooks.json`
+under `UserPromptSubmit` only, with absolute store commands. State is
+`~/.smooth-ai-devex/installation.json` (a `links[]` record of what was installed); `-g --uninstall`
+removes exactly that — never `.system/`, an operator's `gk` hooks, or their `RTK.md` `@`-import line.
+Every pre-existing config file the installer appends to (`~/.codex/AGENTS.md`, `~/.codex/hooks.json`,
+and the shell profile when decision env vars are written) is snapshotted once as
+`<file>.smooth-devex-<UTC datetime>` before modification, and `--uninstall` restores it.
+`-g` refuses to be combined with `SKILLS_ROOT`, and `--uninstall` without `-g` is refused.
 
 ## Test References
 
@@ -87,3 +103,4 @@ Two known gaps:
 | 2026-10-17 | Installer decision prompt reads `/dev/tty`/console so it is asked even on piped `curl \| bash` / `irm \| iex`; falls back to disabled with no terminal | — |
 | 2026-10-17 | `-d` switch: opt into decision validation without prompting (writes env vars, sets `decisions_enabled: true`) | — |
 | 2026-10-17 | Decision prompt probes `/dev/tty` by opening it (`-r` passes on CI runners with no controlling terminal, then `read` died under `set -e`); harness adds a no-controlling-terminal case | — |
+| 2026-10-17 | `-g` global mode: `~/.smooth-ai-devex/{skills,rules,hooks}` store + manifest with `links[]`; Codex wiring — skills symlinks, marker-guarded `~/.codex/AGENTS.md` import, UserPromptSubmit `hooks.json` merge; snaps pre-existing appended files as `<file>.smooth-devex-<datetime>` and restores on `-g --uninstall`; harness adds 8 `-g` cases | — |

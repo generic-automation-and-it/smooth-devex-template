@@ -55,7 +55,10 @@ param(
     [Alias('h')]
     [switch] $Hooks,
     [Alias('d')]
-    [switch] $Decisions
+    [switch] $Decisions,
+    [Alias('g')]
+    [switch] $Global,
+    [switch] $Uninstall
 )
 
 Set-StrictMode -Version Latest
@@ -218,6 +221,8 @@ function Write-DecisionsEnv {
 `$env:SMOOTH_DEVEX_DECISIONS_MAX_ATTEMPTS = '3'
 `$env:SMOOTH_DEVEX_DECISIONS_TIMEOUT = '60'
 "@
+    # Snapshot the shell profile before appending to it — it is operator-owned.
+    $null = Backup-Inplace -Path $profilePath
     Add-Content -LiteralPath $profilePath -Value $envBlock -Encoding UTF8
     Write-Info "Wrote decision env vars to $profilePath"
 }
@@ -660,6 +665,470 @@ function Install-OwnedHooks {
 }
 
 # ---------------------------------------------------------------------------
+# Global install (-g): a ~/.smooth-ai-devex central store wired into Codex.
+#
+# The per-repo install above scopes everything to <agent-root> in the repo you
+# are standing in. -g instead installs the same owned set once, machine-wide,
+# into a store and wires it into Codex's config dir (~/.codex by default, or
+# $CODEX_HOME): skills symlinked into its skills dir (coexisting with .system/),
+# rules imported through a generated $GLB_ROOT/AGENTS.md that ~/.codex/AGENTS.md
+# pulls in with one @-line (never written into ~/.codex/rules/, which Codex
+# treats as a Starlark prefix_rule namespace), and hooks JSON-merged into
+# ~/.codex/hooks.json (UserPromptSubmit only). A manifest at
+# $GLB_ROOT/installation.json records every link and edit, and -g --uninstall
+# removes exactly that — never .system/, the gk hooks, or the operator's RTK
+# @-import line. Every pre-existing config file the installer appends to
+# (~/.codex/AGENTS.md, ~/.codex/hooks.json, and the shell profile when decision
+# env vars are written) is snapshotted once as <file>.smooth-devex-<UTC datetime>
+# before modification, and --uninstall restores it. $SMOOTH_DEVEX_HOME overrides
+# the store location and $CODEX_HOME overrides Codex's config dir (both are how
+# test harnesses isolate a run).
+# ---------------------------------------------------------------------------
+
+$script:GlbRoot = if ($env:SMOOTH_DEVEX_HOME) { $env:SMOOTH_DEVEX_HOME } else { Join-Path $HOME '.smooth-ai-devex' }
+$script:GlobalManifest = Join-Path $script:GlbRoot 'installation.json'
+$script:GlobalMarker = 'installer-owned-global-instructions'
+$script:GlobalCodexMarkerLine = "# $($script:GlobalMarker) (added by install-skills)"
+$script:CodexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
+$script:Links = [System.Collections.Generic.List[string]]::new()
+
+function Add-GlobalLink {
+    # Record a link/edit for --uninstall. Tabs separate fields; a tab cannot
+    # appear in a path on any supported OS, so the split is unambiguous.
+    param([string] $Type, [string] $Path, [string] $Detail = '')
+    if ($Detail) { $script:Links.Add("$Type`t$Path`t$Detail") } else { $script:Links.Add("$Type`t$Path") }
+}
+
+function Backup-Inplace {
+    # Snapshot an operator-owned file the installer is about to append to, as
+    # <FILE>.smooth-devex-<UTC YYYYMMDD-HHMMSS>, exactly once. Echoes the backup
+    # path, or nothing when there is no pre-existing file to protect (a file the
+    # installer is about to create is not snapshotted, and a file already
+    # snapshotted by an earlier run is not re-snapshotted — so --uninstall
+    # restores the genuinely pre-install content, never our own earlier append).
+    param([string] $Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return '' }
+    $dir = Split-Path -Parent $Path
+    $name = [System.IO.Path]::GetFileName($Path)
+    $prior = Get-ChildItem -LiteralPath $dir -Filter "$name.smooth-devex-*" -ErrorAction SilentlyContinue
+    if ($prior) { return '' }
+    $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss')
+    $backup = "$Path.smooth-devex-$stamp"
+    Copy-Item -LiteralPath $Path -Destination $backup -Force
+    return $backup
+}
+
+function Read-GlobalManifest {
+    # Missing reads as $null (a first global install). A *corrupt* file is a hard
+    # error, never a silent reset from defaults — same rule as the repo manifest.
+    param([string] $Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    $raw = Get-Content -LiteralPath $Path -Raw
+    if ([string]::IsNullOrWhiteSpace($raw)) {
+        Fail "$Path is empty or whitespace-only; fix or delete it - not treating it as a first install"
+    }
+    try { return ($raw | ConvertFrom-Json) }
+    catch {
+        Fail "$Path is not valid JSON ($($_.Exception.Message)); fix or delete it - not treating it as a first install"
+    }
+}
+
+function Sync-GlobalSkill {
+    # Link the store's copy of NAME into Codex's skills dir. An existing correct
+    # link is kept; a real file/dir or a foreign link at the path is reported and
+    # left untouched. Codex's own .system/ is never iterated, so it is never
+    # touched. On Windows without symlink privilege, falls back to a junction
+    # (degraded: git records the junction target's contents as real files).
+    param([string] $Name)
+    $link = Join-Path (Join-Path $script:CodexHome 'skills') $Name
+    $target = Join-Path (Join-Path $script:GlbRoot 'skills') $Name
+    if (-not (Test-Path -LiteralPath $target)) {
+        Write-Info "WARNING: $target missing - no global skill symlink for $Name"
+        return
+    }
+    $linkTaken = Test-Path -LiteralPath $link
+    if (-not $linkTaken) {
+        $dangling = Get-Item -LiteralPath $link -Force -ErrorAction SilentlyContinue
+        $linkTaken = ($null -ne $dangling) -and ($null -ne $dangling.LinkType)
+    }
+    if ($linkTaken) {
+        $item = Get-Item -LiteralPath $link -Force
+        if ($item.LinkType) {
+            if ($item.Target -eq $target) { Write-Info "Global skill $Name already linked into Codex"; return }
+            Write-Info "WARNING: $link is a link to somewhere else - left untouched"
+            return
+        }
+        Write-Info "WARNING: $link already exists - left untouched"
+        return
+    }
+    New-Item -ItemType Directory -Path (Join-Path $script:CodexHome 'skills') -Force | Out-Null
+    try { New-Item -ItemType SymbolicLink -Path $link -Target $target | Out-Null }
+    catch { New-Item -ItemType Junction -Path $link -Target $target | Out-Null }
+    Add-GlobalLink 'skill-link' $link $target
+    Write-Info "Linked global skill $Name -> $target"
+}
+
+function Install-GlobalSkills {
+    # Copy the owned skills into the central store, then symlink each
+    # installed:true owned skill into Codex's skills dir.
+    param([object] $Manifest)
+    $repoSkills = Join-Path $script:TempRepo '.agents/skills'
+    foreach ($name in $script:OwnedList) {
+        if (-not (Test-OwnedSkill -Name $name)) { continue }
+        $source = Join-Path $repoSkills $name
+        if (Test-Path -LiteralPath $source -PathType Container) {
+            $dest = Join-Path (Join-Path $script:GlbRoot 'skills') $name
+            if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
+            Copy-Item -LiteralPath $source -Destination $dest -Recurse -Force
+            Write-Info "Stored global skill $name"
+        } else {
+            Write-Info "WARNING: skill $name not found in repo - not stored"
+        }
+    }
+    if ($Manifest -and $Manifest.skills) {
+        foreach ($skill in $Manifest.skills) {
+            if ($skill.installed -and (Test-OwnedSkill -Name $skill.name)) {
+                Sync-GlobalSkill -Name $skill.name
+            }
+        }
+    }
+}
+
+function Install-GlobalRules {
+    # Copy the owned rule files into the store, preserving relative paths.
+    # Overwrite, never delete.
+    $sourceRules = Join-Path $script:TempRepo '.github/instructions'
+    if (-not (Test-Path -LiteralPath $sourceRules -PathType Container)) {
+        Write-Info 'No .github/instructions in source - nothing to install for global rules'
+        return
+    }
+    foreach ($rel in $script:OwnedRules) {
+        $source = Join-Path $sourceRules $rel
+        if (Test-Path -LiteralPath $source -PathType Leaf) {
+            $dest = Join-Path (Join-Path $script:GlbRoot 'rules') $rel
+            New-Item -ItemType Directory -Path (Split-Path -Parent $dest) -Force | Out-Null
+            Copy-Item -LiteralPath $source -Destination $dest -Force
+            Write-Info "Stored global rule $rel"
+        } else {
+            Write-Info "WARNING: rule $rel not found in repo - not stored"
+        }
+    }
+}
+
+function Write-GlobalAgents {
+    # Generate the store-level AGENTS.md that imports each owned rule by
+    # absolute @-line. This is the single delivery shape for global rules:
+    # ~/.codex/AGENTS.md @-imports this file, which @-imports each rule.
+    $file = Join-Path $script:GlbRoot 'AGENTS.md'
+    $lines = New-Object System.Collections.Generic.List[string]
+    $lines.Add('# Smooth DevEx - installed global instructions')
+    $lines.Add('# (managed by install-skills -g; do not edit)')
+    $lines.Add('')
+    $lines.Add("<!-- $($script:GlobalMarker): regenerated by install-skills -->")
+    $lines.Add('')
+    foreach ($rel in $script:OwnedRules) {
+        $lines.Add('@' + ((Join-Path (Join-Path $script:GlbRoot 'rules') $rel) -replace '\\', '/'))
+    }
+    [System.IO.File]::WriteAllLines($file, $lines, [System.Text.UTF8Encoding]::new($false))
+    Write-Info "Wrote global instructions importer $file"
+}
+
+function Install-GlobalInstructions {
+    # Append one @-import of $GLB_ROOT/AGENTS.md to $CODEX_HOME/AGENTS.md,
+    # marker-guarded so a re-run does not duplicate it and an operator's existing
+    # @-imports (notably @.../RTK.md) are never touched. A missing AGENTS.md is
+    # created with an RTK-preserving header.
+    Write-GlobalAgents
+    $codexAgents = Join-Path $script:CodexHome 'AGENTS.md'
+    if (-not (Test-Path -LiteralPath $codexAgents -PathType Leaf)) {
+        $lines = New-Object System.Collections.Generic.List[string]
+        $rtk = Join-Path $script:CodexHome 'RTK.md'
+        if (Test-Path -LiteralPath $rtk -PathType Leaf) {
+            $lines.Add('@' + ($rtk -replace '\\', '/'))
+            $lines.Add('')
+        }
+        $lines.Add($script:GlobalCodexMarkerLine)
+        $lines.Add('@' + ((Join-Path $script:GlbRoot 'AGENTS.md') -replace '\\', '/'))
+        [System.IO.File]::WriteAllLines($codexAgents, $lines, [System.Text.UTF8Encoding]::new($false))
+        Add-GlobalLink 'agents-import' $codexAgents
+        Write-Info "Created $codexAgents with global instructions import"
+        return
+    }
+    $content = Get-Content -LiteralPath $codexAgents -Raw
+    if ($content -match [regex]::Escape($script:GlobalMarker)) {
+        Write-Info "Global instructions already imported into $codexAgents"
+        return
+    }
+    # We are about to append to a pre-existing operator-owned file: snapshot it
+    # first so --uninstall restores the operator's content.
+    $backup = Backup-Inplace -Path $codexAgents
+    if ($backup) { Write-Info "Backed up $codexAgents -> $backup" }
+    $importLine = '@' + ((Join-Path $script:GlbRoot 'AGENTS.md') -replace '\\', '/')
+    Add-Content -LiteralPath $codexAgents -Value ("`n" + $script:GlobalCodexMarkerLine + "`n" + $importLine) -Encoding UTF8
+    Add-GlobalLink 'agents-import' $codexAgents $backup
+    Write-Info "Appended global instructions import to $codexAgents"
+}
+
+function Install-GlobalHooks {
+    # Copy the owned hooks into the store, then JSON-merge them into
+    # ~/.codex/hooks.json under UserPromptSubmit only, with absolute store
+    # commands, deduped by exact command match. Preserves the gk and
+    # code-review-graph entries that already live there. Backs the file up once
+    # (only when this run is the first to modify a file that already existed), so
+    # --uninstall can restore the pre-install state. UserPromptSubmit is a
+    # matcher-ignored event, so the new chunk omits matcher.
+    $hooksFile = Join-Path $script:CodexHome 'hooks.json'
+    $sourceHooks = Join-Path $script:TempRepo '.agents/hooks'
+    $ownedCmds = New-Object System.Collections.Generic.List[string]
+    if (-not (Test-Path -LiteralPath $sourceHooks -PathType Container)) {
+        Write-Info 'No .agents/hooks in source - nothing to install for global hooks'
+        return
+    }
+    foreach ($name in $script:OwnedHooks) {
+        $source = Join-Path $sourceHooks $name
+        $dest = Join-Path (Join-Path $script:GlbRoot 'hooks') $name
+        if (Test-Path -LiteralPath $source) {
+            Copy-Item -LiteralPath $source -Destination $dest -Recurse -Force
+            # Preserve the source exec bit per owned file, never a wildcard over the
+            # directory. `test -x` is portable across Unix; UnixFileMode is not.
+            if ($name -like '*.sh' -and ($IsLinux -or $IsMacOS)) {
+                & test -x $source; if ($LASTEXITCODE -eq 0) { & chmod +x $dest 2>$null }
+            }
+            Write-Info "Stored global hook $name"
+        } else {
+            Write-Info "WARNING: hook $name not found in repo - not stored"
+        }
+    }
+    foreach ($name in $script:OwnedHooks) {
+        $dest = Join-Path (Join-Path $script:GlbRoot 'hooks') $name
+        if (Test-Path -LiteralPath $dest -PathType Leaf) { $ownedCmds.Add($dest) }
+    }
+    if ($ownedCmds.Count -eq 0) { Write-Info 'No owned hooks to register globally'; return }
+
+    $data = $null
+    if (Test-Path -LiteralPath $hooksFile -PathType Leaf) {
+        $raw = Get-Content -LiteralPath $hooksFile -Raw
+        if (-not [string]::IsNullOrWhiteSpace($raw)) {
+            try { $data = $raw | ConvertFrom-Json -AsHashtable }
+            catch { Fail "$hooksFile is not valid JSON ($($_.Exception.Message)); fix or delete it" }
+        }
+    }
+    if ($null -eq $data) { $data = @{} }
+    if (-not $data.ContainsKey('hooks')) { $data['hooks'] = @{} }
+    $hooks = $data['hooks']
+    $ups = if ($hooks.ContainsKey('UserPromptSubmit')) { $hooks['UserPromptSubmit'] } else { @() }
+    $existing = @{}
+    foreach ($group in @($ups)) {
+        if ($group -is [hashtable] -and $group.ContainsKey('hooks')) {
+            foreach ($h in @($group['hooks'])) {
+                if ($h -is [hashtable] -and $h.ContainsKey('command')) { $existing[[string]$h['command']] = $true }
+            }
+        }
+    }
+    $new = @()
+    foreach ($cmd in $ownedCmds) {
+        if (-not $existing.ContainsKey([string]$cmd)) { $new += @{ command = $cmd; type = 'command' } }
+    }
+    $backupPath = ''
+    if ($new.Count -gt 0 -and (Test-Path -LiteralPath $hooksFile -PathType Leaf)) {
+        $backupPath = Backup-Inplace -Path $hooksFile
+    }
+    if ($new.Count -gt 0) {
+        $upsList = New-Object System.Collections.Generic.List[object]
+        foreach ($g in @($ups)) { $upsList.Add($g) }
+        $upsList.Add(@{ hooks = $new })
+        $hooks['UserPromptSubmit'] = $upsList
+        [System.IO.File]::WriteAllText($hooksFile, (($data | ConvertTo-Json -Depth 10) + "`n"), [System.Text.UTF8Encoding]::new($false))
+    }
+    if ($backupPath) { Write-Info "Backed up $hooksFile -> $backupPath" }
+    if ($new.Count -gt 0) {
+        Add-GlobalLink 'hooks-merge' $hooksFile $backupPath
+        Write-Info "Registered $($new.Count) owned hook(s) in $hooksFile"
+    } else {
+        Write-Info "Owned hooks already registered in $hooksFile"
+    }
+    Write-Info 'Trust the newly registered Codex hooks with: /hooks'
+}
+
+function Write-GlobalManifest {
+    # Write the global manifest. SKILLS_JSON is the reconciled skills document
+    # (or an existing one for a rules/hooks-only run); 'updated' is refreshed, the
+    # recorded links are merged with the previous run's so a re-run never wipes
+    # the uninstall history, and the links array is attached.
+    param([string] $SkillsJson)
+    $linksJson = [System.Collections.Generic.List[object]]::new()
+    foreach ($line in $script:Links) {
+        $parts = $line -split "`t"
+        $entry = [ordered]@{ type = $parts[0]; path = $parts[1] }
+        if ($parts.Count -gt 2 -and $parts[2]) { $entry['detail'] = $parts[2] }
+        $linksJson.Add($entry)
+    }
+    $existing = $null
+    if (Test-Path -LiteralPath $script:GlobalManifest -PathType Leaf) {
+        try {
+            $raw = Get-Content -LiteralPath $script:GlobalManifest -Raw
+            if ($raw.Trim()) { $existing = $raw | ConvertFrom-Json -AsHashtable }
+        } catch { $existing = $null }
+    }
+    $data = $null
+    if ($SkillsJson) {
+        try { $data = $SkillsJson | ConvertFrom-Json -AsHashtable } catch { $data = $null }
+    }
+    if ($null -eq $data) { $data = $existing }
+    if ($null -eq $data) { $data = @{} }
+    if (-not $data.ContainsKey('skills')) {
+        $data['skills'] = @()
+    }
+    if (-not $data.ContainsKey('decisions_enabled')) {
+        $data['decisions_enabled'] = $false
+    }
+    # Merge links: carry forward the previous run's records, upsert new ones by
+    # (type, path) so a re-run updates in place instead of accumulating.
+    $merged = New-Object System.Collections.Generic.List[object]
+    $seen = @{}
+    if ($existing -and $existing.ContainsKey('links')) {
+        foreach ($link in @($existing['links'])) {
+            $merged.Add($link)
+            $seen["$($link.type)|$($link.path)"] = $true
+        }
+    }
+    foreach ($link in $linksJson) {
+        $key = "$($link.type)|$($link.path)"
+        if ($seen.ContainsKey($key)) {
+            for ($i = 0; $i -lt $merged.Count; $i++) {
+                if ($merged[$i].type -eq $link.type -and $merged[$i].path -eq $link.path) { $merged[$i] = $link; break }
+            }
+        } else {
+            $merged.Add($link)
+            $seen[$key] = $true
+        }
+    }
+    $data['updated'] = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+    $data['links'] = $merged
+    [System.IO.File]::WriteAllText($script:GlobalManifest, (($data | ConvertTo-Json -Depth 10) + "`n"), [System.Text.UTF8Encoding]::new($false))
+    Write-Info "Wrote global manifest $($script:GlobalManifest)"
+}
+
+function Invoke-GlobalInstall {
+    # The -g entry point: build the central store, wire skills, rules/instructions
+    # and hooks into Codex, and write the manifest last.
+    New-Item -ItemType Directory -Path (Join-Path $script:GlbRoot 'skills') -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $script:GlbRoot 'rules') -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $script:GlbRoot 'hooks') -Force | Out-Null
+    New-Item -ItemType Directory -Path $script:CodexHome -Force | Out-Null
+
+    Invoke-SourceClone -Repo $SkillsRepo -Branch $SkillsBranch
+
+    $existing = Read-GlobalManifest -Path $script:GlobalManifest
+    $newJson = ''
+
+    if ($script:DoSkills) {
+        $hasPref = Test-DecisionsPropertyExists -ExistingJson $existing
+        if ($script:DoDecisions) {
+            $script:DecisionsEnabled = $true
+            Write-Info 'Decisions enabled via -d'
+        } elseif ($hasPref) {
+            $script:DecisionsEnabled = [bool] (Get-DecisionsEnabled -ExistingJson $existing)
+            Write-Info "Decisions preference saved ($($script:DecisionsEnabled)) - skipping prompt"
+        } else {
+            Prompt-Decisions
+        }
+        if ($script:DecisionsEnabled) { Write-DecisionsEnv }
+
+        $diskSkills = @(Get-Skills -Root (Join-Path $script:GlbRoot 'skills'))
+        $sourceSkills = @(Get-Skills -Root (Join-Path $script:TempRepo '.agents/skills'))
+        $existingSkills = @()
+        if ($existing -and $existing.skills) { $existingSkills = @($existing.skills) }
+        $newJson = Build-InstallationJson -Updated ([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH\:mm\:ssZ')) `
+            -DiskSkills $diskSkills -SourceSkills $sourceSkills -ExistingSkills $existingSkills `
+            -DecisionsEnabled $script:DecisionsEnabled
+
+        Write-Info 'Storing and wiring global skills...'
+        Install-GlobalSkills -Manifest ($newJson | ConvertFrom-Json)
+    }
+
+    if ($script:DoRules) {
+        Write-Info 'Storing global rules...'
+        Install-GlobalRules
+        Write-Info 'Writing global instructions...'
+        Install-GlobalInstructions
+    }
+
+    if ($script:DoHooks) {
+        Write-Info 'Registering global hooks...'
+        Install-GlobalHooks
+    }
+
+    Write-Info 'Writing global manifest...'
+    Write-GlobalManifest -SkillsJson $newJson
+}
+
+function Uninstall-Global {
+    # Remove only what the manifest recorded, and restore the hooks backup if the
+    # installer made one. Leaves Codex's .system/, the gk hooks, and the
+    # operator's RTK @-import line alone. The store itself is left in place.
+    if (-not (Test-Path -LiteralPath $script:GlobalManifest -PathType Leaf)) {
+        Write-Info "No global install manifest at $($script:GlobalManifest) - nothing to uninstall"
+        return
+    }
+    $data = Get-Content -LiteralPath $script:GlobalManifest -Raw | ConvertFrom-Json
+    foreach ($link in @($data.links)) {
+        $typ = $link.type
+        $path = $link.path
+        # agents-import records carry no detail; a StrictMode dot-access on a
+        # missing property throws, so read it through the property collection.
+        $detail = if ($link.PSObject.Properties['detail']) { $link.detail } else { '' }
+        if ($typ -eq 'skill-link') {
+            $item = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+            if ($null -ne $item -and $item.LinkType -and $item.Target -eq $detail) {
+                Remove-Item -LiteralPath $path -Force
+            }
+        } elseif ($typ -eq 'agents-import') {
+            if ($detail -and (Test-Path -LiteralPath $detail -PathType Leaf)) {
+                # Restore the pre-append snapshot: strictly the operator's earlier
+                # content, never our own append.
+                Copy-Item -LiteralPath $detail -Destination $path -Force
+            } elseif (Test-Path -LiteralPath $path -PathType Leaf) {
+                $lines = Get-Content -LiteralPath $path
+                $output = New-Object System.Collections.Generic.List[string]
+                for ($i = 0; $i -lt $lines.Count; $i++) {
+                    if ($lines[$i] -match [regex]::Escape($script:GlobalCodexMarkerLine)) {
+                        if ($output.Count -gt 0 -and $output[$output.Count - 1].Trim() -eq '') { $output.RemoveAt($output.Count - 1) }
+                        $i++
+                        while ($i -lt $lines.Count -and $lines[$i].Trim() -eq '') { $i++ }
+                        if ($i -lt $lines.Count -and ($lines[$i].Trim() -eq ('@' + ((Join-Path $script:GlbRoot 'AGENTS.md') -replace '\\', '/')))) {
+                            $i++
+                            if ($i -lt $lines.Count -and $lines[$i].Trim() -eq '') { $i++ }
+                        }
+                        $i--
+                        continue
+                    }
+                    $output.Add($lines[$i])
+                }
+                [System.IO.File]::WriteAllLines($path, $output, [System.Text.UTF8Encoding]::new($false))
+            }
+        } elseif ($typ -eq 'hooks-merge') {
+            if ($detail -and (Test-Path -LiteralPath $detail -PathType Leaf)) {
+                Copy-Item -LiteralPath $detail -Destination $path -Force
+            } elseif (Test-Path -LiteralPath $path -PathType Leaf) {
+                $data2 = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json -AsHashtable
+                $hooks2 = $data2['hooks']
+                $ups2 = @($hooks2['UserPromptSubmit'])
+                $kept = @()
+                foreach ($group in $ups2) {
+                    $cmds = @($group['hooks']) | ForEach-Object { if ($_['command']) { [string]$_['command'] } }
+                    if ($cmds.Count -gt 0 -and ($cmds | Where-Object { -not $_.StartsWith((Join-Path $script:GlbRoot 'hooks')) }) -eq $null) { continue }
+                    $kept += $group
+                }
+                $hooks2['UserPromptSubmit'] = $kept
+                [System.IO.File]::WriteAllText($path, (($data2 | ConvertTo-Json -Depth 10) + "`n"), [System.Text.UTF8Encoding]::new($false))
+            }
+        }
+    }
+    Write-Info "Uninstalled global install - store left at $($script:GlbRoot) (remove it to reclaim space)"
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -670,10 +1139,25 @@ $script:DoRules = [bool]$Rules
 $script:DoSkills = [bool]$Skills
 $script:DoHooks = [bool]$Hooks
 $script:DoDecisions = [bool]$Decisions
-if (-not ($script:DoRules -or $script:DoSkills -or $script:DoHooks)) {
+$script:DoGlobal = [bool]$Global
+$script:DoUninstall = [bool]$Uninstall
+if (-not ($script:DoRules -or $script:DoSkills -or $script:DoHooks -or $script:DoUninstall)) {
     $script:DoRules = $true
     $script:DoSkills = $true
     $script:DoHooks = $true
+}
+if ($script:DoUninstall) {
+    if (-not $script:DoGlobal) { Fail '--uninstall only applies to the global install — use: install-skills -g --uninstall' }
+    if ($SkillsRoot) { Fail "-g cannot be combined with SKILLS_ROOT — the global install owns $($script:GlbRoot)" }
+    Uninstall-Global
+    Write-Info 'Done.'
+    exit 0
+}
+if ($script:DoGlobal) {
+    if ($SkillsRoot) { Fail '-g cannot be combined with SKILLS_ROOT — use the per-repo install (no -g) or unset SKILLS_ROOT' }
+    Invoke-GlobalInstall
+    Write-Info 'Done.'
+    exit 0
 }
 if ($SkillsRoot) {
     if (-not (Test-Path -LiteralPath $SkillsRoot -PathType Container)) { Fail "SKILLS_ROOT '$SkillsRoot' does not exist" }

@@ -805,6 +805,182 @@ else
 fi
 
 # ---------------------------------------------------------------------------------------------
+# 8. global install (-g): ~/.smooth-ai-devex store wired into Codex
+# ---------------------------------------------------------------------------------------------
+# Each case runs against an isolated temp HOME (so ~/.smooth-ai-devex and
+# ~/.codex both resolve inside it) with CODEX_HOME pinned to the same path. No
+# SKILLS_ROOT is passed — -g explicitly refuses it. The clone source is the
+# checkout itself, so no network.
+
+# run_sh_global GHOME ARGS... — run the installer in global mode (always -g).
+run_sh_global() {
+  local ghome="$1"; shift
+  HOME="$ghome" CODEX_HOME="$ghome/.codex" SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
+    SKILLS_TEST_OWNED_EXTRA="alpha beta gamma delta epsilon" \
+    bash "$installer_sh" -g "$@" >"$scratch/out" 2>"$scratch/err"
+}
+
+# A fresh temp HOME with the real-ish Codex shape: a .system/ dir under
+# .codex/skills (which the installer must never touch), plus zero or more real
+# skill directories occupying the link path so the foreign-skip case has
+# something to protect.
+make_ghome() {
+  local ghome="$scratch/global-$1"
+  shift
+  mkdir -p "$ghome/.codex/skills/.system"
+  printf '# Codex system\n' >"$ghome/.codex/skills/.system/cfg.md"
+  local name
+  for name in "$@"; do
+    mkdir -p "$ghome/.codex/skills/$name"
+    printf 'operator %s\n' "$name" >"$ghome/.codex/skills/$name/keep.txt"
+  done
+  printf '%s\n' "$ghome"
+}
+
+glb_root() { printf '%s\n' "$1/.smooth-ai-devex"; }
+global_manifest() { printf '%s\n' "$(glb_root "$1")/installation.json"; }
+
+# 8a. First global install builds the store, wires skills/rules/hooks into
+# Codex, and records the manifest — without touching .system/.
+ghome="$(make_ghome "first")"
+run_sh_global "$ghome" >/dev/null 2>&1
+groot="$(glb_root "$ghome")"
+gok=1
+for d in skills rules hooks; do [ -d "$groot/$d" ] || gok=0; done
+for s in ai-asset-sync ai-ralph-loop ai-template-sync ai-terse create-hld create-worktask manage-rule-system; do
+  [ -e "$groot/skills/$s" ] || gok=0
+  [ -L "$ghome/.codex/skills/$s" ] || gok=0
+  [ "$(readlink "$ghome/.codex/skills/$s")" = "$groot/skills/$s" ] || gok=0
+done
+[ -f "$ghome/.codex/skills/.system/cfg.md" ] || gok=0
+[ -L "$ghome/.codex/skills/.system" ] && gok=0
+for r in code-review-standards.instructions.md git/git-policy.instructions.md \
+  meta/knowledge-conventional-contexts-quality.instructions.md meta/rules.instructions.md; do
+  [ -f "$groot/rules/$r" ] || gok=0
+done
+grep -q "@$groot/rules/code-review-standards.instructions.md" "$groot/AGENTS.md" || gok=0
+grep -q 'installer-owned-global-instructions' "$ghome/.codex/AGENTS.md" || gok=0
+grep -q "@$groot/AGENTS.md" "$ghome/.codex/AGENTS.md" || gok=0
+grep -q "$groot/hooks/manage-rule-system-context.sh" "$ghome/.codex/hooks.json" || gok=0
+grep -q "$groot/hooks/worktask-skill-trigger.sh" "$ghome/.codex/hooks.json" || gok=0
+[ -f "$(global_manifest "$ghome")" ] || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global first install: store, skills, rules, hooks, AGENTS import, manifest (.system untouched)"
+else
+  no "global first install: store, skills, rules, hooks, AGENTS import, manifest" "$(tail -n 5 "$scratch/err")"
+fi
+
+# 8b. A re-run converges: no duplicated hook group, no doubled marker, and the
+# links history is preserved (not wiped by the assumption that nothing changed).
+links_after_first="$(python3 -c "import json;print(len(json.load(open('$(global_manifest "$ghome")'))['links']))")"
+run_sh_global "$ghome" >/dev/null 2>&1
+gok=1
+[ "$(grep -c 'installer-owned-global-instructions' "$ghome/.codex/AGENTS.md")" = "1" ] || gok=0
+ups_groups="$(python3 -c "import json;print(len(json.load(open('$ghome/.codex/hooks.json'))['hooks']['UserPromptSubmit']))")"
+[ "$ups_groups" = "1" ] || gok=0
+[ "$(python3 -c "import json;print(len(json.load(open('$(global_manifest "$ghome")'))['links']))")" = "$links_after_first" ] || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global re-run converges (no dupes, links preserved)"
+else
+  no "global re-run converges (no dupes, links preserved)" "groups=$ups_groups links=$links_after_first"
+fi
+
+# 8c. A foreign real directory at a Codex skills link path is never replaced;
+# the free sibling gets linked. .system/ is again left alone.
+ghome="$(make_ghome "foreign")"
+mkdir -p "$ghome/.codex/skills/ai-terse"
+printf 'operator ai-terse\n' >"$ghome/.codex/skills/ai-terse/keep.txt"
+run_sh_global "$ghome" >/dev/null 2>&1
+gok=1
+[ -d "$ghome/.codex/skills/ai-terse" ] && [ ! -L "$ghome/.codex/skills/ai-terse" ] || gok=0
+[ "$(cat "$ghome/.codex/skills/ai-terse/keep.txt")" = "operator ai-terse" ] || gok=0
+[ -L "$ghome/.codex/skills/create-hld" ] || gok=0
+grep -q 'already exists — left untouched' "$scratch/err" || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global foreign link: real skill dir kept, link skipped, free sibling linked"
+else
+  no "global foreign link: real skill dir kept, link skipped, free sibling linked" "$(grep 'already exists' "$scratch/err" | head -1)"
+fi
+
+# 8d. .system/ and .DS_Store are never iterated or replaced.
+ghome="$(make_ghome "system")"
+run_sh_global "$ghome" >/dev/null 2>&1
+if [ -d "$ghome/.codex/skills/.system" ] && [ ! -L "$ghome/.codex/skills/.system" ] \
+  && [ -f "$ghome/.codex/skills/.system/cfg.md" ]; then
+  ok "global .system/ is never touched"
+else
+  no "global .system/ is never touched" "$(ls -la "$ghome/.codex/skills" 2>/dev/null)"
+fi
+
+# 8e. A corrupt global manifest is a hard error, never a silent reset.
+ghome="$(make_ghome "corrupt")"
+mkdir -p "$(glb_root "$ghome")"
+printf '{ not json' >"$(global_manifest "$ghome")"
+st=0
+run_sh_global "$ghome" >/dev/null 2>&1 || st=$?
+if [ "$st" -ne 0 ] && [ "$(cat "$(global_manifest "$ghome")")" = "{ not json" ]; then
+  ok "global corrupt manifest is refused, non-zero exit, left untouched"
+else
+  no "global corrupt manifest is refused, non-zero exit, left untouched" "st=$st content=$(cat "$(global_manifest "$ghome")")"
+fi
+
+# 8f. -g refuses SKILLS_ROOT (the global store owns the agent root, not a per-repo one).
+ghome="$(make_ghome "refuse-skillsroot")"
+st=0
+HOME="$ghome" CODEX_HOME="$ghome/.codex" SKILLS_ROOT="$ghome/.codex/skills" \
+  SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
+  bash "$installer_sh" -g >/dev/null 2>&1 || st=$?
+if [ "$st" -ne 0 ]; then
+  ok "global -g refuses being combined with SKILLS_ROOT"
+else
+  no "global -g refuses being combined with SKILLS_ROOT" "expected failure, got success"
+fi
+
+# 8g. --uninstall is meaningless without -g, and is refused.
+ghome="$(make_ghome "refuse-uninstall")"
+st=0
+HOME="$ghome" CODEX_HOME="$ghome/.codex" SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
+  bash "$installer_sh" --uninstall >/dev/null 2>&1 || st=$?
+if [ "$st" -ne 0 ]; then
+  ok "--uninstall without -g is refused"
+else
+  no "--uninstall without -g is refused" "expected failure, got success"
+fi
+
+# 8h. Uninstall removes exactly what the install recorded: the Codex skill links,
+# the marker-guarded AGENTS import (leaving the operator's RTK @-line), and the
+# hooked chunks — restoring the pre-install hooks.json backup made by the
+# installer. .system/ and the store directory are left alone.
+ghome="$(make_ghome "uninstall")"
+printf '@%s/.codex/RTK.md\n\noperator line 1\noperator line 2\n' "$ghome" >"$ghome/.codex/AGENTS.md"
+printf '# RTK\n' >"$ghome/.codex/RTK.md"
+printf '{"hooks":{"UserPromptSubmit":[{"hooks":[{"command":"gk ai hook run --host codex","type":"command"}],"matcher":""}]}}\n' >"$ghome/.codex/hooks.json"
+run_sh_global "$ghome" >/dev/null 2>&1
+gok=1
+# The pre-seeded operator files are snapshotted before append (both hooks.json
+# and AGENTS.md), so --uninstall restores them byte-for-byte rather than only
+# splicing out the installer's markers.
+backup_agents="$(ls "$ghome"/.codex/AGENTS.md.smooth-devex-* 2>/dev/null | head -n 1)"
+backup_hooks="$(ls "$ghome"/.codex/hooks.json.smooth-devex-* 2>/dev/null | head -n 1)"
+[ -n "$backup_agents" ] || gok=0
+[ -n "$backup_hooks" ] || gok=0
+run_sh_global "$ghome" --uninstall >/dev/null 2>&1
+for s in ai-asset-sync ai-terse create-hld; do [ -e "$ghome/.codex/skills/$s" ] && gok=0; done
+[ -d "$(glb_root "$ghome")/skills" ] || gok=0
+grep -q 'installer-owned-global-instructions' "$ghome/.codex/AGENTS.md" && gok=0
+grep -q "@$(glb_root "$ghome")/AGENTS.md" "$ghome/.codex/AGENTS.md" && gok=0
+# AGENTS.md is restored to the operator's earlier content, byte-for-byte.
+[ -f "$backup_agents" ] && cmp -s "$backup_agents" "$ghome/.codex/AGENTS.md" || gok=0
+grep -q 'gk ai hook run --host codex' "$ghome/.codex/hooks.json" || gok=0
+grep -q "$(glb_root "$ghome")/hooks/" "$ghome/.codex/hooks.json" && gok=0
+[ -f "$ghome/.codex/skills/.system/cfg.md" ] || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global uninstall removes only owned links/edits, restores hooks + AGENTS snapshots byte-for-byte, keeps RTK + .system"
+else
+  no "global uninstall removes only owned links/edits, restores hooks + AGENTS snapshots byte-for-byte, keeps RTK + .system" "$(tail -n 6 "$scratch/err")"
+fi
+
+# ---------------------------------------------------------------------------------------------
 
 echo
 echo "passed: $passed  failed: $failed"

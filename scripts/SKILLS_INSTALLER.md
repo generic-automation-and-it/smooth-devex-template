@@ -197,6 +197,42 @@ The flag only governs **updates**. It does not remove or disable anything: a `fa
 and stays discoverable, it is simply never overwritten again. Delete the folder if you want it gone — the
 next run drops it from the manifest.
 
+## Global install (`-g`)
+
+`-g` installs the same owned set **once, machine-wide**, into `~/.smooth-ai-devex/`, then wires it into
+Codex's own config dir (`~/.codex`, or `$CODEX_HOME`). It is a separate mode from the per-repo install
+above — the two never mix, and `-g` refuses to be combined with `SKILLS_ROOT`. It composes with the same
+category switches (`-g -s -r -h`), so you can install just skills, just rules, or just hooks globally.
+
+| Layer | Where it lands |
+|---|---|
+| Skills | copied into `~/.smooth-ai-devex/skills/`, then symlinked into `~/.codex/skills/<name>` — coexisting with Codex's own `.system/`, which is never touched |
+| Rules | copied into `~/.smooth-ai-devex/rules/` and imported by a generated `~/.smooth-ai-devex/AGENTS.md`; `~/.codex/AGENTS.md` pulls that file in with one marker-guarded `@`-line. No `*.instructions.md` is written into `~/.codex/rules/` — Codex treats that directory as a Starlark `prefix_rule` namespace, and the `@`-import chain is the supported delivery shape |
+| Hooks | copied into `~/.smooth-ai-devex/hooks/` and JSON-merged into `~/.codex/hooks.json` under `UserPromptSubmit` only, with absolute store commands (relative `.agents/...` commands would break outside the repo), deduped by command match, preserving the `gk` and `code-review-graph` entries already there |
+
+State is `~/.smooth-ai-devex/installation.json` — the same `skills`/`decisions_enabled` shape as the
+per-repo manifest plus a `links[]` array recording every symlink and config edit, so `-g --uninstall`
+removes exactly what was installed. Before appending to any pre-existing file it does not own, the
+installer snapshots it **once** as `<file>.smooth-devex-<UTC datetime>` — `~/.codex/hooks.json` and
+`~/.codex/AGENTS.md`, plus the shell profile when decision env vars are written. `--uninstall` restores
+those snapshots (so the operator's earlier content comes back byte-for-byte), removes the `AGENTS.md`
+import block, and deletes the skill symlinks — leaving Codex's `.system/`, an operator's `gk` hooks, and
+their `RTK.md` `@`-import line untouched. The store directory itself is left in place
+(`rm -rf ~/.smooth-ai-devex` to reclaim it).
+
+`$SMOOTH_DEVEX_HOME` overrides the store location and `$CODEX_HOME` overrides Codex's config dir — both
+are how a test harness isolates a run from a real `~/.codex`.
+
+```bash
+scripts/install-skills.sh -g                  # all layers
+scripts/install-skills.sh -g -s               # skills only
+scripts/install-skills.sh -g --uninstall      # remove the global install
+```
+
+Windows (PowerShell 7) mirrors the contract: `./scripts/install-skills.ps1 -g`. Symlinks need Developer
+Mode or elevation; on a machine without either the ps1 port falls back to a junction — degraded, because
+git records a junction's target contents as real files, so prefer symlinks.
+
 ## Write ordering is load-bearing
 
 The manifest is written **after** the update, not before. The manifest lives inside
@@ -258,7 +294,7 @@ and payload purposes.
 bash scripts/test-install-skills.sh
 ```
 
-48 cases against the bash port, no network and no container engine needed: the clone source is the
+59 cases against the bash port, no network and no container engine needed: the clone source is the
 checkout itself (`SKILLS_REPO` pointed at the repo, `SKILLS_BRANCH` at the current branch), so a harness
 that reached GitHub would be red for reasons unrelated to the code. Runs in the PR gate. The shared
 payload, canonical links, stale-entry sweep, legacy-manifest ignore, and real-dir-at-link-path cases
