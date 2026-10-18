@@ -73,8 +73,8 @@ the full template rules tree is copied into the store and imported through a gen
 `~/.smooth-ai-devex/AGENTS.md` that `~/.codex/AGENTS.md` pulls in with one marker-guarded `@`-line
 (never written into `~/.codex/rules/`, a Starlark `prefix_rule` namespace), symlinked into
 `~/.claude/rules/` when Claude is installed, and added to `opencode.json` `instructions` when OpenCode
-is installed — unlike the per-repo install, which ships only the 4 `OWNED_RULES`. And the owned hooks
-are JSON-merged into `~/.codex/hooks.json`
+is installed. The per-repo install ships the same rules (every rule is owned — it is the DevEx rules
+tree). And the owned hooks are JSON-merged into `~/.codex/hooks.json`
 under `UserPromptSubmit` only, with absolute store commands. When Claude is installed, owned skills
 are also symlinked into `~/.claude/skills/`. When OpenCode is installed, each owned skill is
 referenced from `~/.config/opencode/commands` (a folder symlink to the store's `opencode-commands/`,

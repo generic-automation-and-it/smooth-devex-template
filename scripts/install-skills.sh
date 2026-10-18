@@ -82,23 +82,31 @@ OWNED_LIST=(
 )
 
 # Rules the installer is allowed to carry across, as paths relative to .github/instructions/.
-# Derived from what the owned skills actually reference, plus the shared convention:
-#
-#   code-review-standards.instructions.md                       referenced by create-worktask
-#   git/git-policy.instructions.md                              referenced by ai-asset-sync, create-worktask
-#   meta/knowledge-conventional-contexts-quality.instructions.md   referenced by create-hld
-#   meta/rules.instructions.md                                  rule lifecycle convention (manage-rule-system)
-#
-# The rules index (AGENTS.md) is NOT copied: it catalogues the template's full rule tree, most of
-# which never ships. install_rules writes a generated index of the shipped subset instead, so a
-# fresh consumer never sees dangling references and an existing consumer's own index is merged,
-# not clobbered. Everything else in .github/instructions/ stays local. Same positive owned-set
-# shape as skills: never a deny list.
+# Every rule in this template is owned — it is the DevEx rules tree, so all of them ship to a
+# consumer (the generated rules-index AGENTS.md is the one file excluded; install_rules writes a
+# generated index of the shipped set instead). Same positive owned-set shape as skills: never a
+# deny list. Keep in sync with $script:OwnedRules (the harness holds the two byte-for-byte).
 OWNED_RULES=(
+  ai-workflow-rules.instructions.md
+  backend/api-mediator-validation.instructions.md
+  backend/architecture-slices.instructions.md
+  backend/backend-logging-conventions.instructions.md
+  backend/collection-types.instructions.md
+  backend/external-api-clients.instructions.md
+  backend/migrations.instructions.md
+  backend/readonly-collections.instructions.md
+  backend/wiremock-stubbing.instructions.md
+  clean-code.instructions.md
   code-review-standards.instructions.md
   git/git-policy.instructions.md
+  git/pr-standards.instructions.md
   meta/knowledge-conventional-contexts-quality.instructions.md
   meta/rules.instructions.md
+  meta/understandings.instructions.md
+  project-overview.instructions.md
+  skills/skill-secret-handling.instructions.md
+  skills/skillspector-pre-pr.instructions.md
+  solid-principles.instructions.md
 )
 
 # Hooks the installer is allowed to carry across. Derived the same way: a hook is owned iff an
@@ -624,9 +632,15 @@ rules_index_table() {
   cat <<'EOF'
 | Scope | Rules |
 | :---- | :---- |
-| `**` | `code-review-standards` · `git/git-policy` |
+| `**` | `ai-workflow-rules` · `clean-code` · `code-review-standards` · `project-overview` · `solid-principles` |
+| `**/*.cs` | `backend/api-mediator-validation` · `backend/architecture-slices` · `backend/backend-logging-conventions` · `backend/collection-types` · `backend/external-api-clients` · `backend/readonly-collections` |
+| `src/*.Infrastructure/Persistence/Migrations/**/*.cs` | `backend/migrations` |
+| `tests/*.TestFramework.Aspire/**/*.cs` | `backend/wiremock-stubbing` |
+| `**` | `git/git-policy` · `git/pr-standards` |
 | `**/*AGENTS.md` | `meta/knowledge-conventional-contexts-quality` |
 | `.agents/rules/**` | `meta/rules` |
+| `**/*understanding.md` | `meta/understandings` |
+| `.agents/skills/**` | `skills/skill-secret-handling` · `skills/skillspector-pre-pr` |
 EOF
 }
 
@@ -869,15 +883,14 @@ install_global_claude_rules() {
     return 0
   fi
   local rel target link
-  while IFS= read -r -d '' rel; do
-    rel="${rel#./}"
+  for rel in "${OWNED_RULES[@]}"; do
     target="$GLB_ROOT/rules/$rel"
     if [ ! -f "$target" ]; then
       continue
     fi
     link="$CLAUDE_HOME/rules/$rel"
     link_store_file "$link" "$target" "claude-rule"
-  done < <(cd "$GLB_ROOT/rules" && find . -name '*.instructions.md' -print0)
+  done
 }
 
 # link_store_file DESTLINK TARGET LINKTYPE — symlink a store file at DESTLINK.
@@ -1018,17 +1031,19 @@ install_global_rules() {
     log "No .github/instructions in source — nothing to install for global rules"
     return 0
   fi
-  # The global install sends the FULL template rules tree machine-wide (the
-  # template owns these rules), not just the owned subset a consumer gets from
-  # the per-repo install. The generated AGENTS.md index is excluded (it is not an
-  # .instructions.md rule and the installer writes its own).
+  # The global install sends the FULL template rules tree machine-wide (every
+  # rule in this template is owned). The generated AGENTS.md index is excluded
+  # (it is not an .instructions.md rule and the installer writes its own).
   local rel
-  while IFS= read -r -d '' rel; do
-    rel="${rel#./}"
-    mkdir -p "$(dirname "$GLB_ROOT/rules/$rel")"
-    cp "$source_rules/$rel" "$GLB_ROOT/rules/$rel"
-    log "Stored global rule $rel"
-  done < <(cd "$source_rules" && find . -name '*.instructions.md' -print0)
+  for rel in "${OWNED_RULES[@]}"; do
+    if [ -f "$source_rules/$rel" ]; then
+      mkdir -p "$(dirname "$GLB_ROOT/rules/$rel")"
+      cp "$source_rules/$rel" "$GLB_ROOT/rules/$rel"
+      log "Stored global rule $rel"
+    else
+      log "WARNING: rule $rel not found in repo — not stored"
+    fi
+  done
 }
 
 # write_global_agents — generate the store-level AGENTS.md that imports each
@@ -1041,10 +1056,9 @@ write_global_agents() {
     printf '# (managed by install-skills -g; do not edit)\n\n'
     printf '<!-- %s: regenerated by install-skills -->\n\n' "$GLOBAL_MARKER"
     local rel
-    while IFS= read -r -d '' rel; do
-      rel="${rel#./}"
+    for rel in "${OWNED_RULES[@]}"; do
       printf '@%s/rules/%s\n' "$GLB_ROOT" "$rel"
-    done < <(cd "$GLB_ROOT/rules" && find . -name '*.instructions.md' -print0)
+    done
   } > "$file"
   log "Wrote global instructions importer $file"
 }

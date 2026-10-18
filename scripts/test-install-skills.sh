@@ -674,19 +674,22 @@ else
   no "-s only: skills install, no rules, no hooks" "rules or hooks leaked in"
 fi
 
-# 7b. -r only: the five owned rules land, topology symlink created, no skills, no manifest.
+# 7b. -r only: every owned rule lands (all template rules are owned), topology symlink created, no
+# skills, no manifest.
 root="$(make_root "cat-rules" alpha)"
 run_sh "$root" -r >/dev/null 2>&1
 rules_ok=1
-for rel in code-review-standards.instructions.md git/git-policy.instructions.md \
-  meta/knowledge-conventional-contexts-quality.instructions.md meta/rules.instructions.md; do
+for rel in code-review-standards.instructions.md ai-workflow-rules.instructions.md \
+  clean-code.instructions.md backend/architecture-slices.instructions.md \
+  git/git-policy.instructions.md meta/rules.instructions.md \
+  skills/skill-secret-handling.instructions.md; do
   [ -f "$root/../.github/instructions/$rel" ] || rules_ok=0
 done
-# The template's own index is never copied: a generated subset index ships instead, with no
-# references to unshipped rules.
+# The template's own index is never copied: a generated index of the shipped set ships instead,
+# referencing the owned rules.
 if [ -f "$root/../.github/instructions/AGENTS.md" ] \
   && grep -q "installed subset" "$root/../.github/instructions/AGENTS.md" \
-  && ! grep -q "backend/" "$root/../.github/instructions/AGENTS.md"; then
+  && grep -q "backend/architecture-slices" "$root/../.github/instructions/AGENTS.md"; then
   :
 else
   rules_ok=0
@@ -730,18 +733,18 @@ else
   no "-r -h: rules and hooks install, skills skipped" "wrong category set"
 fi
 
-# 7e. An unowned rule is never copied, and an operator's own rule file survives (overwrite,
-# never delete, no sweep).
-root="$(make_root "cat-unowned" alpha)"
+# 7e. All template rules are owned, so each lands; an operator's own rule file survives
+# (overwrite, never delete, no sweep).
+root="$(make_root "cat-owned" alpha)"
 run_sh "$root" -r >/dev/null 2>&1
 mkdir -p "$root/../.github/instructions/backend"
 printf 'operator rule\n' >"$root/../.github/instructions/backend/operator.instructions.md"
 run_sh "$root" -r >/dev/null 2>&1
-if [ ! -e "$root/../.github/instructions/backend/api-mediator-validation.instructions.md" ] \
+if [ -e "$root/../.github/instructions/backend/api-mediator-validation.instructions.md" ] \
   && [ "$(cat "$root/../.github/instructions/backend/operator.instructions.md")" = "operator rule" ]; then
-  ok "-r: unowned rules never copied, operator rules never swept"
+  ok "-r: owned rules land, operator rules never swept"
 else
-  no "-r: unowned rules never copied, operator rules never swept" "unowned landed or operator lost"
+  no "-r: owned rules land, operator rules never swept" "owned missing or operator lost"
 fi
 
 # 7f. An existing real rules directory is kept (topology link skipped, files still update).

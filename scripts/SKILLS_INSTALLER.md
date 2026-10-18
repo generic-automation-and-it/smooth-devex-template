@@ -124,8 +124,9 @@ edit inside one survives every run until you set its flag back. A skill outside 
 never copied even when a hand-edited manifest asks for it. Skipped entirely unless `-s` (or no
 switches).
 
-**4. Update the owned rules (`-r`).** The four `OWNED_RULES` files copy from the source's
-`.github/instructions/` into `<repo>/.github/instructions/`, preserving relative paths:
+**4. Update the owned rules (`-r`).** Every rule in this template is owned, so all of the
+`.instructions.md` files copy from the source's `.github/instructions/` into `<repo>/.github/instructions/`,
+preserving relative paths:
 
 | Owned rule | Why |
 |---|---|

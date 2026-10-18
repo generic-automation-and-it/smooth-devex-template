@@ -14,7 +14,7 @@
 
 ## Install skills, rules and hooks into a brownfield repository
 
-Reuse in another repo. One command — ships owned set only (7 skills, 4 rules, 2 hooks). Details and owned-set table: [`docs/wiki/reuse.md`](docs/wiki/reuse.md).
+Reuse in another repo. One command — ships owned set only (7 skills, all owned rules, 2 hooks). Details and owned-set table: [`docs/wiki/reuse.md`](docs/wiki/reuse.md).
 
 ```bash
 # Mac/Linux
@@ -40,7 +40,7 @@ $script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-a
 
 | Switch | Meaning |
 |---|---|
-| `-r` | Install the owned rules (`.github/instructions/` subset) |
+| `-r` | Install the owned rules (the template's `.github/instructions/` tree) |
 | `-s` | Install the owned skills (`.agents/skills/` flat folders) |
 | `-h` | Install the owned hooks (`.agents/hooks/`) |
 | `-d` | Enable AI decision validation for the ralph loop — writes `SMOOTH_DEVEX_DECISIONS_*` env vars and sets `decisions_enabled: true` in `installation.json` |
