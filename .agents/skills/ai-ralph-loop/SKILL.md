@@ -31,6 +31,7 @@ No switch is needed — a bare invocation is the full run.
 | `--plan [path]` | Review a plan or design document instead of code ([Plan mode](#plan-mode)) | off — code mode |
 | `--spawn` | Run the two review lenses as parallel subagents with fresh context | off — both lenses run sequentially, inline, in the current agent pid |
 | `--notests` | Do not create new tests during the loop; retain coverage review, existing-test repairs and verification | off — create required tests |
+| `--nodecisions` | Do not evaluate accepted fixes through the decision-validation layer even when `SMOOTH_DEVEX_DECISIONS_ENABLED=true` | off — decisions honoured when enabled |
 
 Single-dash spellings (`-loops 5`) are accepted. An unrecognised switch or a non-positive `--loops` is
 not guessed at: say what was passed and ask.
@@ -49,6 +50,19 @@ fixes may proceed without creating a regression test, but record the missing reg
 separate deferred finding. Report deferred gaps and test incompleteness in the final output.
 
 Without `--notests`, required test creation remains part of the normal loop.
+
+### `--nodecisions` — no decision validation
+
+Decision validation is an **opt-in, non-blocking** layer: when `SMOOTH_DEVEX_DECISIONS_ENABLED=true`,
+each accepted fix is evaluated by `decisions/scripts/decision-evaluate.sh` (an OpenJEV model) and the
+result is surfaced in the `Decision` column of the [output](#output). It never gates a fix — a
+`keep=false` is reported, not undone, and a service that stays unreachable after `MAX_ATTEMPTS` falls
+back to running as if decisions were disabled.
+
+With `--nodecisions`, skip that evaluation even when the env var is set; the `Decision` column reads
+`n/a` for every row. Decision validation is off by default (`SMOOTH_DEVEX_DECISIONS_ENABLED` unset),
+in which case the column is `n/a` too. This composes with `--scope`, `--loops`, `--spawn`, `--notests`
+and `--plan`.
 
 ## Plan mode
 
@@ -221,12 +235,14 @@ plan mode, so that table is omitted there:
 Finding body:
 
 ```markdown
-| ID | Loop | Category | File(s) | Status | Rationale |
+| ID | Loop | Category | File(s) | Status | Decision | Rationale |
 ```
 
-`Status` is `fixed`, `rejected`, `deferred` or `oscillation`. Re-read the ledger at the start of every
-loop — never rely on recall of earlier loops. The table is the same in plan mode, where the `File(s)`
-cell holds the plan section the finding was fixed in.
+`Status` is `fixed`, `rejected`, `deferred` or `oscillation`. `Decision` is the decision-validation
+outcome `keep` / `reject` (with `pct` when useful), or `n/a` when the layer is off — that is, when
+`SMOOTH_DEVEX_DECISIONS_ENABLED` is not `true` or `--nodecisions` is set — or after a `fallback=true`.
+Re-read the ledger at the start of every loop — never rely on recall of earlier loops. The table is the
+same in plan mode, where the `File(s)` cell holds the plan section the finding was fixed in.
 
 ### Loop n (1 … cap)
 
@@ -251,12 +267,18 @@ test at the tier required by Test focus unless `--notests` is set; then fix the 
    defer any missing regression coverage separately. Existing test placement is not authoritative.
    A fix that would leave the permitted scope is `deferred`. In plan mode the edit lands on the plan
    document and **nowhere else** — never on code.
+   When decision validation is active (not `--nodecisions` and `SMOOTH_DEVEX_DECISIONS_ENABLED=true`),
+   capture the before/after of the accepted fix and run
+   `decisions/scripts/decision-evaluate.sh --category <cat> --before <before-file> --after <after-file>
+   --context <file:line>`; record the outcome as the finding's `Decision`. Non-blocking: a `keep=false`
+   or a `fallback=true` result is reported, never undone.
 4. **Verify.** Build touched projects and run relevant L0/L1/L2 suites for affected behaviour, including
    required feature tests in otherwise untouched test projects. Update the inventory with commands and
    pass/fail/skip/blocked results; unrun or blocked suites never count as passing. A new failure → fix
    forward, at most two attempts; still red → stop the run, report the failing command, leave the tree
    as it is. In plan mode, the [four checks](#verify) instead.
-5. **Record.** One ledger row per finding, then a summary line:
+5. **Record.** One ledger row per finding (its `Decision` outcome from step 3, or `n/a` when decision
+   validation is inactive), then a summary line:
    `Loop n: target=<full|delta k files> accepted a / rejected r / deferred d`.
 6. **Exit check.**
    - 0 accepted on a full-scope pass → review **converged**, stop; unresolved test gaps or verification blockers still prevent a test-complete verdict. In plan mode there are no test gaps — the plan-mode **Testability** check stands in for the test-complete verdict.
