@@ -184,7 +184,7 @@ prompt_decisions() {
 # write_decisions_env — write SMOOTH_DEVEX_DECISIONS_* env vars to the user's shell profile.
 # Idempotent: skips when the sentinel marker is already present.
 write_decisions_env() {
-  local profile=""
+  local profile="" backup_path
   case "$(uname -s)" in
     Darwin) profile="$HOME/.zshrc" ;;
     Linux)  profile="$HOME/.bashrc" ;;
@@ -195,7 +195,11 @@ write_decisions_env() {
     return 0
   fi
   # Snapshot the shell profile before appending to it — it is operator-owned.
-  backup_inplace "$profile" >/dev/null || true
+  backup_path="$(backup_inplace "$profile")"
+  # In global mode, track the edit so --uninstall can restore the profile.
+  if [ "$DO_GLOBAL" = "1" ]; then
+    record_link "profile-edit" "$profile" "$backup_path"
+  fi
   cat >> "$profile" <<'ENVEOF'
 
 # Smooth DevEx — AI Decision Validation (added by install-skills)
@@ -532,6 +536,16 @@ ensure_canonical_link() {
   log "Linked $link -> $target"
 }
 
+# strip_skill_context DIR — delete the AGENTS.md files inside an installed skill
+# folder. A skill's AGENTS.md documents the owner repo's local-dev context and
+# improvements; it is not part of the runnable payload a consumer should inherit,
+# so the installer removes it from the copy while leaving the source's in place.
+strip_skill_context() {
+  local dir="$1"
+  [ -d "$dir" ] || return 0
+  find "$dir" -type f -name 'AGENTS.md' -delete 2>/dev/null || true
+}
+
 update_installed_skills() {
   local installation_json="$1" skills_root="$2" agent_root="$3" shared_dir="$4"
   local installed_names
@@ -562,6 +576,7 @@ for s in data.get('skills', []):
       if [ -d "$INSTALL_TMP/repo/.agents/skills/$name" ]; then
         rm -rf "$skills_root/$name"
         cp -R "$INSTALL_TMP/repo/.agents/skills/$name" "$skills_root/$name"
+        strip_skill_context "$skills_root/$name"
         log "Updated $name"
       else
         log "WARNING: $name not found in repo — left on disk untouched"
@@ -739,6 +754,7 @@ GLOBAL_MANIFEST="$GLB_ROOT/installation.json"
 GLOBAL_MARKER="installer-owned-global-instructions"
 GLOBAL_CODEX_MARKER_LINE="# $GLOBAL_MARKER (added by install-skills)"
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+OPENCODE_CONFIG="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
 LINKS=()
 
 # record_link TYPE PATH [DETAIL] — append a link/edit record for the uninstall
@@ -811,6 +827,65 @@ symlink_global_skill() {
   log "Linked global skill $name -> $target"
 }
 
+# link_store_file DESTLINK TARGET LINKTYPE — symlink a store file at DESTLINK.
+# Kept when a correct link already exists; a real file/dir or a foreign link at
+# the path is reported and left untouched (never a replacement). Records the link
+# for --uninstall. Used for OpenCode commands, where the link points at a skill's
+# SKILL.md (a command is a markdown file, so the filename is the command name).
+link_store_file() {
+  local destlink="$1" target="$2" linktype="$3"
+  if [ -L "$destlink" ]; then
+    if [ "$(readlink "$destlink")" = "$target" ]; then
+      log "Already linked: $destlink -> $target"
+      return 0
+    fi
+    log "WARNING: $destlink is a symlink to somewhere else — left untouched"
+    return 0
+  fi
+  if [ -e "$destlink" ]; then
+    log "WARNING: $destlink already exists — left untouched"
+    return 0
+  fi
+  mkdir -p "$(dirname "$destlink")"
+  if ! ln -s "$target" "$destlink"; then
+    log "WARNING: could not create symlink $destlink -> $target — left untouched"
+    return 0
+  fi
+  record_link "$linktype" "$destlink" "$target"
+  log "Linked $destlink -> $target"
+}
+
+# install_global_opencode MANIFEST_JSON — register each installed owned skill as
+# an OpenCode command. OpenCode already discovers the owned skills through the
+# Claude/agents interface, so we do NOT copy them into ~/.config/opencode/skills/;
+# instead we reference each skill's SKILL.md from the commands folder (filename =
+# command name). Skipped when OpenCode's config dir is absent.
+install_global_opencode() {
+  local manifest="$1"
+  if [ ! -d "$OPENCODE_CONFIG" ]; then
+    log "OpenCode config not found ($OPENCODE_CONFIG) — skipping global OpenCode wiring"
+    return 0
+  fi
+  local installed name target link
+  installed="$(printf '%s' "$manifest" | python3 -c "
+import json, sys
+for s in json.load(sys.stdin).get('skills', []):
+    if s.get('installed'):
+        print(s['name'])
+")"
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    is_owned_skill "$name" || continue
+    target="$GLB_ROOT/skills/$name/SKILL.md"
+    if [ ! -f "$target" ]; then
+      log "WARNING: $target missing — no OpenCode command for $name"
+      continue
+    fi
+    link="$OPENCODE_CONFIG/commands/$name.md"
+    link_store_file "$link" "$target" "opencode-command"
+  done <<< "$installed"
+}
+
 # install_global_skills MANIFEST_JSON — copy the owned skills into the central
 # store, then symlink each installed:true owned skill into Codex's skills dir.
 install_global_skills() {
@@ -820,6 +895,7 @@ install_global_skills() {
     if [ -d "$INSTALL_TMP/repo/.agents/skills/$name" ]; then
       rm -rf "$GLB_ROOT/skills/$name"
       cp -R "$INSTALL_TMP/repo/.agents/skills/$name" "$GLB_ROOT/skills/$name"
+      strip_skill_context "$GLB_ROOT/skills/$name"
       log "Stored global skill $name"
     else
       log "WARNING: skill $name not found in repo — not stored"
@@ -1128,6 +1204,8 @@ print(json.dumps(sorted(line.strip() for line in sys.stdin if line.strip())))
 
     log "Storing and wiring global skills…"
     install_global_skills "$new_json"
+    log "Registering global OpenCode commands…"
+    install_global_opencode "$new_json"
   fi
 
   if [ "$DO_RULES" = "1" ]; then
@@ -1165,10 +1243,37 @@ for link in links:
     typ = link.get('type')
     path = link.get('path', '')
     detail = link.get('detail', '')
-    if typ == 'skill-link':
+    if typ in ('skill-link', 'opencode-command'):
         if os.path.islink(path) and os.readlink(path) == detail:
             os.unlink(path)
             print('removed link', path)
+    elif typ == 'profile-edit':
+        if detail and os.path.exists(detail):
+            # Restore the pre-append profile snapshot.
+            with open(detail, 'rb') as f:
+                content = f.read()
+            with open(path, 'wb') as f:
+                f.write(content)
+            print('restored profile backup', path)
+        elif os.path.exists(path):
+            # No snapshot: drop the marker-guarded decision env block we appended.
+            with open(path, encoding='utf-8') as f:
+                lines = f.readlines()
+            out = []
+            i = 0
+            while i < len(lines):
+                if 'Smooth DevEx — AI Decision Validation' in lines[i]:
+                    if out and out[-1].strip() == '':
+                        out.pop()
+                    i += 1
+                    while i < len(lines) and ('SMOOTH_DEVEX_DECISIONS' in lines[i] or lines[i].strip() == ''):
+                        i += 1
+                    continue
+                out.append(lines[i])
+                i += 1
+            with open(path, 'w', encoding='utf-8') as f:
+                f.writelines(out)
+            print('removed decision env block', path)
     elif typ == 'agents-import':
         if detail and os.path.exists(detail):
             # Restore the pre-append snapshot, which is strictly the operator's

@@ -117,7 +117,9 @@ unowned folder even
 if the manifest was hand-edited. The harness covers the third case for every entry on the list.
 
 **3. Update only the owned skills marked `installed: true`.** The repo is shallow-cloned once and
-those folders are copied over the existing ones. A skill marked `false` is never touched, so a local
+those folders are copied over the existing ones. A skill's own `AGENTS.md` is stripped from every copy —
+it documents the owner repo's local-dev context and improvements, not the runnable payload a consumer
+should inherit. A skill marked `false` is never touched, so a local
 edit inside one survives every run until you set its flag back. A skill outside the owned set is
 never copied even when a hand-edited manifest asks for it. Skipped entirely unless `-s` (or no
 switches).
@@ -206,7 +208,7 @@ category switches (`-g -s -r -h`), so you can install just skills, just rules, o
 
 | Layer | Where it lands |
 |---|---|
-| Skills | copied into `~/.smooth-ai-devex/skills/`, then symlinked into `~/.codex/skills/<name>` — coexisting with Codex's own `.system/`, which is never touched |
+| Skills | copied into `~/.smooth-ai-devex/skills/` (skill `AGENTS.md` stripped), then symlinked into `~/.codex/skills/<name>` — coexisting with Codex's own `.system/`, which is never touched. When OpenCode is installed, each is also referenced as an OpenCode command at `~/.config/opencode/commands/<name>.md` (never copied into the opencode skills folder) |
 | Rules | copied into `~/.smooth-ai-devex/rules/` and imported by a generated `~/.smooth-ai-devex/AGENTS.md`; `~/.codex/AGENTS.md` pulls that file in with one marker-guarded `@`-line. No `*.instructions.md` is written into `~/.codex/rules/` — Codex treats that directory as a Starlark `prefix_rule` namespace, and the `@`-import chain is the supported delivery shape |
 | Hooks | copied into `~/.smooth-ai-devex/hooks/` and JSON-merged into `~/.codex/hooks.json` under `UserPromptSubmit` only, with absolute store commands (relative `.agents/...` commands would break outside the repo), deduped by command match, preserving the `gk` and `code-review-graph` entries already there |
 
@@ -294,7 +296,7 @@ and payload purposes.
 bash scripts/test-install-skills.sh
 ```
 
-60 cases against the bash port, no network and no container engine needed: the clone source is the
+64 cases against the bash port, no network and no container engine needed: the clone source is the
 checkout itself (`SKILLS_REPO` pointed at the repo, `SKILLS_BRANCH` at the current branch), so a harness
 that reached GitHub would be red for reasons unrelated to the code. Runs in the PR gate. The shared
 payload, canonical links, stale-entry sweep, legacy-manifest ignore, and real-dir-at-link-path cases

@@ -222,7 +222,9 @@ function Write-DecisionsEnv {
 `$env:SMOOTH_DEVEX_DECISIONS_TIMEOUT = '60'
 "@
     # Snapshot the shell profile before appending to it — it is operator-owned.
-    $null = Backup-Inplace -Path $profilePath
+    $backup = Backup-Inplace -Path $profilePath
+    # In global mode, track the edit so --uninstall can restore the profile.
+    if ($script:DoGlobal) { Add-GlobalLink 'profile-edit' $profilePath $backup }
     Add-Content -LiteralPath $profilePath -Value $envBlock -Encoding UTF8
     Write-Info "Wrote decision env vars to $profilePath"
 }
@@ -498,6 +500,7 @@ function Update-InstalledSkills {
             $dest = Join-Path $SkillsRoot $name
             if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
             Copy-Item -LiteralPath $source -Destination $dest -Recurse -Force
+            Remove-SkillContext -Path $dest
             Write-Info "Updated $name"
         } else {
             Write-Info "WARNING: $name not found in repo - left on disk untouched"
@@ -690,6 +693,7 @@ $script:GlobalManifest = Join-Path $script:GlbRoot 'installation.json'
 $script:GlobalMarker = 'installer-owned-global-instructions'
 $script:GlobalCodexMarkerLine = "# $($script:GlobalMarker) (added by install-skills)"
 $script:CodexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
+$script:OpenCodeConfig = if ($env:OPENCODE_CONFIG) { $env:OPENCODE_CONFIG } else { Join-Path $HOME '.config/opencode' }
 $script:Links = [System.Collections.Generic.List[string]]::new()
 
 function Add-GlobalLink {
@@ -716,6 +720,18 @@ function Backup-Inplace {
     $backup = "$Path.smooth-devex-$stamp"
     Copy-Item -LiteralPath $Path -Destination $backup -Force
     return $backup
+}
+
+function Remove-SkillContext {
+    # Delete the AGENTS.md files inside an installed skill folder. A skill's
+    # AGENTS.md documents the owner repo's local-dev context and improvements; it
+    # is not part of the runnable payload a consumer should inherit, so the
+    # installer removes it from the copy while leaving the source's in place.
+    param([string] $Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) { return }
+    Get-ChildItem -LiteralPath $Path -Recurse -Force -File |
+        Where-Object { $_.Name -eq 'AGENTS.md' } |
+        ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
 }
 
 function Read-GlobalManifest {
@@ -768,6 +784,56 @@ function Sync-GlobalSkill {
     Write-Info "Linked global skill $Name -> $target"
 }
 
+function Link-StoreFile {
+    # Symlink a store file at $DestLink. Kept when a correct link exists; a real
+    # file/dir or a foreign link at the path is reported and left untouched.
+    # Records the link for --uninstall. Used for OpenCode commands, where the link
+    # points at a skill's SKILL.md (command filename = command name).
+    param([string] $DestLink, [string] $Target, [string] $LinkType)
+    $linkTaken = Test-Path -LiteralPath $DestLink
+    if (-not $linkTaken) {
+        $dangling = Get-Item -LiteralPath $DestLink -Force -ErrorAction SilentlyContinue
+        $linkTaken = ($null -ne $dangling) -and ($null -ne $dangling.LinkType)
+    }
+    if ($linkTaken) {
+        $item = Get-Item -LiteralPath $DestLink -Force
+        if ($item.LinkType) {
+            if ($item.Target -eq $Target) { Write-Info "Already linked: $DestLink -> $Target"; return }
+            Write-Info "WARNING: $DestLink is a link to somewhere else - left untouched"; return
+        }
+        Write-Info "WARNING: $DestLink already exists - left untouched"; return
+    }
+    New-Item -ItemType Directory -Path (Split-Path -Parent $DestLink) -Force | Out-Null
+    try { New-Item -ItemType SymbolicLink -Path $DestLink -Target $Target | Out-Null }
+    catch { New-Item -ItemType Junction -Path $DestLink -Target $Target | Out-Null }
+    Add-GlobalLink $LinkType $DestLink $Target
+    Write-Info "Linked $DestLink -> $Target"
+}
+
+function Install-GlobalOpencode {
+    # Register each installed owned skill as an OpenCode command. OpenCode already
+    # discovers the owned skills through the Claude/agents interface, so we do NOT
+    # copy them into ~/.config/opencode/skills/; instead we reference each skill's
+    # SKILL.md from the commands folder (filename = command name). Skipped when
+    # OpenCode's config dir is absent.
+    param([object] $Manifest)
+    if (-not (Test-Path -LiteralPath $script:OpenCodeConfig -PathType Container)) {
+        Write-Info "OpenCode config not found ($($script:OpenCodeConfig)) - skipping global OpenCode wiring"
+        return
+    }
+    if (-not $Manifest -or -not $Manifest.skills) { return }
+    foreach ($skill in $Manifest.skills) {
+        if (-not $skill.installed -or -not (Test-OwnedSkill -Name $skill.name)) { continue }
+        $target = Join-Path (Join-Path (Join-Path $script:GlbRoot 'skills') $skill.name) 'SKILL.md'
+        if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
+            Write-Info "WARNING: $target missing - no OpenCode command for $($skill.name)"
+            continue
+        }
+        $link = Join-Path (Join-Path $script:OpenCodeConfig 'commands') "$($skill.name).md"
+        Link-StoreFile -DestLink $link -Target $target -LinkType 'opencode-command'
+    }
+}
+
 function Install-GlobalSkills {
     # Copy the owned skills into the central store, then symlink each
     # installed:true owned skill into Codex's skills dir.
@@ -780,6 +846,7 @@ function Install-GlobalSkills {
             $dest = Join-Path (Join-Path $script:GlbRoot 'skills') $name
             if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
             Copy-Item -LiteralPath $source -Destination $dest -Recurse -Force
+            Remove-SkillContext -Path $dest
             Write-Info "Stored global skill $name"
         } else {
             Write-Info "WARNING: skill $name not found in repo - not stored"
@@ -1045,6 +1112,8 @@ function Invoke-GlobalInstall {
 
         Write-Info 'Storing and wiring global skills...'
         Install-GlobalSkills -Manifest ($newJson | ConvertFrom-Json)
+        Write-Info 'Registering global OpenCode commands...'
+        Install-GlobalOpencode -Manifest ($newJson | ConvertFrom-Json)
     }
 
     if ($script:DoRules) {
@@ -1078,10 +1147,29 @@ function Uninstall-Global {
         # agents-import records carry no detail; a StrictMode dot-access on a
         # missing property throws, so read it through the property collection.
         $detail = if ($link.PSObject.Properties['detail']) { $link.detail } else { '' }
-        if ($typ -eq 'skill-link') {
+        if ($typ -eq 'skill-link' -or $typ -eq 'opencode-command') {
             $item = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
             if ($null -ne $item -and $item.LinkType -and $item.Target -eq $detail) {
                 Remove-Item -LiteralPath $path -Force
+            }
+        } elseif ($typ -eq 'profile-edit') {
+            if ($detail -and (Test-Path -LiteralPath $detail -PathType Leaf)) {
+                Copy-Item -LiteralPath $detail -Destination $path -Force
+            } elseif (Test-Path -LiteralPath $path -PathType Leaf) {
+                # No snapshot: drop the marker-guarded decision env block.
+                $lines = Get-Content -LiteralPath $path
+                $output = New-Object System.Collections.Generic.List[string]
+                for ($i = 0; $i -lt $lines.Count; $i++) {
+                    if ($lines[$i] -like '*Smooth DevEx — AI Decision Validation*') {
+                        if ($output.Count -gt 0 -and $output[$output.Count - 1].Trim() -eq '') { $output.RemoveAt($output.Count - 1) }
+                        $i++
+                        while ($i -lt $lines.Count -and ($lines[$i] -like '*SMOOTH_DEVEX_DECISIONS*' -or $lines[$i].Trim() -eq '')) { $i++ }
+                        $i--
+                        continue
+                    }
+                    $output.Add($lines[$i])
+                }
+                [System.IO.File]::WriteAllLines($path, $output, [System.Text.UTF8Encoding]::new($false))
             }
         } elseif ($typ -eq 'agents-import') {
             if ($detail -and (Test-Path -LiteralPath $detail -PathType Leaf)) {

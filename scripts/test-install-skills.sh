@@ -870,6 +870,65 @@ else
   no "global first install: store, skills, rules, hooks, AGENTS import, manifest" "$(tail -n 5 "$scratch/err")"
 fi
 
+# 8j. Skill AGENTS.md owner-context files are not copied over; SKILL.md and the
+# runnable payload are.
+ghome="$(make_ghome "no-agents-md")"
+run_sh_global "$ghome" >/dev/null 2>&1
+gok=1
+for s in ai-ralph-loop create-worktask manage-rule-system ai-terse; do
+  [ -e "$(glb_root "$ghome")/skills/$s/AGENTS.md" ] && gok=0
+  [ -e "$(glb_root "$ghome")/skills/$s/SKILL.md" ] || gok=0
+done
+if [ "$gok" = "1" ]; then
+  ok "global skill copy strips AGENTS.md, keeps SKILL.md and payload"
+else
+  no "global skill copy strips AGENTS.md, keeps SKILL.md and payload" "$(find "$(glb_root "$ghome")/skills" -name 'AGENTS.md' 2>/dev/null)"
+fi
+
+# 8k. OpenCode wiring: skills are referenced from the commands folder
+# (commands/<name>.md -> SKILL.md), NOT copied into ~/.config/opencode/skills/
+# (OpenCode already sees them via the Claude/agents interface). Removed on
+# uninstall; skipped when OpenCode's config dir is absent.
+ghome="$(make_ghome "opencode")"
+mkdir -p "$ghome/.config/opencode"
+OPENCODE_CONFIG="$ghome/.config/opencode" run_sh_global "$ghome" >/dev/null 2>&1
+gok=1
+for s in ai-ralph-loop ai-terse create-worktask; do
+  [ -L "$ghome/.config/opencode/commands/$s.md" ] || gok=0
+  [ "$(readlink "$ghome/.config/opencode/commands/$s.md")" = "$(glb_root "$ghome")/skills/$s/SKILL.md" ] || gok=0
+done
+[ ! -d "$ghome/.config/opencode/skills" ] || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global OpenCode wiring: skills referenced as commands, not copied to skills/"
+else
+  no "global OpenCode wiring: skills referenced as commands, not copied to skills/" "$(find "$ghome/.config/opencode" -maxdepth 2 2>/dev/null | sed "s|$ghome|HOME|")"
+fi
+OPENCODE_CONFIG="$ghome/.config/opencode" run_sh_global "$ghome" --uninstall >/dev/null 2>&1
+if [ "$(ls "$ghome/.config/opencode/commands/"*.md 2>/dev/null | wc -l | tr -d ' ')" = "0" ]; then
+  ok "global OpenCode commands removed on uninstall"
+else
+  no "global OpenCode commands removed on uninstall" "$(ls "$ghome/.config/opencode/commands/" 2>/dev/null)"
+fi
+
+# 8l. -g -d tracks the shell-profile edit and restores it on uninstall (backup first).
+ghome="$(make_ghome "profiledit")"
+mkdir -p "$ghome/.config/opencode"
+printf '# operator shell\nexport MY_CHECK=1\n' >"$ghome/.zshrc"
+HOME="$ghome" CODEX_HOME="$ghome/.codex" OPENCODE_CONFIG="$ghome/.config/opencode" SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
+  SKILLS_TEST_OWNED_EXTRA="alpha beta gamma delta epsilon" bash "$installer_sh" -g -d >/dev/null 2>&1
+gok=1
+grep -q 'SMOOTH_DEVEX_DECISIONS' "$ghome/.zshrc" || gok=0
+ls "$ghome"/.zshrc.smooth-devex-* >/dev/null 2>&1 || gok=0
+HOME="$ghome" CODEX_HOME="$ghome/.codex" OPENCODE_CONFIG="$ghome/.config/opencode" SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
+  bash "$installer_sh" -g --uninstall >/dev/null 2>&1
+grep -q 'SMOOTH_DEVEX_DECISIONS' "$ghome/.zshrc" && gok=0
+grep -q 'MY_CHECK=1' "$ghome/.zshrc" || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global -g -d tracks + restores the shell profile on uninstall"
+else
+  no "global -g -d tracks + restores the shell profile on uninstall" "$(cat "$ghome/.zshrc" 2>/dev/null)"
+fi
+
 # 8b. A re-run converges: no duplicated hook group, no doubled marker, and the
 # links history is preserved (not wiped by the assumption that nothing changed).
 links_after_first="$(python3 -c "import json;print(len(json.load(open('$(global_manifest "$ghome")'))['links']))")"

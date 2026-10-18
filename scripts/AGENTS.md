@@ -36,13 +36,18 @@ documentation.
 | --- | --- |
 | `install-skills.sh` | bash port. macOS / Linux. Needs `bash`, `git`, `python3`. |
 | `install-skills.ps1` | PowerShell 7 port. Windows or anywhere `pwsh` runs. Needs `pwsh`, `git`. |
-| `test-install-skills.sh` | Harness. 60 cases, bash port only (the ps1 port is read, not run). |
+| `test-install-skills.sh` | Harness. 64 cases, bash port only (the ps1 port is read, not run). |
 
 The installer pulls a flat list of folders from `.agents/skills/` in this repository into a consumer
 repository, controlled by a per-skill `installed` flag in
 `<consumer-root>/_smooth-devex-shared/installation.json`. Skills owned by **other** repositories
 (such as `smooth-ai-product-context-memory`'s `mimisbrunnr-*` set) are not touched, and the shared-folder
 name is deliberately per-repo so a single tree cannot confuse two installers' state files.
+
+A skill's own `AGENTS.md` is **never copied** — it documents the owner repo's local-dev context and
+improvements, not the runnable payload a consumer should inherit. The installer strips `AGENTS.md`
+files from every skill folder it copies (per-repo and `-g` global), leaving `SKILL.md`, scripts and
+references intact.
 
 A small hardcoded **owned set** (`OWNED_LIST` in `install-skills.sh`, `$script:OwnedList` in
 `install-skills.ps1`) scopes the installer to seven template-purpose skills: `ai-asset-sync`,
@@ -63,13 +68,17 @@ installs the same owned set once, machine-wide, into `~/.smooth-ai-devex/` and w
 the owned rules are imported through a generated `~/.smooth-ai-devex/AGENTS.md` that
 `~/.codex/AGENTS.md` pulls in with one marker-guarded `@`-line (never written into `~/.codex/rules/`,
 a Starlark `prefix_rule` namespace), and the owned hooks are JSON-merged into `~/.codex/hooks.json`
-under `UserPromptSubmit` only, with absolute store commands. State is
-`~/.smooth-ai-devex/installation.json` (a `links[]` record of what was installed); `-g --uninstall`
-removes exactly that — never `.system/`, an operator's `gk` hooks, or their `RTK.md` `@`-import line.
-Every pre-existing config file the installer appends to (`~/.codex/AGENTS.md`, `~/.codex/hooks.json`,
-and the shell profile when decision env vars are written) is snapshotted once as
-`<file>.smooth-devex-<UTC datetime>` before modification, and `--uninstall` restores it.
-`-g` refuses to be combined with `SKILLS_ROOT`, and `--uninstall` without `-g` is refused.
+under `UserPromptSubmit` only, with absolute store commands. When OpenCode is installed, each owned
+skill is instead referenced from `~/.config/opencode/commands/<name>.md` (a command symlink to the
+skill's `SKILL.md`, not a copy into the skills folder — OpenCode already sees them via the
+Claude/agents interface). State is `~/.smooth-ai-devex/installation.json` (a `links[]` record of what
+was installed); `-g --uninstall` removes exactly that — never `.system/`, an operator's `gk` hooks, or
+their `RTK.md` `@`-import line. Every pre-existing config file the installer appends to
+(`~/.codex/AGENTS.md`, `~/.codex/hooks.json`, and the shell profile when decision env vars are written)
+is snapshotted once as `<file>.smooth-devex-<UTC datetime>` before modification, and `--uninstall`
+restores it; the symlinks the installer creates (Codex skills, OpenCode commands) are removed, and a
+`-g -d` profile edit is restored too. `-g` refuses to be combined with `SKILLS_ROOT`, and `--uninstall`
+without `-g` is refused.
 
 ## Test References
 
@@ -105,3 +114,5 @@ Two known gaps:
 | 2026-10-17 | Decision prompt probes `/dev/tty` by opening it (`-r` passes on CI runners with no controlling terminal, then `read` died under `set -e`); harness adds a no-controlling-terminal case | — |
 | 2026-10-17 | `-g` global mode: `~/.smooth-ai-devex/{skills,rules,hooks}` store + manifest with `links[]`; Codex wiring — skills symlinks, marker-guarded `~/.codex/AGENTS.md` import, UserPromptSubmit `hooks.json` merge; snaps pre-existing appended files as `<file>.smooth-devex-<datetime>` and restores on `-g --uninstall`; harness adds 8 `-g` cases | — |
 | 2026-10-18 | Review fixes: `-g --uninstall` removes an installer-created `AGENTS.md` from nothing (exact inverse, no leftover), `symlink_global_skill` guards a failed `ln -s` instead of aborting the run, `-g` usage string reworded; harness adds case 8i (60 total) | — |
+| 2026-10-18 | Skill `AGENTS.md` files are no longer copied over (owner local-dev context; stripped from per-repo and `-g` skill copies); harness case 8j | — |
+| 2026-10-18 | `-g` wires OpenCode: owned skills referenced as `~/.config/opencode/commands/<name>.md` (command, not skills-folder copy); `-g -d` profile edit tracked and restored on uninstall; harness cases 8k/8l | — |
