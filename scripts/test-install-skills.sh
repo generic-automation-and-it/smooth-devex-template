@@ -918,24 +918,30 @@ else
 fi
 
 # 8l. -g -d tracks the shell-profile edit and restores it on uninstall (backup first).
+# write_decisions_env writes to .zshrc on macOS and .bashrc on Linux — mirror that
+# so the case is platform-agnostic (the PR-gate runner is Ubuntu).
 ghome="$(make_ghome "profiledit")"
 mkdir -p "$ghome/.config/opencode"
-printf '# operator shell\nexport MY_CHECK=1\n' >"$ghome/.zshrc"
+case "$(uname -s)" in
+  Darwin) profile="$ghome/.zshrc" ;;
+  *)      profile="$ghome/.bashrc" ;;
+esac
+printf '# operator shell\nexport MY_CHECK=1\n' >"$profile"
 HOME="$ghome" CODEX_HOME="$ghome/.codex" SMOOTH_DEVEX_HOME="$ghome/.smooth-ai-devex" \
   OPENCODE_CONFIG="$ghome/.config/opencode" SKILLS_ROOT="" SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
   SKILLS_TEST_OWNED_EXTRA="alpha beta gamma delta epsilon" bash "$installer_sh" -g -d >/dev/null 2>&1
 gok=1
-grep -q 'SMOOTH_DEVEX_DECISIONS' "$ghome/.zshrc" || gok=0
-ls "$ghome"/.zshrc.smooth-devex-* >/dev/null 2>&1 || gok=0
+grep -q 'SMOOTH_DEVEX_DECISIONS' "$profile" || gok=0
+ls "$profile".smooth-devex-* >/dev/null 2>&1 || gok=0
 HOME="$ghome" CODEX_HOME="$ghome/.codex" SMOOTH_DEVEX_HOME="$ghome/.smooth-ai-devex" \
   OPENCODE_CONFIG="$ghome/.config/opencode" SKILLS_ROOT="" SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
   bash "$installer_sh" -g --uninstall >/dev/null 2>&1
-grep -q 'SMOOTH_DEVEX_DECISIONS' "$ghome/.zshrc" && gok=0
-grep -q 'MY_CHECK=1' "$ghome/.zshrc" || gok=0
+grep -q 'SMOOTH_DEVEX_DECISIONS' "$profile" && gok=0
+grep -q 'MY_CHECK=1' "$profile" || gok=0
 if [ "$gok" = "1" ]; then
   ok "global -g -d tracks + restores the shell profile on uninstall"
 else
-  no "global -g -d tracks + restores the shell profile on uninstall" "$(cat "$ghome/.zshrc" 2>/dev/null)"
+  no "global -g -d tracks + restores the shell profile on uninstall" "$(cat "$profile" 2>/dev/null)"
 fi
 
 # 8b. A re-run converges: no duplicated hook group, no doubled marker, and the
