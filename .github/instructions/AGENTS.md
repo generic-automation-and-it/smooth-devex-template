@@ -14,8 +14,8 @@ Rule index. Claude Code, Copilot and OpenCode auto-load these files; **Codex doe
 
 | Scope | Rules |
 | :---- | :---- |
-| `**` | `ai-workflow-rules` · `clean-code` · `code-review-standards` · `project-overview` · `solid-principles` · `git/git-policy` · `git/pr-standards` |
-| `**/*.cs` | `backend/api-mediator-validation` · `backend/architecture-slices` · `backend/backend-logging-conventions` · `backend/collection-types` · `backend/external-api-clients` · `backend/readonly-collections` |
+| `**` | `ai-workflow-rules` · `clean-code` · `code-review-standards` · `solid-principles` · `git/git-policy` · `git/pr-standards` |
+| `**/*.cs` | `project-overview` · `backend/api-mediator-validation` · `backend/architecture-slices` · `backend/backend-logging-conventions` · `backend/collection-types` · `backend/external-api-clients` · `backend/readonly-collections` |
 | `src/*.Infrastructure/Persistence/Migrations/**/*.cs` | `backend/migrations` |
 | `tests/*.TestFramework.Aspire/**/*.cs` | `backend/wiremock-stubbing` |
 | `**/*AGENTS.md` | `meta/knowledge-conventional-contexts-quality` |

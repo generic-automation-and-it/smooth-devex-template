@@ -1,10 +1,10 @@
 ---
 description: 'Project backend tech stack, architecture, and commands for AI coding tasks'
-globs: "**"
+globs: "**/*.cs"
 paths:
-  - "**"
-applyTo: '**'
-alwaysApply: true
+  - "**/*.cs"
+applyTo: '**/*.cs'
+alwaysApply: false
 ---
 # Project Overview
 
