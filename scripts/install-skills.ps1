@@ -835,11 +835,17 @@ function Install-GlobalOpencode {
 }
 
 function Install-GlobalSkills {
-    # Copy the owned skills into the central store, then symlink each
-    # installed:true owned skill into Codex's skills dir.
+    # Copy the enabled owned skills into the central store, then symlink each.
+    # Only installed:true entries are refreshed AND symlinked, so an
+    # installed:false skill is neither overwritten (local edits preserved) nor
+    # exposed to Codex; the owned-name guard still applies.
     param([object] $Manifest)
     $repoSkills = Join-Path $script:TempRepo '.agents/skills'
-    foreach ($name in $script:OwnedList) {
+    $enabled = @()
+    if ($Manifest -and $Manifest.skills) {
+        $enabled = @($Manifest.skills | Where-Object { $_.installed } | Select-Object -ExpandProperty name)
+    }
+    foreach ($name in $enabled) {
         if (-not (Test-OwnedSkill -Name $name)) { continue }
         $source = Join-Path $repoSkills $name
         if (Test-Path -LiteralPath $source -PathType Container) {
@@ -852,12 +858,8 @@ function Install-GlobalSkills {
             Write-Info "WARNING: skill $name not found in repo - not stored"
         }
     }
-    if ($Manifest -and $Manifest.skills) {
-        foreach ($skill in $Manifest.skills) {
-            if ($skill.installed -and (Test-OwnedSkill -Name $skill.name)) {
-                Sync-GlobalSkill -Name $skill.name
-            }
-        }
+    foreach ($name in $enabled) {
+        if (Test-OwnedSkill -Name $name) { Sync-GlobalSkill -Name $name }
     }
 }
 
@@ -1155,6 +1157,9 @@ function Uninstall-Global {
         } elseif ($typ -eq 'profile-edit') {
             if ($detail -and (Test-Path -LiteralPath $detail -PathType Leaf)) {
                 Copy-Item -LiteralPath $detail -Destination $path -Force
+                # Retire the snapshot so a later reinstall snapshots the operator's
+                # current content fresh rather than reusing an obsolete backup.
+                Remove-Item -LiteralPath $detail -Force
             } elseif (Test-Path -LiteralPath $path -PathType Leaf) {
                 # No snapshot: drop the marker-guarded decision env block.
                 $lines = Get-Content -LiteralPath $path
@@ -1176,6 +1181,9 @@ function Uninstall-Global {
                 # Restore the pre-append snapshot: strictly the operator's earlier
                 # content, never our own append.
                 Copy-Item -LiteralPath $detail -Destination $path -Force
+                # Retire the snapshot so a later reinstall snapshots the operator's
+                # current content fresh rather than reusing an obsolete backup.
+                Remove-Item -LiteralPath $detail -Force
             } elseif (Test-Path -LiteralPath $path -PathType Leaf) {
                 # No snapshot means the installer created the file from nothing;
                 # removing it is the exact inverse of the install (a splice would
@@ -1185,6 +1193,9 @@ function Uninstall-Global {
         } elseif ($typ -eq 'hooks-merge') {
             if ($detail -and (Test-Path -LiteralPath $detail -PathType Leaf)) {
                 Copy-Item -LiteralPath $detail -Destination $path -Force
+                # Retire the snapshot so a later reinstall snapshots the operator's
+                # current content fresh rather than reusing an obsolete backup.
+                Remove-Item -LiteralPath $detail -Force
             } elseif (Test-Path -LiteralPath $path -PathType Leaf) {
                 $data2 = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json -AsHashtable
                 $hooks2 = $data2['hooks']

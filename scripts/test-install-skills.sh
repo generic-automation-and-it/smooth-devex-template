@@ -1022,18 +1022,20 @@ else
 fi
 
 # 8h. Uninstall removes exactly what the install recorded: the Codex skill links,
-# the marker-guarded AGENTS import (leaving the operator's RTK @-line), and the
-# hooked chunks — restoring the pre-install hooks.json backup made by the
-# installer. .system/ and the store directory are left alone.
+# the marker-guarded AGENTS import, and the hooked chunks — restoring the
+# pre-install operator content byte-for-byte and retiring the snapshots that
+# enabled the restore (so a later install snapshots fresh). .system/ and the store
+# directory are left alone.
 ghome="$(make_ghome "uninstall")"
 printf '@%s/.codex/RTK.md\n\noperator line 1\noperator line 2\n' "$ghome" >"$ghome/.codex/AGENTS.md"
 printf '# RTK\n' >"$ghome/.codex/RTK.md"
 printf '{"hooks":{"UserPromptSubmit":[{"hooks":[{"command":"gk ai hook run --host codex","type":"command"}],"matcher":""}]}}\n' >"$ghome/.codex/hooks.json"
+# Capture the operator's original content; the snapshots are retired on uninstall,
+# so compare against these rather than the (now-deleted) backup files.
+cp "$ghome/.codex/AGENTS.md" "$scratch/orig-8h-agents.md"
+cp "$ghome/.codex/hooks.json" "$scratch/orig-8h-hooks.json"
 run_sh_global "$ghome" >/dev/null 2>&1
 gok=1
-# The pre-seeded operator files are snapshotted before append (both hooks.json
-# and AGENTS.md), so --uninstall restores them byte-for-byte rather than only
-# splicing out the installer's markers.
 backup_agents="$(ls "$ghome"/.codex/AGENTS.md.smooth-devex-* 2>/dev/null | head -n 1)"
 backup_hooks="$(ls "$ghome"/.codex/hooks.json.smooth-devex-* 2>/dev/null | head -n 1)"
 [ -n "$backup_agents" ] || gok=0
@@ -1044,14 +1046,66 @@ for s in ai-asset-sync ai-terse create-hld; do [ -e "$ghome/.codex/skills/$s" ] 
 grep -q 'installer-owned-global-instructions' "$ghome/.codex/AGENTS.md" && gok=0
 grep -q "@$(glb_root "$ghome")/AGENTS.md" "$ghome/.codex/AGENTS.md" && gok=0
 # AGENTS.md is restored to the operator's earlier content, byte-for-byte.
-[ -f "$backup_agents" ] && cmp -s "$backup_agents" "$ghome/.codex/AGENTS.md" || gok=0
+cmp -s "$scratch/orig-8h-agents.md" "$ghome/.codex/AGENTS.md" || gok=0
 grep -q 'gk ai hook run --host codex' "$ghome/.codex/hooks.json" || gok=0
 grep -q "$(glb_root "$ghome")/hooks/" "$ghome/.codex/hooks.json" && gok=0
+# The snapshots used for restore are retired (a later install snapshots fresh).
+[ -e "$backup_agents" ] && gok=0
+[ -e "$backup_hooks" ] && gok=0
 [ -f "$ghome/.codex/skills/.system/cfg.md" ] || gok=0
 if [ "$gok" = "1" ]; then
-  ok "global uninstall removes only owned links/edits, restores hooks + AGENTS snapshots byte-for-byte, keeps RTK + .system"
+  ok "global uninstall restores operator content byte-for-byte, retires snapshots, keeps RTK + .system"
 else
-  no "global uninstall removes only owned links/edits, restores hooks + AGENTS snapshots byte-for-byte, keeps RTK + .system" "$(tail -n 6 "$scratch/err")"
+  no "global uninstall restores operator content byte-for-byte, retires snapshots, keeps RTK + .system" "$(tail -n 6 "$scratch/err")"
+fi
+
+# 8m. install → uninstall → reinstall → uninstall never loses an operator's
+# pre-existing AGENTS.md. The first uninstall restores it and retires the
+# snapshot; the reinstall snapshots the operator's current content fresh and
+# records the new snapshot, so the second uninstall still restores (never deletes
+# as installer-created).
+ghome="$(make_ghome "cycle")"
+printf '@%s/.codex/RTK.md\n\noperator line 1\noperator line 2\n' "$ghome" >"$ghome/.codex/AGENTS.md"
+printf '# RTK\n' >"$ghome/.codex/RTK.md"
+run_sh_global "$ghome" >/dev/null 2>&1
+run_sh_global "$ghome" --uninstall >/dev/null 2>&1
+run_sh_global "$ghome" >/dev/null 2>&1
+run_sh_global "$ghome" --uninstall >/dev/null 2>&1
+expected="$(printf '@%s/.codex/RTK.md\n\noperator line 1\noperator line 2\n' "$ghome")"
+actual="$(cat "$ghome/.codex/AGENTS.md")"
+if [ "$actual" = "$expected" ] && [ -f "$ghome/.codex/AGENTS.md" ]; then
+  ok "global install/uninstall cycle preserves an operator's pre-existing AGENTS.md"
+else
+  no "global install/uninstall cycle preserves an operator's pre-existing AGENTS.md" "after 2nd uninstall: $(cat "$ghome/.codex/AGENTS.md" 2>/dev/null)"
+fi
+
+# 8n. A global manifest entry set to installed:false is not refreshed in the store
+# (operator local edits preserved, honoring the update opt-out), and remains
+# discoverable — the flag only stops updates, it does not remove the skill.
+ghome="$(make_ghome "disabled-skill")"
+run_sh_global "$ghome" >/dev/null 2>&1
+printf 'local edit\n' >"$(glb_root "$ghome")/skills/ai-terse/SKILL.md"   # operator-local edit in the store
+python3 - "$(global_manifest "$ghome")" <<'PYEOF'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+for s in d['skills']:
+    if s['name'] == 'ai-terse':
+        s['installed'] = False
+json.dump(d, open(p, 'w'), indent=2)
+PYEOF
+run_sh_global "$ghome" >/dev/null 2>&1
+gok=1
+# The installed:false skill keeps its local edit in the store (not overwritten).
+[ "$(cat "$(glb_root "$ghome")/skills/ai-terse/SKILL.md")" = "local edit" ] || gok=0
+# It stays discoverable (the flag stops updates, not exposure).
+[ -L "$ghome/.codex/skills/ai-terse" ] || gok=0
+# An installed:true sibling is still exposed.
+[ -L "$ghome/.codex/skills/create-hld" ] || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global installed:false skill is preserved (not refreshed) but stays discoverable"
+else
+  no "global installed:false skill is preserved (not refreshed) but stays discoverable" "$(cat "$(glb_root "$ghome")/skills/ai-terse/SKILL.md" 2>/dev/null)"
 fi
 
 # 8i. A global install that created ~/.codex/AGENTS.md from nothing removes it on

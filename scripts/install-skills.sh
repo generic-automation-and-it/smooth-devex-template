@@ -889,8 +889,18 @@ for s in json.load(sys.stdin).get('skills', []):
 # install_global_skills MANIFEST_JSON — copy the owned skills into the central
 # store, then symlink each installed:true owned skill into Codex's skills dir.
 install_global_skills() {
-  local installation_json="$1" name
-  for name in "${OWNED_LIST[@]}"; do
+  local installation_json="$1" name installed
+  # Only installed:true entries are refreshed into the store AND symlinked, so an
+  # installed:false skill is neither overwritten (local edits preserved) nor
+  # exposed to Codex. The owned-name guard still applies to every entry.
+  installed="$(printf '%s' "$installation_json" | python3 -c "
+import json, sys
+for s in json.load(sys.stdin).get('skills', []):
+    if s.get('installed'):
+        print(s['name'])
+")"
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
     is_owned_skill "$name" || continue
     if [ -d "$INSTALL_TMP/repo/.agents/skills/$name" ]; then
       rm -rf "$GLB_ROOT/skills/$name"
@@ -900,14 +910,7 @@ install_global_skills() {
     else
       log "WARNING: skill $name not found in repo — not stored"
     fi
-  done
-  local installed
-  installed="$(printf '%s' "$installation_json" | python3 -c "
-import json, sys
-for s in json.load(sys.stdin).get('skills', []):
-    if s.get('installed'):
-        print(s['name'])
-")"
+  done <<< "$installed"
   while IFS= read -r name; do
     [ -n "$name" ] || continue
     is_owned_skill "$name" || continue
@@ -1249,11 +1252,15 @@ for link in links:
             print('removed link', path)
     elif typ == 'profile-edit':
         if detail and os.path.exists(detail):
-            # Restore the pre-append profile snapshot.
+            # Restore the pre-append profile snapshot, then retire it so a later
+            # reinstall snapshots the operator's current content fresh rather than
+            # reusing an obsolete backup that leaves the file indistinguishable
+            # from an installer-created one.
             with open(detail, 'rb') as f:
                 content = f.read()
             with open(path, 'wb') as f:
                 f.write(content)
+            os.remove(detail)
             print('restored profile backup', path)
         elif os.path.exists(path):
             # No snapshot: drop the marker-guarded decision env block we appended.
@@ -1277,11 +1284,13 @@ for link in links:
     elif typ == 'agents-import':
         if detail and os.path.exists(detail):
             # Restore the pre-append snapshot, which is strictly the operator's
-            # earlier content (never our own append).
+            # earlier content (never our own append), then retire it so a later
+            # reinstall snapshots the operator's current content fresh.
             with open(detail, 'rb') as f:
                 content = f.read()
             with open(path, 'wb') as f:
                 f.write(content)
+            os.remove(detail)
             print('restored agents import backup', path)
         elif os.path.exists(path):
             # No snapshot means the installer created the file from nothing, so
@@ -1295,6 +1304,7 @@ for link in links:
                 content = f.read()
             with open(path, 'wb') as f:
                 f.write(content)
+            os.remove(detail)
             print('restored hooks backup', path)
         elif os.path.exists(path):
             with open(path, encoding='utf-8') as f:
