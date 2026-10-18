@@ -69,11 +69,12 @@ installs the same owned set once, machine-wide, into `~/.smooth-ai-devex/` and w
 and made vendorable into any agent tree; the skills' own `SKILL.md` files reference a repo-local
 `.agents/...` tree (own scripts, rules, `.context/`), so a globally-installed skill is *discoverable*
 but its scripts only run when the consumer has that tree (a per-repo install, or this template).
-the owned rules are imported through a generated `~/.smooth-ai-devex/AGENTS.md` that
-`~/.codex/AGENTS.md` pulls in with one marker-guarded `@`-line (never written into `~/.codex/rules/`,
-a Starlark `prefix_rule` namespace), symlinked into `~/.claude/rules/` when Claude is installed, and
-added to `opencode.json` `instructions` when OpenCode is installed; and the owned hooks are
-JSON-merged into `~/.codex/hooks.json`
+the full template rules tree is copied into the store and imported through a generated
+`~/.smooth-ai-devex/AGENTS.md` that `~/.codex/AGENTS.md` pulls in with one marker-guarded `@`-line
+(never written into `~/.codex/rules/`, a Starlark `prefix_rule` namespace), symlinked into
+`~/.claude/rules/` when Claude is installed, and added to `opencode.json` `instructions` when OpenCode
+is installed — unlike the per-repo install, which ships only the 4 `OWNED_RULES`. And the owned hooks
+are JSON-merged into `~/.codex/hooks.json`
 under `UserPromptSubmit` only, with absolute store commands. When Claude is installed, owned skills
 are also symlinked into `~/.claude/skills/`. When OpenCode is installed, each owned skill is
 referenced from `~/.config/opencode/commands` (a folder symlink to the store's `opencode-commands/`,
@@ -130,3 +131,4 @@ Two known gaps:
 | 2026-10-18 | `-g` wires Claude Code: owned skills symlinked into `~/.claude/skills` when Claude is installed (removed on `--uninstall`); harness case 8p | — |
 | 2026-10-18 | `-g` OpenCode: owned skills symlinked into OpenCode's skills dir, and the store's rules added to `opencode.json` `instructions` with a backup; harness cases 8k/8q | — |
 | 2026-10-18 | `-g` Claude rules: owned rules symlinked into `~/.claude/rules` so Claude Code loads them across sessions; harness case 8r | — |
+| 2026-10-18 | `-g` global rules ship the **full** template rules tree (incl. `backend/`, `skills/`, clean-code, solid-principles), not just the 4 `OWNED_RULES` a consumer gets — for Codex `@`-import, Claude `~/.claude/rules`, OpenCode `opencode.json` | — |

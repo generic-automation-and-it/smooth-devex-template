@@ -1169,17 +1169,20 @@ ghome="$(make_ghome "claude-rules")"
 mkdir -p "$ghome/.claude"
 run_sh_global "$ghome" >/dev/null 2>&1
 gok=1
+# The store ships the FULL template rules tree, so backend/ and the flat rules
+# land too, not just the owned subset (git, meta).
+[ -e "$(glb_root "$ghome")/rules/backend/architecture-slices.instructions.md" ] || gok=0
 for r in code-review-standards.instructions.md git/git-policy.instructions.md \
-  meta/knowledge-conventional-contexts-quality.instructions.md meta/rules.instructions.md; do
+  backend/architecture-slices.instructions.md meta/rules.instructions.md; do
   [ -L "$ghome/.claude/rules/$r" ] || gok=0
   [ "$(readlink "$ghome/.claude/rules/$r")" = "$(glb_root "$ghome")/rules/$r" ] || gok=0
 done
 run_sh_global "$ghome" --uninstall >/dev/null 2>&1
 [ "$(find "$ghome/.claude/rules" -type l 2>/dev/null | wc -l | tr -d ' ')" = "0" ] || gok=0
 if [ "$gok" = "1" ]; then
-  ok "global Claude rules: owned rules symlinked into ~/.claude/rules, removed on uninstall"
+  ok "global Claude rules: full rule tree (incl. backend/) symlinked into ~/.claude/rules, removed on uninstall"
 else
-  no "global Claude rules: owned rules symlinked into ~/.claude/rules, removed on uninstall" "$(find "$ghome/.claude/rules" -type l 2>/dev/null)"
+  no "global Claude rules: full rule tree (incl. backend/) symlinked into ~/.claude/rules, removed on uninstall" "$(find "$ghome/.claude/rules" -type l 2>/dev/null)"
 fi
 
 # 8i. A global install that created ~/.codex/AGENTS.md from nothing removes it on
