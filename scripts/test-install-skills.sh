@@ -918,14 +918,15 @@ else
   no "global OpenCode skills removed on uninstall" "$(ls "$ghome/.config/opencode/skills" 2>/dev/null)"
 fi
 
-# 8q. OpenCode opencode.json gets the store-rule instructions glob (backup first)
+# 8q. OpenCode opencode.json gets one instructions entry per installed store rule
+# (a per-file path, not a glob, so a single rule can be switched off) after a backup,
 # so OpenCode loads the global rules; restored on uninstall.
 ghome="$(make_ghome "opencode-instr")"
 mkdir -p "$ghome/.config/opencode"
 printf '{"$schema":"https://opencode.ai/config.json","provider":{"name":"x"}}\n' >"$ghome/.config/opencode/opencode.json"
 OPENCODE_CONFIG="$ghome/.config/opencode" run_sh_global "$ghome" >/dev/null 2>&1
 gok=1
-python3 -c "import json,sys; d=json.load(open('$ghome/.config/opencode/opencode.json')); i=d.get('instructions',[]); sys.exit(0 if any('$(glb_root "$ghome")/rules/*.instructions.md' in g for g in i) and any('$(glb_root "$ghome")/rules/**/*.instructions.md' in g for g in i) else 1)" || gok=0
+python3 -c "import json,sys; d=json.load(open('$ghome/.config/opencode/opencode.json')); i=d.get('instructions',[]); r='$(glb_root "$ghome")/rules/'; sys.exit(0 if r+'code-review-standards.instructions.md' in i and r+'backend/architecture-slices.instructions.md' in i and not any('*' in g for g in i) else 1)" || gok=0
 ls "$ghome"/.config/opencode/opencode.json.smooth-devex-* >/dev/null 2>&1 || gok=0
 OPENCODE_CONFIG="$ghome/.config/opencode" run_sh_global "$ghome" --uninstall >/dev/null 2>&1
 python3 -c "import json,sys; d=json.load(open('$ghome/.config/opencode/opencode.json')); sys.exit(0 if not any('$(glb_root "$ghome")/rules/' in g for g in d.get('instructions',[])) else 1)" || gok=0
@@ -1188,6 +1189,226 @@ else
   no "global Claude rules: full rule tree (incl. backend/) symlinked into ~/.claude/rules, removed on uninstall" "$(find "$ghome/.claude/rules" -type l 2>/dev/null)"
 fi
 
+# Per-item installed flags for rules[] and hooks[] (cases 8s-8x). The manifest carries the
+# same {name, installed} entries for them that it does for skills, so one rule or one hook
+# can be switched off without touching the rest.
+
+# global_item_flag GHOME KEY NAME -> "true"/"false", or empty when the manifest has no such entry.
+global_item_flag() {
+  python3 -c "
+import json, sys
+for entry in json.load(open(sys.argv[1])).get(sys.argv[2], []):
+    if entry['name'] == sys.argv[3]:
+        print('true' if entry['installed'] else 'false')
+        raise SystemExit(0)
+" "$(global_manifest "$1")" "$2" "$3"
+}
+
+# set_global_item_flag GHOME KEY NAME true|false -- the operator's hand edit of the manifest.
+set_global_item_flag() {
+  python3 - "$(global_manifest "$1")" "$2" "$3" "$4" <<'PYEOF'
+import json, sys
+path, key, name, value = sys.argv[1:5]
+data = json.load(open(path))
+for entry in data[key]:
+    if entry['name'] == name:
+        entry['installed'] = (value == 'true')
+json.dump(data, open(path, 'w'), indent=2)
+PYEOF
+}
+
+# global_item_names GHOME KEY -> the manifest's names for KEY, sorted, one per line.
+global_item_names() {
+  python3 -c "
+import json, sys
+print('\n'.join(sorted(e['name'] for e in json.load(open(sys.argv[1])).get(sys.argv[2], []))))
+" "$(global_manifest "$1")" "$2"
+}
+
+opencode_instr_has() { # GHOME ENTRY
+  python3 -c "import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if sys.argv[2] in d.get('instructions',[]) else 1)" \
+    "$1/.config/opencode/opencode.json" "$2"
+}
+
+# 8s. A first global install records every owned rule and hook in the manifest as
+# installed:true, next to skills[] -- the list is the owned allowlist, nothing more.
+ghome="$(make_ghome "items-shape")"
+run_sh_global "$ghome" >/dev/null 2>&1
+gok=1
+[ "$(global_item_names "$ghome" rules)" = "$bash_rules" ] || gok=0
+[ "$(global_item_names "$ghome" hooks)" = "$bash_hooks" ] || gok=0
+python3 - "$(global_manifest "$ghome")" <<'PYEOF' || gok=0
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d['skills'], 'skills[] missing'
+for key in ('rules', 'hooks'):
+    assert d[key] and all(e['installed'] is True for e in d[key]), key
+PYEOF
+if [ "$gok" = "1" ]; then
+  ok "global manifest: rules[] and hooks[] list every owned item as installed:true beside skills[]"
+else
+  no "global manifest: rules[] and hooks[] list every owned item as installed:true beside skills[]" "$(python3 -c "import json;d=json.load(open('$(global_manifest "$ghome")'));print(list(d))")"
+fi
+
+# 8t. Reconciliation matches skills: the operator's flag survives a re-run, a name outside the
+# owned allowlist is dropped (it can never be installed), and a missing owned name rejoins as true.
+ghome="$(make_ghome "items-reconcile")"
+run_sh_global "$ghome" >/dev/null 2>&1
+set_global_item_flag "$ghome" rules clean-code.instructions.md false
+set_global_item_flag "$ghome" hooks worktask-skill-trigger.sh false
+python3 - "$(global_manifest "$ghome")" <<'PYEOF'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+d['rules'] = [e for e in d['rules'] if e['name'] != 'meta/rules.instructions.md']
+d['rules'].append({'name': 'ghost.instructions.md', 'installed': True})
+json.dump(d, open(p, 'w'), indent=2)
+PYEOF
+run_sh_global "$ghome" >/dev/null 2>&1
+gok=1
+[ "$(global_item_flag "$ghome" rules clean-code.instructions.md)" = "false" ] || gok=0
+[ "$(global_item_flag "$ghome" hooks worktask-skill-trigger.sh)" = "false" ] || gok=0
+[ "$(global_item_flag "$ghome" hooks manage-rule-system-context.sh)" = "true" ] || gok=0
+[ -z "$(global_item_flag "$ghome" rules ghost.instructions.md)" ] || gok=0
+[ "$(global_item_flag "$ghome" rules meta/rules.instructions.md)" = "true" ] || gok=0
+[ "$(global_item_names "$ghome" rules)" = "$bash_rules" ] || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global manifest: an operator's rule/hook installed:false survives a re-run, unowned names drop, missing ones rejoin"
+else
+  no "global manifest: an operator's rule/hook installed:false survives a re-run, unowned names drop, missing ones rejoin" "clean-code=$(global_item_flag "$ghome" rules clean-code.instructions.md) ghost=$(global_item_flag "$ghome" rules ghost.instructions.md)"
+fi
+
+# 8u. A rule set to installed:false is switched off everywhere it was wired -- the generated
+# AGENTS.md import, the ~/.claude/rules link, the opencode.json entry -- while its store copy keeps
+# any local edit and every sibling rule stays wired. Flipping it back rewires it and refreshes it.
+ghome="$(make_ghome "rule-off")"
+mkdir -p "$ghome/.claude" "$ghome/.config/opencode"
+printf '{"provider":{"name":"x"}}\n' >"$ghome/.config/opencode/opencode.json"
+run_sh_global "$ghome" >/dev/null 2>&1
+groot="$(glb_root "$ghome")"
+rule="clean-code.instructions.md"
+sibling="git/git-policy.instructions.md"
+gok=1
+[ -L "$ghome/.claude/rules/$rule" ] || gok=0
+grep -q "@$groot/rules/$rule" "$groot/AGENTS.md" || gok=0
+opencode_instr_has "$ghome" "$groot/rules/$rule" || gok=0
+printf 'local edit\n' >"$groot/rules/$rule"
+set_global_item_flag "$ghome" rules "$rule" false
+run_sh_global "$ghome" >/dev/null 2>&1
+[ -e "$ghome/.claude/rules/$rule" ] || [ -L "$ghome/.claude/rules/$rule" ] && gok=0
+grep -q "$rule" "$groot/AGENTS.md" && gok=0
+opencode_instr_has "$ghome" "$groot/rules/$rule" && gok=0
+[ "$(cat "$groot/rules/$rule")" = "local edit" ] || gok=0
+[ -L "$ghome/.claude/rules/$sibling" ] || gok=0
+grep -q "@$groot/rules/$sibling" "$groot/AGENTS.md" || gok=0
+opencode_instr_has "$ghome" "$groot/rules/$sibling" || gok=0
+set_global_item_flag "$ghome" rules "$rule" true
+run_sh_global "$ghome" >/dev/null 2>&1
+[ -L "$ghome/.claude/rules/$rule" ] || gok=0
+grep -q "@$groot/rules/$rule" "$groot/AGENTS.md" || gok=0
+opencode_instr_has "$ghome" "$groot/rules/$rule" || gok=0
+[ "$(cat "$groot/rules/$rule")" != "local edit" ] || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global installed:false rule is unwired (AGENTS import, Claude link, OpenCode entry), store edit kept, re-enable rewires"
+else
+  no "global installed:false rule is unwired (AGENTS import, Claude link, OpenCode entry), store edit kept, re-enable rewires" "claude=$(ls "$ghome/.claude/rules" 2>/dev/null | tr '\n' ' ') agents=$(grep -c "$rule" "$groot/AGENTS.md")"
+fi
+
+# 8v. A hook set to installed:false has its command removed from ~/.codex/hooks.json (the group it
+# alone filled goes with it) while the other owned hook and the operator's gk hook stay; the store
+# copy stays; flipping it back registers it again.
+ghome="$(make_ghome "hook-off")"
+printf '{"hooks":{"UserPromptSubmit":[{"hooks":[{"command":"gk ai hook run --host codex","type":"command"}],"matcher":""}]}}\n' >"$ghome/.codex/hooks.json"
+run_sh_global "$ghome" >/dev/null 2>&1
+groot="$(glb_root "$ghome")"
+hook="worktask-skill-trigger.sh"
+other="manage-rule-system-context.sh"
+gok=1
+grep -q "$groot/hooks/$hook" "$ghome/.codex/hooks.json" || gok=0
+set_global_item_flag "$ghome" hooks "$hook" false
+run_sh_global "$ghome" >/dev/null 2>&1
+grep -q "$groot/hooks/$hook" "$ghome/.codex/hooks.json" && gok=0
+grep -q "$groot/hooks/$other" "$ghome/.codex/hooks.json" || gok=0
+grep -q 'gk ai hook run --host codex' "$ghome/.codex/hooks.json" || gok=0
+[ -f "$groot/hooks/$hook" ] || gok=0
+python3 - "$ghome/.codex/hooks.json" <<'PYEOF' || gok=0
+import json, sys
+groups = json.load(open(sys.argv[1]))['hooks']['UserPromptSubmit']
+assert all(g.get('hooks') for g in groups), 'an emptied group was left behind'
+PYEOF
+set_global_item_flag "$ghome" hooks "$hook" true
+run_sh_global "$ghome" >/dev/null 2>&1
+grep -q "$groot/hooks/$hook" "$ghome/.codex/hooks.json" || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global installed:false hook is removed from hooks.json (gk and sibling kept, store copy kept), re-enable registers it"
+else
+  no "global installed:false hook is removed from hooks.json (gk and sibling kept, store copy kept), re-enable registers it" "$(cat "$ghome/.codex/hooks.json" 2>/dev/null)"
+fi
+
+# 8w. An opencode.json written by an earlier install (the rules/*.instructions.md glob pair) is
+# migrated to per-file entries -- the globs would keep loading a disabled rule -- and the operator's
+# own entries survive. A rules-only run (-g -r) is enough to do it.
+ghome="$(make_ghome "opencode-legacy")"
+groot="$(glb_root "$ghome")"
+mkdir -p "$ghome/.config/opencode"
+printf '{"instructions":["operator/own.md","%s/rules/*.instructions.md","%s/rules/**/*.instructions.md"]}\n' "$groot" "$groot" \
+  >"$ghome/.config/opencode/opencode.json"
+run_sh_global "$ghome" -r >/dev/null 2>&1
+gok=1
+opencode_instr_has "$ghome" "operator/own.md" || gok=0
+opencode_instr_has "$ghome" "$groot/rules/code-review-standards.instructions.md" || gok=0
+python3 - "$ghome/.config/opencode/opencode.json" "$(printf '%s\n' "$bash_rules" | wc -l | tr -d ' ')" <<'PYEOF' || gok=0
+import json, sys
+inst = json.load(open(sys.argv[1]))['instructions']
+assert not any('*' in g for g in inst), 'a legacy glob survived'
+assert len([g for g in inst if '/rules/' in g]) == int(sys.argv[2]), inst
+PYEOF
+if [ "$gok" = "1" ]; then
+  ok "global OpenCode: a legacy rules glob pair becomes per-file entries (operator entries kept), via -g -r alone"
+else
+  no "global OpenCode: a legacy rules glob pair becomes per-file entries (operator entries kept), via -g -r alone" "$(cat "$ghome/.config/opencode/opencode.json" 2>/dev/null)"
+fi
+
+# 8x. A category-only run reconciles only its own list and carries the others forward: -g -r
+# writes rules[] without inventing hooks[], and a later -g -h adds hooks[] without disturbing rules[].
+ghome="$(make_ghome "items-carry")"
+run_sh_global "$ghome" -r >/dev/null 2>&1
+gok=1
+python3 -c "import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if 'rules' in d and 'hooks' not in d else 1)" "$(global_manifest "$ghome")" || gok=0
+set_global_item_flag "$ghome" rules clean-code.instructions.md false
+run_sh_global "$ghome" -h >/dev/null 2>&1
+[ "$(global_item_names "$ghome" hooks)" = "$bash_hooks" ] || gok=0
+[ "$(global_item_flag "$ghome" rules clean-code.instructions.md)" = "false" ] || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global manifest: -g -r and -g -h each reconcile only their own list and carry the other forward"
+else
+  no "global manifest: -g -r and -g -h each reconcile only their own list and carry the other forward" "$(python3 -c "import json;print(list(json.load(open('$(global_manifest "$ghome")'))))")"
+fi
+
+# 8y. Switching items off after install must not cost the operator their pre-install files back:
+# the second edit of opencode.json / hooks.json snapshots nothing (the first run did), and its link
+# record must not overwrite the one that points at that snapshot -- so --uninstall still restores
+# both files byte-for-byte.
+ghome="$(make_ghome "flip-then-uninstall")"
+mkdir -p "$ghome/.claude" "$ghome/.config/opencode"
+printf '{"provider":{"name":"x"}}\n' >"$ghome/.config/opencode/opencode.json"
+printf '{"hooks":{"UserPromptSubmit":[{"hooks":[{"command":"gk ai hook run --host codex","type":"command"}],"matcher":""}]}}\n' >"$ghome/.codex/hooks.json"
+cp "$ghome/.config/opencode/opencode.json" "$scratch/opencode.orig"
+cp "$ghome/.codex/hooks.json" "$scratch/hooks.orig"
+run_sh_global "$ghome" >/dev/null 2>&1
+set_global_item_flag "$ghome" rules clean-code.instructions.md false
+set_global_item_flag "$ghome" hooks worktask-skill-trigger.sh false
+run_sh_global "$ghome" >/dev/null 2>&1
+run_sh_global "$ghome" --uninstall >/dev/null 2>&1
+gok=1
+cmp -s "$ghome/.config/opencode/opencode.json" "$scratch/opencode.orig" || gok=0
+cmp -s "$ghome/.codex/hooks.json" "$scratch/hooks.orig" || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global uninstall after flipping rules/hooks off restores opencode.json and hooks.json byte-for-byte"
+else
+  no "global uninstall after flipping rules/hooks off restores opencode.json and hooks.json byte-for-byte" "$(cat "$ghome/.config/opencode/opencode.json" 2>/dev/null) | $(cat "$ghome/.codex/hooks.json" 2>/dev/null)"
+fi
+
 # 8i. A global install that created ~/.codex/AGENTS.md from nothing removes it on
 # uninstall — no RTK-only leftover — while .system/ and the store stay.
 ghome="$(make_ghome "uninstall-fresh")"
@@ -1202,6 +1423,253 @@ if [ "$gok" = "1" ]; then
   ok "global uninstall removes an installer-created AGENTS.md from nothing (no leftover)"
 else
   no "global uninstall removes an installer-created AGENTS.md from nothing (no leftover)" "$(ls -la "$ghome/.codex" 2>/dev/null)"
+fi
+
+# ---------------------------------------------------------------------------------------------
+# 9. harnesses{} and link `enabled`: switch a whole harness (claude-code, codex, opencode) off
+# ---------------------------------------------------------------------------------------------
+# harnesses{} in the global manifest turns a whole harness off: nothing is installed into it, and
+# anything this installer put there is removed -- found on disk, not only in links[]. Each symlink
+# record carries `enabled`, the installer's own status (is the link on disk right now).
+
+# set_harness GHOME NAME true|false -- the operator's hand edit of harnesses{}.
+set_harness() {
+  python3 - "$(global_manifest "$1")" "$2" "$3" <<'PYEOF'
+import json, sys
+path, name, value = sys.argv[1:4]
+data = json.load(open(path))
+data['harnesses'][name] = (value == 'true')
+json.dump(data, open(path, 'w'), indent=2)
+PYEOF
+}
+
+# link_enabled GHOME TYPE -> the distinct enabled values on that link type ("true", "false", "false true", or empty).
+link_enabled() {
+  python3 -c "
+import json, sys
+vals = sorted({str(l['enabled']).lower() for l in json.load(open(sys.argv[1]))['links'] if l['type'] == sys.argv[2] and 'enabled' in l})
+print(' '.join(vals))
+" "$(global_manifest "$1")" "$2"
+}
+
+# count_links DIR -> how many symlinks sit under DIR (0 when DIR is absent).
+count_links() { find -H "$1" -type l 2>/dev/null | wc -l | tr -d ' '; }
+
+# A temp HOME with every harness present and an operator-owned file in each place the installer edits.
+make_wired_ghome() {
+  local gh
+  gh="$(make_ghome "$1")"
+  mkdir -p "$gh/.claude" "$gh/.config/opencode"
+  printf '{"provider":{"name":"x"},"instructions":["operator/own.md"]}\n' >"$gh/.config/opencode/opencode.json"
+  printf '{"hooks":{"UserPromptSubmit":[{"hooks":[{"command":"gk ai hook run --host codex","type":"command"}],"matcher":""}]}}\n' >"$gh/.codex/hooks.json"
+  printf '@%s/.codex/RTK.md\n\noperator line\n' "$gh" >"$gh/.codex/AGENTS.md"
+  printf '# RTK\n' >"$gh/.codex/RTK.md"
+  printf '%s\n' "$gh"
+}
+
+# 9a. A first install records harnesses{} (all true, fixed order) and `enabled` on exactly the four
+# symlink record types; a missing harness key is added back as true and an operator false is kept.
+ghome="$(make_wired_ghome "harness-shape")"
+run_sh_global "$ghome" >/dev/null 2>&1
+gok=1
+python3 - "$(global_manifest "$ghome")" <<'PYEOF' || gok=0
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert list(d['harnesses'].items()) == [('claude-code', True), ('codex', True), ('opencode', True)], d['harnesses']
+assert list(d)[:4] == ['updated', 'decisions_enabled', 'harnesses', 'skills'], list(d)
+by_type = {}
+for link in d['links']:
+    by_type.setdefault(link['type'], []).append(link)
+for kind in ('skill-link', 'claude-skill', 'opencode-skill', 'claude-rule'):
+    assert by_type[kind] and all(l['enabled'] is True for l in by_type[kind]), kind
+    assert list(by_type[kind][0]) == ['type', 'path', 'detail', 'enabled'], list(by_type[kind][0])
+for kind in ('agents-import', 'hooks-merge', 'opencode-config'):
+    assert by_type[kind] and all('enabled' not in l for l in by_type[kind]), kind
+PYEOF
+python3 - "$(global_manifest "$ghome")" <<'PYEOF'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+del d['harnesses']['opencode']
+d['harnesses']['claude-code'] = False
+d['harnesses']['cursor'] = True
+json.dump(d, open(p, 'w'), indent=2)
+PYEOF
+run_sh_global "$ghome" >/dev/null 2>&1
+python3 -c "
+import json, sys
+h = json.load(open(sys.argv[1]))['harnesses']
+assert list(h.items()) == [('claude-code', False), ('codex', True), ('opencode', True)], h
+" "$(global_manifest "$ghome")" || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global harnesses{}: all true by default, missing key re-added true, operator false kept, unknown key dropped; enabled only on symlink records"
+else
+  no "global harnesses{}: all true by default, missing key re-added true, operator false kept, unknown key dropped; enabled only on symlink records" "$(python3 -c "import json;d=json.load(open('$(global_manifest "$ghome")'));print(d.get('harnesses'), list(d))")"
+fi
+
+# 9b. claude-code false removes every store symlink under ~/.claude -- including one no record names --
+# and leaves foreign links, real directories, Codex and OpenCode alone; the Claude link records stay as
+# enabled:false. Switching it back on relinks them.
+ghome="$(make_wired_ghome "harness-claude")"
+run_sh_global "$ghome" >/dev/null 2>&1
+groot="$(glb_root "$ghome")"
+ln -s "$groot/skills/ai-terse" "$ghome/.claude/skills/stray-alias"
+ln -s "$scratch" "$ghome/.claude/skills/foreign"
+mkdir -p "$ghome/.claude/skills/operator-skill"
+set_harness "$ghome" claude-code false
+run_sh_global "$ghome" >/dev/null 2>&1
+gok=1
+[ "$(count_links "$ghome/.claude/rules")" = "0" ] || gok=0
+[ -L "$ghome/.claude/skills/foreign" ] || gok=0
+[ -d "$ghome/.claude/skills/operator-skill" ] || gok=0
+[ -e "$ghome/.claude/skills/stray-alias" ] || [ -L "$ghome/.claude/skills/stray-alias" ] && gok=0
+[ "$(count_links "$ghome/.claude/skills")" = "1" ] || gok=0
+[ "$(count_links "$ghome/.codex/skills")" = "7" ] || gok=0
+[ "$(count_links "$ghome/.config/opencode/skills")" = "7" ] || gok=0
+[ "$(link_enabled "$ghome" claude-skill)" = "false" ] || gok=0
+[ "$(link_enabled "$ghome" claude-rule)" = "false" ] || gok=0
+[ "$(link_enabled "$ghome" skill-link)" = "true" ] || gok=0
+[ "$(link_enabled "$ghome" opencode-skill)" = "true" ] || gok=0
+set_harness "$ghome" claude-code true
+run_sh_global "$ghome" >/dev/null 2>&1
+[ "$(count_links "$ghome/.claude/rules")" = "$(printf '%s\n' "$bash_rules" | wc -l | tr -d ' ')" ] || gok=0
+[ "$(link_enabled "$ghome" claude-skill)" = "true" ] || gok=0
+[ "$(link_enabled "$ghome" claude-rule)" = "true" ] || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global claude-code:false removes every store symlink under ~/.claude (even unrecorded), spares foreign ones and other harnesses; true relinks"
+else
+  no "global claude-code:false removes every store symlink under ~/.claude (even unrecorded), spares foreign ones and other harnesses; true relinks" "claude links: $(find -H "$ghome/.claude" -type l 2>/dev/null | sed "s|$ghome|HOME|" | head -3 | tr '\n' ' ')"
+fi
+
+# 9c. codex false removes the skill links, the AGENTS.md import block (operator lines stay) and the store
+# hook commands (the gk hook stays), leaves Claude and OpenCode wired, keeps the store, and true restores it.
+ghome="$(make_wired_ghome "harness-codex")"
+run_sh_global "$ghome" >/dev/null 2>&1
+groot="$(glb_root "$ghome")"
+set_harness "$ghome" codex false
+run_sh_global "$ghome" >/dev/null 2>&1
+gok=1
+[ "$(count_links "$ghome/.codex/skills")" = "0" ] || gok=0
+[ -f "$ghome/.codex/skills/.system/cfg.md" ] || gok=0
+grep -q 'installer-owned-global-instructions' "$ghome/.codex/AGENTS.md" && gok=0
+grep -q 'operator line' "$ghome/.codex/AGENTS.md" || gok=0
+grep -q "@$ghome/.codex/RTK.md" "$ghome/.codex/AGENTS.md" || gok=0
+[ -f "$groot/AGENTS.md" ] || gok=0
+grep -q "$groot/hooks/" "$ghome/.codex/hooks.json" && gok=0
+grep -q 'gk ai hook run --host codex' "$ghome/.codex/hooks.json" || gok=0
+python3 - "$ghome/.codex/hooks.json" <<'PYEOF' || gok=0
+import json, sys
+groups = json.load(open(sys.argv[1]))['hooks']['UserPromptSubmit']
+assert all(g.get('hooks') for g in groups), 'an emptied group was left behind'
+PYEOF
+[ -f "$groot/hooks/worktask-skill-trigger.sh" ] || gok=0
+[ -f "$groot/skills/ai-terse/SKILL.md" ] || gok=0
+[ "$(count_links "$ghome/.claude/skills")" = "7" ] || gok=0
+[ "$(count_links "$ghome/.config/opencode/skills")" = "7" ] || gok=0
+opencode_instr_has "$ghome" "$groot/rules/clean-code.instructions.md" || gok=0
+[ "$(link_enabled "$ghome" skill-link)" = "false" ] || gok=0
+[ "$(link_enabled "$ghome" claude-skill)" = "true" ] || gok=0
+set_harness "$ghome" codex true
+run_sh_global "$ghome" >/dev/null 2>&1
+[ "$(count_links "$ghome/.codex/skills")" = "7" ] || gok=0
+[ "$(grep -c 'installer-owned-global-instructions' "$ghome/.codex/AGENTS.md")" = "1" ] || gok=0
+grep -q "$groot/hooks/worktask-skill-trigger.sh" "$ghome/.codex/hooks.json" || gok=0
+[ "$(link_enabled "$ghome" skill-link)" = "true" ] || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global codex:false removes skill links, the AGENTS import (operator lines kept) and store hooks (gk kept); true restores them"
+else
+  no "global codex:false removes skill links, the AGENTS import (operator lines kept) and store hooks (gk kept); true restores them" "agents=$(cat "$ghome/.codex/AGENTS.md" | tr '\n' '|')"
+fi
+
+# 9d. opencode false removes the OpenCode skill links and every store entry from opencode.json
+# instructions (the operator's own entry stays); Claude and Codex stay wired; true restores it.
+ghome="$(make_wired_ghome "harness-opencode")"
+run_sh_global "$ghome" >/dev/null 2>&1
+groot="$(glb_root "$ghome")"
+set_harness "$ghome" opencode false
+run_sh_global "$ghome" >/dev/null 2>&1
+gok=1
+[ "$(count_links "$ghome/.config/opencode/skills")" = "0" ] || gok=0
+python3 - "$ghome/.config/opencode/opencode.json" "$groot" <<'PYEOF' || gok=0
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d['instructions'] == ['operator/own.md'], d['instructions']
+assert d['provider'] == {'name': 'x'}, d
+PYEOF
+[ "$(count_links "$ghome/.claude/skills")" = "7" ] || gok=0
+[ "$(count_links "$ghome/.codex/skills")" = "7" ] || gok=0
+[ "$(link_enabled "$ghome" opencode-skill)" = "false" ] || gok=0
+set_harness "$ghome" opencode true
+run_sh_global "$ghome" >/dev/null 2>&1
+[ "$(count_links "$ghome/.config/opencode/skills")" = "7" ] || gok=0
+opencode_instr_has "$ghome" "operator/own.md" || gok=0
+opencode_instr_has "$ghome" "$groot/rules/clean-code.instructions.md" || gok=0
+[ "$(link_enabled "$ghome" opencode-skill)" = "true" ] || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global opencode:false removes the OpenCode skill links and store instructions (operator entry kept); true restores them"
+else
+  no "global opencode:false removes the OpenCode skill links and store instructions (operator entry kept); true restores them" "$(cat "$ghome/.config/opencode/opencode.json" 2>/dev/null)"
+fi
+
+# 9e. A harness that is false from the very first run is never installed into: no links, no import, no
+# hook commands, no records -- the operator's files are byte-identical -- while the store is still filled
+# and the other harnesses are wired.
+ghome="$(make_wired_ghome "harness-off-first")"
+groot="$(glb_root "$ghome")"
+mkdir -p "$groot"
+printf '{"harnesses":{"codex":false}}\n' >"$(global_manifest "$ghome")"
+cp "$ghome/.codex/AGENTS.md" "$scratch/agents.first"
+cp "$ghome/.codex/hooks.json" "$scratch/hooks.first"
+run_sh_global "$ghome" >/dev/null 2>&1
+gok=1
+[ "$(count_links "$ghome/.codex/skills")" = "0" ] || gok=0
+cmp -s "$ghome/.codex/AGENTS.md" "$scratch/agents.first" || gok=0
+cmp -s "$ghome/.codex/hooks.json" "$scratch/hooks.first" || gok=0
+python3 - "$(global_manifest "$ghome")" <<'PYEOF' || gok=0
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d['harnesses'] == {'claude-code': True, 'codex': False, 'opencode': True}, d['harnesses']
+kinds = {l['type'] for l in d['links']}
+assert not kinds & {'skill-link', 'agents-import', 'hooks-merge'}, kinds
+assert {'claude-skill', 'claude-rule', 'opencode-skill', 'opencode-config'} <= kinds, kinds
+PYEOF
+[ -f "$groot/skills/ai-terse/SKILL.md" ] || gok=0
+[ -f "$groot/rules/clean-code.instructions.md" ] || gok=0
+[ -f "$groot/hooks/manage-rule-system-context.sh" ] || gok=0
+[ "$(count_links "$ghome/.claude/skills")" = "7" ] || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global harness false from the first run: nothing installed into it (files untouched, no records), store filled, others wired"
+else
+  no "global harness false from the first run: nothing installed into it (files untouched, no records), store filled, others wired" "$(python3 -c "import json;print(json.load(open('$(global_manifest "$ghome")')).get('harnesses'))" 2>&1)"
+fi
+
+# 9f. --uninstall is not gated by harnesses{} or `enabled`: with claude-code set to false and no re-run,
+# the Claude links are still removed; and after harnesses were toggled off and on, uninstall still restores
+# opencode.json, hooks.json and ~/.codex/AGENTS.md byte-for-byte.
+ghome="$(make_wired_ghome "harness-uninstall")"
+cp "$ghome/.config/opencode/opencode.json" "$scratch/oc.h9"
+cp "$ghome/.codex/hooks.json" "$scratch/hk.h9"
+cp "$ghome/.codex/AGENTS.md" "$scratch/ag.h9"
+run_sh_global "$ghome" >/dev/null 2>&1
+set_harness "$ghome" codex false
+set_harness "$ghome" opencode false
+run_sh_global "$ghome" >/dev/null 2>&1
+set_harness "$ghome" codex true
+set_harness "$ghome" opencode true
+run_sh_global "$ghome" >/dev/null 2>&1
+set_harness "$ghome" claude-code false
+run_sh_global "$ghome" --uninstall >/dev/null 2>&1
+gok=1
+[ "$(count_links "$ghome/.claude")" = "0" ] || gok=0
+[ "$(count_links "$ghome/.codex/skills")" = "0" ] || gok=0
+[ "$(count_links "$ghome/.config/opencode/skills")" = "0" ] || gok=0
+cmp -s "$ghome/.config/opencode/opencode.json" "$scratch/oc.h9" || gok=0
+cmp -s "$ghome/.codex/hooks.json" "$scratch/hk.h9" || gok=0
+cmp -s "$ghome/.codex/AGENTS.md" "$scratch/ag.h9" || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global --uninstall ignores harnesses{}/enabled and restores every edited file byte-for-byte after harness toggles"
+else
+  no "global --uninstall ignores harnesses{}/enabled and restores every edited file byte-for-byte after harness toggles" "links=$(find -H "$ghome/.claude" "$ghome/.codex/skills" "$ghome/.config/opencode/skills" -type l 2>/dev/null | wc -l | tr -d ' ') agents=$(cat "$ghome/.codex/AGENTS.md" | tr '\n' '|')"
 fi
 
 # ---------------------------------------------------------------------------------------------

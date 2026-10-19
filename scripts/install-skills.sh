@@ -632,8 +632,8 @@ rules_index_table() {
   cat <<'EOF'
 | Scope | Rules |
 | :---- | :---- |
-| `**` | `ai-workflow-rules` · `clean-code` · `code-review-standards` |
-| `**/*.cs` | `backend/project-overview` · `backend/solid-principles` · `backend/api-mediator-validation` · `backend/architecture-slices` · `backend/backend-logging-conventions` · `backend/collection-types` · `backend/external-api-clients` · `backend/readonly-collections` |
+| `**` | `ai-workflow-rules` · `clean-code` |
+| `**/*.cs` | `code-review-standards` · `backend/project-overview` · `backend/solid-principles` · `backend/api-mediator-validation` · `backend/architecture-slices` · `backend/backend-logging-conventions` · `backend/collection-types` · `backend/external-api-clients` · `backend/readonly-collections` |
 | `src/*.Infrastructure/Persistence/Migrations/**/*.cs` | `backend/migrations` |
 | `tests/*.TestFramework.Aspire/**/*.cs` | `backend/wiremock-stubbing` |
 | `**` | `git/git-policy` · `git/pr-standards` |
@@ -757,6 +757,16 @@ install_hooks() {
 # `-g --uninstall` removes exactly that -- never .system/, the gk hooks, or the
 # operator's RTK @-import line.
 #
+# The same manifest carries skills[], rules[] and hooks[], each entry {name,
+# installed}. installed:false on a rule or hook switches that one item off: it is
+# not copied, and is removed from the AGENTS.md import, ~/.claude/rules,
+# opencode.json instructions or hooks.json it was wired into. Its store copy stays.
+#
+# harnesses{} (claude-code, codex, opencode; missing = true) switches a whole tool off: nothing
+# is installed into it, and every store symlink / import / hook / instructions entry already
+# there is removed, found on disk rather than from links[]. --uninstall ignores it. Symlink
+# records carry `enabled`, a status recomputed each run (is the link on disk), not a control.
+#
 # The store is HOME-scoped and per-machine, like the consumer manifest is
 # per-repo: two machines cannot confuse two installers' state. $SMOOTH_DEVEX_HOME
 # overrides the store location and $CODEX_HOME overrides Codex's config dir
@@ -771,6 +781,21 @@ CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 OPENCODE_CONFIG="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
 CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
 LINKS=()
+# Per-item state for the rules and hooks categories, resolved from the manifest by
+# run_global_install: the reconciled JSON arrays, and the names carrying each
+# installed flag as newline-separated lists (the same shape the skills loops read).
+GLB_RULES_JSON=""
+GLB_HOOKS_JSON=""
+RULES_ON=""
+RULES_OFF=""
+HOOKS_ON=""
+HOOKS_OFF=""
+# The three harnesses the installer can wire into, resolved from the manifest's harnesses
+# object by run_global_install. 1 = install into it, 0 = do not, and remove what is there.
+GLB_HARNESSES_JSON=""
+HARNESS_CLAUDE=1
+HARNESS_CODEX=1
+HARNESS_OPENCODE=1
 
 # record_link TYPE PATH [DETAIL] — append a link/edit record for the uninstall
 # manifest. A tab cannot appear in a path on any supported OS, so the tab split
@@ -806,6 +831,123 @@ backup_inplace() {
 
 ensure_global_store() {
   mkdir -p "$GLB_ROOT/skills" "$GLB_ROOT/rules" "$GLB_ROOT/hooks"
+}
+
+# reconcile_global_items KEY EXISTING_JSON NAME... — the manifest's per-item list for
+# one category (rules or hooks), as a JSON array of {name, installed}. The catalogue is
+# the owned allowlist, so a name outside it can never enter or survive a hand edit; a
+# name the manifest has not seen joins as installed:true; the flag the operator already
+# set is kept, false included. Same rule build_installation_json applies to skills.
+reconcile_global_items() {
+  local key="$1" existing="$2"
+  shift 2
+  python3 - "$key" "$existing" "$@" <<'PYEOF'
+import json, sys
+key, raw = sys.argv[1], sys.argv[2]
+catalog = sorted(set(sys.argv[3:]))
+known = {}
+if raw.strip():
+    data = json.loads(raw)
+    items = data.get(key, []) if isinstance(data, dict) else []
+    if isinstance(items, list):
+        for entry in items:
+            if isinstance(entry, dict) and isinstance(entry.get("name"), str):
+                known[entry["name"]] = bool(entry.get("installed", False))
+print(json.dumps([{"name": n, "installed": known.get(n, True)} for n in catalog]))
+PYEOF
+}
+
+# global_items_flagged ITEMS_JSON true|false — names carrying that installed flag, one per line.
+global_items_flagged() {
+  printf '%s' "$1" | python3 -c "
+import json, sys
+want = sys.argv[1] == 'true'
+for entry in json.load(sys.stdin):
+    if bool(entry.get('installed')) == want:
+        print(entry['name'])
+" "$2"
+}
+
+# unlink_store_file DESTLINK TARGET — remove DESTLINK only when it is the symlink this
+# installer made (it points at TARGET). A real file or a foreign link is never touched.
+unlink_store_file() {
+  local destlink="$1" target="$2"
+  if [ -L "$destlink" ] && [ "$(readlink "$destlink")" = "$target" ]; then
+    rm -f "$destlink"
+    log "Unlinked disabled rule $destlink"
+  fi
+}
+
+# reconcile_harnesses EXISTING_JSON — the manifest's harnesses object: exactly the three
+# harnesses the installer can wire into, in a fixed order. A harness the manifest has not
+# seen joins as true; the value the operator set is kept, false included; any other key
+# is dropped.
+reconcile_harnesses() {
+  python3 - "$1" <<'PYEOF'
+import json, sys
+raw = sys.argv[1]
+known = {}
+if raw.strip():
+    data = json.loads(raw)
+    found = data.get("harnesses") if isinstance(data, dict) else None
+    if isinstance(found, dict):
+        known = found
+print(json.dumps({h: bool(known.get(h, True)) for h in ("claude-code", "codex", "opencode")}))
+PYEOF
+}
+
+# harness_flag HARNESSES_JSON NAME — prints 1 when the harness is on, 0 when off.
+harness_flag() {
+  printf '%s' "$1" | python3 -c "
+import json, sys
+print(1 if json.load(sys.stdin).get(sys.argv[1], True) else 0)
+" "$2"
+}
+
+# purge_store_links DIR SUBDIR — remove every symlink under DIR (recursively) that points
+# into the store's SUBDIR. Found by where a link points, not by what the manifest recorded,
+# so a link whose record was lost goes too. A real file, and a link to anywhere else, is
+# never touched.
+purge_store_links() {
+  local dir="$1" subdir="$2" link
+  [ -d "$dir" ] || return 0
+  while IFS= read -r link; do
+    [ -n "$link" ] || continue
+    case "$(readlink "$link")" in
+      "$GLB_ROOT/$subdir/"*)
+        rm -f "$link"
+        log "Unlinked $link (harness turned off)"
+        ;;
+    esac
+  done < <(find -H "$dir" -type l 2>/dev/null)
+}
+
+# strip_codex_import FILE — remove the marker-guarded import block this installer appended
+# to FILE: the marker line, the @-line after it, and the blank line written before them.
+# Nothing else in the file is touched, and no snapshot is taken (one was, at install).
+strip_codex_import() {
+  local file="$1"
+  [ -f "$file" ] && grep -qF "$GLOBAL_MARKER" "$file" || return 0
+  python3 - "$file" "$GLOBAL_MARKER" <<'PYEOF'
+import sys
+path, marker = sys.argv[1], sys.argv[2]
+lines = open(path, encoding='utf-8').read().split('\n')
+out = []
+i = 0
+while i < len(lines):
+    if marker in lines[i]:
+        if out and out[-1] == '':
+            out.pop()
+        i += 1
+        if i < len(lines) and lines[i].startswith('@'):
+            i += 1
+        continue
+    out.append(lines[i])
+    i += 1
+with open(path, 'w', encoding='utf-8') as f:
+    f.write('\n'.join(out))
+PYEOF
+  log "Removed the global instructions import from $file (codex turned off)"
 }
 
 # link_skill_into DEST_DIR NAME LINKTYPE — link the store's copy of NAME into
@@ -857,6 +999,10 @@ symlink_global_claude() {
 # exists. Wired in addition to Codex/OpenCode, never instead of.
 install_global_claude() {
   local manifest="$1"
+  if [ "$HARNESS_CLAUDE" != "1" ]; then
+    purge_store_links "$CLAUDE_HOME/skills" skills
+    return 0
+  fi
   if [ ! -d "$CLAUDE_HOME" ]; then
     log "Claude Code config not found ($CLAUDE_HOME) — skipping global Claude wiring"
     return 0
@@ -878,19 +1024,28 @@ for s in json.load(sys.stdin).get('skills', []):
 # install_global_claude_rules — symlink the owned rules into Claude Code's global
 # rules dir (~/.claude/rules) so Claude Code loads them across sessions.
 install_global_claude_rules() {
+  if [ "$HARNESS_CLAUDE" != "1" ]; then
+    purge_store_links "$CLAUDE_HOME/rules" rules
+    return 0
+  fi
   if [ ! -d "$CLAUDE_HOME" ]; then
     log "Claude Code config not found ($CLAUDE_HOME) — skipping global Claude rules"
     return 0
   fi
   local rel target link
-  for rel in "${OWNED_RULES[@]}"; do
+  while IFS= read -r rel; do
+    [ -n "$rel" ] || continue
     target="$GLB_ROOT/rules/$rel"
-    if [ ! -f "$target" ]; then
-      continue
-    fi
+    [ -f "$target" ] || continue
     link="$CLAUDE_HOME/rules/$rel"
     link_store_file "$link" "$target" "claude-rule"
-  done
+  done <<< "$RULES_ON"
+  # A rule flipped to installed:false is unwired too, so the flag turns it off rather
+  # than only stopping updates. The store copy stays (operator edits preserved).
+  while IFS= read -r rel; do
+    [ -n "$rel" ] || continue
+    unlink_store_file "$CLAUDE_HOME/rules/$rel" "$GLB_ROOT/rules/$rel"
+  done <<< "$RULES_OFF"
 }
 
 # link_store_file DESTLINK TARGET LINKTYPE — symlink a store file at DESTLINK.
@@ -932,6 +1087,10 @@ link_store_file() {
 # config dir is absent.
 install_global_opencode() {
   local manifest="$1"
+  if [ "$HARNESS_OPENCODE" != "1" ]; then
+    purge_store_links "$OPENCODE_CONFIG/skills" skills
+    return 0
+  fi
   if [ ! -d "$OPENCODE_CONFIG" ]; then
     log "OpenCode config not found ($OPENCODE_CONFIG) — skipping global OpenCode wiring"
     return 0
@@ -950,33 +1109,51 @@ for s in json.load(sys.stdin).get('skills', []):
   done <<< "$installed"
 }
 
-# install_global_opencode_config — add an `instructions` glob to the operator's
-# opencode.json so OpenCode loads the global rules from the store. Snapshots the
-# file before writing, merges + dedupes, records the edit for --uninstall.
+# install_global_opencode_config — make the operator's opencode.json `instructions`
+# list exactly the installed:true store rules, one absolute path per rule. Per-file
+# entries (not a rules/** glob) are what let a single rule be switched off. Entries
+# under the store's rules dir that are no longer wanted -- a disabled rule, or the
+# glob pair an earlier install wrote -- are dropped; everything else the operator
+# put there is kept. Snapshots the file before writing, records the edit for
+# --uninstall.
 install_global_opencode_config() {
   local config="$OPENCODE_CONFIG/opencode.json"
   if [ ! -f "$config" ]; then
     log "opencode.json not found ($config) — skipping global rules instructions"
     return 0
   fi
+  # A harness that is off wants no entries; with none of ours present there is nothing to
+  # remove, and snapshotting the file for no edit would leave a stray first snapshot behind.
+  local wanted_rules="$RULES_ON"
+  if [ "$HARNESS_OPENCODE" != "1" ]; then
+    wanted_rules=""
+    if ! grep -qF "$GLB_ROOT/rules/" "$config"; then
+      log "OpenCode is off and $config holds no store rules — nothing to remove"
+      return 0
+    fi
+  fi
   local backup_path altered
   backup_path="$(backup_inplace "$config")"
   [ -n "$backup_path" ] && log "Backed up $config -> $backup_path"
-  altered="$(python3 - "$config" "$GLB_ROOT" <<'PYEOF'
+  altered="$(python3 - "$config" "$GLB_ROOT" "$wanted_rules" <<'PYEOF'
 import json, sys
 path, glb_root = sys.argv[1], sys.argv[2]
+enabled = [rel for rel in sys.argv[3].splitlines() if rel]
 data = json.load(open(path, encoding='utf-8'))
 inst = data.get('instructions', [])
 if not isinstance(inst, list):
     inst = []
-add = [glb_root + '/rules/*.instructions.md', glb_root + '/rules/**/*.instructions.md']
-changed = False
-for g in add:
-    if g not in inst:
-        inst.append(g)
-        changed = True
+prefix = glb_root + '/rules/'
+wanted = [prefix + rel for rel in enabled]
+kept = [g for g in inst if not (isinstance(g, str) and g.startswith(prefix) and g not in wanted)]
+added = [w for w in wanted if w not in kept]
+changed = kept != inst or bool(added)
 if changed:
-    data['instructions'] = inst
+    result = kept + added
+    if result:
+        data['instructions'] = result
+    else:
+        data.pop('instructions', None)
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2)
         f.write('\n')
@@ -985,9 +1162,9 @@ PYEOF
 )"
   if [ "$altered" = "1" ]; then
     record_link "opencode-config" "$config" "$backup_path"
-    log "Added global rules instructions to $config"
+    log "Updated global rules instructions in $config"
   else
-    log "OpenCode instructions already present in $config"
+    log "OpenCode instructions already match the installed rules in $config"
   fi
 }
 
@@ -1016,15 +1193,20 @@ for s in json.load(sys.stdin).get('skills', []):
       log "WARNING: skill $name not found in repo — not stored"
     fi
   done <<< "$installed"
-  while IFS= read -r name; do
-    [ -n "$name" ] || continue
-    is_owned_skill "$name" || continue
-    symlink_global_skill "$name"
-  done <<< "$installed"
+  if [ "$HARNESS_CODEX" = "1" ]; then
+    while IFS= read -r name; do
+      [ -n "$name" ] || continue
+      is_owned_skill "$name" || continue
+      symlink_global_skill "$name"
+    done <<< "$installed"
+  else
+    purge_store_links "$CODEX_HOME/skills" skills
+  fi
 }
 
-# install_global_rules — copy the owned rule files into the store, preserving
-# relative paths. Overwrite, never delete.
+# install_global_rules — copy the installed:true rule files into the store,
+# preserving relative paths. Overwrite, never delete: an installed:false rule is
+# neither refreshed (operator edits in the store survive) nor wired.
 install_global_rules() {
   local source_rules="$INSTALL_TMP/repo/.github/instructions"
   if [ ! -d "$source_rules" ]; then
@@ -1035,7 +1217,8 @@ install_global_rules() {
   # rule in this template is owned). The generated AGENTS.md index is excluded
   # (it is not an .instructions.md rule and the installer writes its own).
   local rel
-  for rel in "${OWNED_RULES[@]}"; do
+  while IFS= read -r rel; do
+    [ -n "$rel" ] || continue
     if [ -f "$source_rules/$rel" ]; then
       mkdir -p "$(dirname "$GLB_ROOT/rules/$rel")"
       cp "$source_rules/$rel" "$GLB_ROOT/rules/$rel"
@@ -1043,7 +1226,7 @@ install_global_rules() {
     else
       log "WARNING: rule $rel not found in repo — not stored"
     fi
-  done
+  done <<< "$RULES_ON"
 }
 
 # write_global_agents — generate the store-level AGENTS.md that imports each
@@ -1056,9 +1239,10 @@ write_global_agents() {
     printf '# (managed by install-skills -g; do not edit)\n\n'
     printf '<!-- %s: regenerated by install-skills -->\n\n' "$GLOBAL_MARKER"
     local rel
-    for rel in "${OWNED_RULES[@]}"; do
+    while IFS= read -r rel; do
+      [ -n "$rel" ] || continue
       printf '@%s/rules/%s\n' "$GLB_ROOT" "$rel"
-    done
+    done <<< "$RULES_ON"
   } > "$file"
   log "Wrote global instructions importer $file"
 }
@@ -1070,6 +1254,10 @@ write_global_agents() {
 install_global_instructions() {
   write_global_agents
   local codex_agents="$CODEX_HOME/AGENTS.md" backup_path
+  if [ "$HARNESS_CODEX" != "1" ]; then
+    strip_codex_import "$codex_agents"
+    return 0
+  fi
   if [ ! -f "$codex_agents" ]; then
     {
       if [ -f "$CODEX_HOME/RTK.md" ]; then
@@ -1107,9 +1295,10 @@ install_global_instructions() {
 install_global_hooks() {
   local hooks_file="$CODEX_HOME/hooks.json"
   local source_hooks="$INSTALL_TMP/repo/.agents/hooks"
-  local owned_cmds=() name
+  local enabled_cmds="" disabled_cmds="" name
   if [ -d "$source_hooks" ]; then
-    for name in "${OWNED_HOOKS[@]}"; do
+    while IFS= read -r name; do
+      [ -n "$name" ] || continue
       if [ -e "$source_hooks/$name" ]; then
         cp -R "$source_hooks/$name" "$GLB_ROOT/hooks/$name"
         case "$name" in
@@ -1119,28 +1308,55 @@ install_global_hooks() {
       else
         log "WARNING: hook $name not found in repo — not stored"
       fi
-    done
+    done <<< "$HOOKS_ON"
   else
     log "No .agents/hooks in source — nothing to install for global hooks"
     return 0
   fi
-  for name in "${OWNED_HOOKS[@]}"; do
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
     if [ -f "$GLB_ROOT/hooks/$name" ]; then
-      owned_cmds+=("$GLB_ROOT/hooks/$name")
+      enabled_cmds="$enabled_cmds$GLB_ROOT/hooks/$name"$'\n'
     else
       log "WARNING: owned hook $name not in store — not registered"
     fi
-  done
-  if [ "${#owned_cmds[@]}" -eq 0 ]; then
+  done <<< "$HOOKS_ON"
+  # A disabled hook's command is removed from hooks.json (it stays in the store), so
+  # the flag turns the hook off rather than only stopping updates.
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    disabled_cmds="$disabled_cmds$GLB_ROOT/hooks/$name"$'\n'
+  done <<< "$HOOKS_OFF"
+  # Codex off: register nothing, and remove every command under the store's hooks dir. They
+  # are matched by that prefix, so a hook that is no longer owned goes too.
+  local purge_prefix=""
+  if [ "$HARNESS_CODEX" != "1" ]; then
+    enabled_cmds=""
+    purge_prefix="$GLB_ROOT/hooks/"
+  fi
+  if [ -z "$enabled_cmds" ] && [ -z "$disabled_cmds" ] && [ -z "$purge_prefix" ]; then
     log "No owned hooks to register globally"
     return 0
   fi
-  local result added backup
-  result="$(python3 - "$hooks_file" "${owned_cmds[@]}" <<'PYEOF'
+  local result added removed backup
+  result="$(python3 - "$hooks_file" "$enabled_cmds" "$disabled_cmds" "$purge_prefix" <<'PYEOF'
 import json, sys, os, shutil, glob
 from datetime import datetime, timezone
 path = sys.argv[1]
-cmds = sys.argv[2:]
+cmds = [c for c in sys.argv[2].splitlines() if c]
+disabled = set(c for c in sys.argv[3].splitlines() if c)
+purge_prefix = sys.argv[4]
+
+
+def is_dropped(entry):
+    if not isinstance(entry, dict):
+        return False
+    command = entry.get('command')
+    if command in disabled:
+        return True
+    return bool(purge_prefix) and isinstance(command, str) and command.startswith(purge_prefix)
+
+
 data = {}
 if os.path.exists(path):
     raw = open(path, encoding='utf-8').read()
@@ -1158,6 +1374,22 @@ ups = hooks.setdefault('UserPromptSubmit', [])
 if not isinstance(ups, list):
     ups = []
     hooks['UserPromptSubmit'] = ups
+# Drop the commands of disabled hooks. Only a group this empties is dropped; a group
+# the operator shares with other commands keeps them.
+removed = 0
+pruned = []
+for group in ups:
+    if isinstance(group, dict) and isinstance(group.get('hooks'), list):
+        keep = [h for h in group['hooks'] if not is_dropped(h)]
+        dropped = len(group['hooks']) - len(keep)
+        if dropped:
+            removed += dropped
+            if not keep:
+                continue
+            group = dict(group, hooks=keep)
+    pruned.append(group)
+ups = pruned
+hooks['UserPromptSubmit'] = ups
 existing = set()
 for group in ups:
     if isinstance(group, dict) and isinstance(group.get('hooks'), list):
@@ -1171,37 +1403,49 @@ new = [{'command': c, 'type': 'command'} for c in cmds if c not in existing]
 # --uninstall restore our own change). A file we created from nothing has no
 # pre-install state to capture and is left for surgical removal at uninstall.
 backup_path = ''
-if new and os.path.exists(path) and not glob.glob(path + '.smooth-devex-[0-9]*'):
+changed = bool(new) or removed > 0
+if changed and os.path.exists(path) and not glob.glob(path + '.smooth-devex-[0-9]*'):
     stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')
     backup_path = path + '.smooth-devex-' + stamp
     shutil.copyfile(path, backup_path)
-if new:
-    # UserPromptSubmit is a matcher-ignored event, so the new chunk omits matcher.
-    ups.append({'hooks': new})
+if changed:
+    if new:
+        # UserPromptSubmit is a matcher-ignored event, so the new chunk omits matcher.
+        ups.append({'hooks': new})
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2)
         f.write('\n')
-print('%s\t%s' % (len(new), backup_path))
+print('%s\t%s\t%s' % (len(new), removed, backup_path))
 PYEOF
 )"
-  IFS=$'\t' read -r added backup <<< "$result"
+  IFS=$'\t' read -r added removed backup <<< "$result"
   if [ -n "${backup:-}" ]; then
     log "Backed up $hooks_file -> $backup"
   fi
-  if [ "${added:-0}" -gt 0 ]; then
+  if [ "${added:-0}" -gt 0 ] || [ "${removed:-0}" -gt 0 ]; then
     record_link "hooks-merge" "$hooks_file" "$backup"
-    log "Registered $added owned hook(s) in $hooks_file"
+    if [ "${added:-0}" -gt 0 ]; then
+      log "Registered $added owned hook(s) in $hooks_file"
+    fi
+    if [ "${removed:-0}" -gt 0 ]; then
+      log "Unregistered $removed disabled hook(s) from $hooks_file"
+    fi
   else
-    log "Owned hooks already registered in $hooks_file"
+    log "Owned hooks already match the installed set in $hooks_file"
   fi
-  log "Trust the newly registered Codex hooks with: /hooks"
+  if [ "$HARNESS_CODEX" = "1" ]; then
+    log "Trust the newly registered Codex hooks with: /hooks"
+  fi
 }
 
-# write_global_manifest SKILLS_JSON — write the global manifest. SKILLS_JSON is
-# the reconciled skills document (or an existing one for a rules/hooks-only run);
-# 'updated' is refreshed and the links array is attached.
+# write_global_manifest SKILLS_JSON RULES_JSON HOOKS_JSON HARNESSES_JSON — write the
+# global manifest. SKILLS_JSON is the reconciled skills document (or an existing one for a
+# rules/hooks-only run); RULES_JSON / HOOKS_JSON are the reconciled per-item arrays
+# for a category this run covered, or empty to carry the existing ones forward;
+# HARNESSES_JSON is the reconciled harnesses object. 'updated' is refreshed and the links
+# array is attached, each symlink record carrying `enabled` (is it on disk right now).
 write_global_manifest() {
-  local skills_json="$1"
+  local skills_json="$1" rules_json="${2:-}" hooks_json="${3:-}" harnesses_json="${4:-}"
   local links_json
   links_json="$(python3 -c '
 import json, sys
@@ -1216,10 +1460,13 @@ for line in sys.argv[1:]:
     links.append(entry)
 print(json.dumps(links))
 ' ${LINKS[@]+"${LINKS[@]}"})" || links_json="[]"
-  python3 - "$GLOBAL_MANIFEST" "$skills_json" "$links_json" <<'PYEOF'
+  python3 - "$GLOBAL_MANIFEST" "$skills_json" "$links_json" "$rules_json" "$hooks_json" "$harnesses_json" <<'PYEOF'
 import json, sys, os
 from datetime import datetime, timezone
 path, skills_json, links_json = sys.argv[1], sys.argv[2], sys.argv[3]
+rules_json, hooks_json, harnesses_json = sys.argv[4], sys.argv[5], sys.argv[6]
+SYMLINK_TYPES = ('skill-link', 'claude-skill', 'opencode-skill', 'claude-rule')
+KEY_ORDER = ('updated', 'decisions_enabled', 'harnesses', 'skills', 'rules', 'hooks', 'links')
 new_links = json.loads(links_json)
 now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 # The existing manifest carries the links[] recorded on earlier runs. A re-run
@@ -1251,6 +1498,17 @@ if 'skills' not in data:
     data['skills'] = existing.get('skills', [])
 if 'decisions_enabled' not in data:
     data['decisions_enabled'] = existing.get('decisions_enabled', False)
+# A category this run covered brings its reconciled list; one it did not keeps the
+# list the previous run recorded (absent until that category has run once).
+for key, raw in (('rules', rules_json), ('hooks', hooks_json)):
+    if raw:
+        data[key] = json.loads(raw)
+    elif key not in data and key in existing:
+        data[key] = existing[key]
+if harnesses_json:
+    data['harnesses'] = json.loads(harnesses_json)
+elif 'harnesses' not in data and 'harnesses' in existing:
+    data['harnesses'] = existing['harnesses']
 merged = []
 seen = set()
 for link in existing.get('links', []):
@@ -1261,13 +1519,28 @@ for link in new_links:
     if key in seen:
         for i, m in enumerate(merged):
             if (m.get('type'), m.get('path')) == key:
+                # A re-run that edits the same file again (a rule or hook flipped off)
+                # snapshots nothing, because the first run already did. Its record has
+                # no detail, and must not overwrite the one that points at the snapshot
+                # --uninstall restores from.
+                if 'detail' not in link and 'detail' in m:
+                    link = dict(link, detail=m['detail'])
                 merged[i] = link
                 break
     else:
         merged.append(link)
         seen.add(key)
+# `enabled` is a status the installer recomputes every run, not a control: true exactly when the
+# symlink is on disk and points where the record says. A link the installer unwired (its item or
+# its harness turned off) stays recorded, as enabled:false, so --uninstall and a re-enable still
+# know about it. Config-edit records (agents-import, hooks-merge, ...) carry no such field.
+for link in merged:
+    if link.get('type') in SYMLINK_TYPES:
+        link_path = link.get('path', '')
+        link['enabled'] = os.path.islink(link_path) and os.readlink(link_path) == link.get('detail')
 data['updated'] = now
 data['links'] = merged
+data = dict([(k, data[k]) for k in KEY_ORDER if k in data] + [(k, v) for k, v in data.items() if k not in KEY_ORDER])
 with open(path, 'w') as f:
     json.dump(data, f, indent=2)
     f.write('\n')
@@ -1289,6 +1562,30 @@ run_global_install() {
   # silent reset from defaults — same rule as the per-repo manifest.
   existing_json="$(json_read "$GLOBAL_MANIFEST")" \
     || die "cannot read $GLOBAL_MANIFEST — fix or delete it, then re-run"
+
+  # Which harnesses to wire into. Resolved whatever categories this run covers: a harness the
+  # manifest has not seen joins as on, and an off one is not installed into and is cleaned of
+  # anything this installer put there.
+  GLB_HARNESSES_JSON="$(reconcile_harnesses "$existing_json")"
+  HARNESS_CLAUDE="$(harness_flag "$GLB_HARNESSES_JSON" claude-code)"
+  HARNESS_CODEX="$(harness_flag "$GLB_HARNESSES_JSON" codex)"
+  HARNESS_OPENCODE="$(harness_flag "$GLB_HARNESSES_JSON" opencode)"
+  if [ "$HARNESS_CLAUDE" != "1" ]; then log "Harness claude-code is off — not installing, removing what is wired"; fi
+  if [ "$HARNESS_CODEX" != "1" ]; then log "Harness codex is off — not installing, removing what is wired"; fi
+  if [ "$HARNESS_OPENCODE" != "1" ]; then log "Harness opencode is off — not installing, removing what is wired"; fi
+
+  # Rules and hooks carry the same per-item installed flag skills do. Only a category
+  # this run covers is reconciled; the others keep what the manifest already says.
+  if [ "$DO_RULES" = "1" ]; then
+    GLB_RULES_JSON="$(reconcile_global_items rules "$existing_json" "${OWNED_RULES[@]}")"
+    RULES_ON="$(global_items_flagged "$GLB_RULES_JSON" true)"
+    RULES_OFF="$(global_items_flagged "$GLB_RULES_JSON" false)"
+  fi
+  if [ "$DO_HOOKS" = "1" ]; then
+    GLB_HOOKS_JSON="$(reconcile_global_items hooks "$existing_json" "${OWNED_HOOKS[@]}")"
+    HOOKS_ON="$(global_items_flagged "$GLB_HOOKS_JSON" true)"
+    HOOKS_OFF="$(global_items_flagged "$GLB_HOOKS_JSON" false)"
+  fi
 
   if [ "$DO_SKILLS" = "1" ]; then
     local existing_decisions
@@ -1317,8 +1614,6 @@ print(json.dumps(sorted(line.strip() for line in sys.stdin if line.strip())))
     install_global_skills "$new_json"
     log "Registering global OpenCode commands…"
     install_global_opencode "$new_json"
-    log "Adding global rules to OpenCode instructions…"
-    install_global_opencode_config
     log "Registering global Claude skills…"
     install_global_claude "$new_json"
   fi
@@ -1330,6 +1625,8 @@ print(json.dumps(sorted(line.strip() for line in sys.stdin if line.strip())))
     install_global_instructions
     log "Wiring Claude global rules…"
     install_global_claude_rules
+    log "Adding global rules to OpenCode instructions…"
+    install_global_opencode_config
   fi
 
   if [ "$DO_HOOKS" = "1" ]; then
@@ -1339,9 +1636,9 @@ print(json.dumps(sorted(line.strip() for line in sys.stdin if line.strip())))
 
   log "Writing global manifest…"
   if [ "$DO_SKILLS" = "1" ]; then
-    write_global_manifest "$new_json"
+    write_global_manifest "$new_json" "$GLB_RULES_JSON" "$GLB_HOOKS_JSON" "$GLB_HARNESSES_JSON"
   else
-    write_global_manifest "$existing_json"
+    write_global_manifest "$existing_json" "$GLB_RULES_JSON" "$GLB_HOOKS_JSON" "$GLB_HARNESSES_JSON"
   fi
 }
 

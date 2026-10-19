@@ -37,7 +37,7 @@ documentation.
 | --- | --- |
 | `install-skills.sh` | bash port. macOS / Linux. Needs `bash`, `git`, `python3`. |
 | `install-skills.ps1` | PowerShell 7 port. Windows or anywhere `pwsh` runs. Needs `pwsh`, `git`. |
-| `test-install-skills.sh` | Harness. 70 cases, bash port only (the ps1 port is read, not run). |
+| `test-install-skills.sh` | Harness. 83 cases, bash port only (the ps1 port is read, not run). |
 
 The installer pulls a flat list of folders from `.agents/skills/` in this repository into a consumer
 repository, controlled by a per-skill `installed` flag in
@@ -89,6 +89,18 @@ restores it; the symlinks the installer creates (Codex skills, OpenCode commands
 `-g -d` profile edit is restored too. `-g` refuses to be combined with `SKILLS_ROOT`, and `--uninstall`
 without `-g` is refused.
 
+The global manifest also carries `rules[]` and `hooks[]` (`{name, installed}`, like `skills[]`; a run
+reconciles only the categories it covers). Unlike a skill, `installed: false` on a rule or hook
+**unwires** it (`AGENTS.md` import, `~/.claude/rules` link, `opencode.json` entry, `hooks.json`
+command); its store copy stays. OpenCode `instructions` therefore holds one absolute path per rule,
+never a `rules/**` glob — a glob cannot exclude one. The per-repo install has no per-item flags.
+
+`harnesses{}` (`claude-code`, `codex`, `opencode`; missing = `true`) is the same switch for a whole tool,
+and `false` **removes** as well as skips: store symlinks, the `~/.codex/AGENTS.md` import block, `hooks.json`
+commands and `opencode.json` entries are found on disk by where they point, not from `links[]`.
+`--uninstall` is deliberately not gated by it. `enabled` on the four symlink record types is a status the
+writer recomputes from disk each run — never read it as a control, and never add it to the config-edit records.
+
 ## Test References
 
 The harness is wired into `.github/workflows/pr-gate.yml` (`Test skills installer`). It deliberately
@@ -132,3 +144,5 @@ Two known gaps:
 | 2026-10-18 | `-g` OpenCode: owned skills symlinked into OpenCode's skills dir, and the store's rules added to `opencode.json` `instructions` with a backup; harness cases 8k/8q | — |
 | 2026-10-18 | `-g` Claude rules: owned rules symlinked into `~/.claude/rules` so Claude Code loads them across sessions; harness case 8r | — |
 | 2026-10-18 | `-g` global rules ship the **full** template rules tree (incl. `backend/`, `skills/`, clean-code, solid-principles), not just the 4 `OWNED_RULES` a consumer gets — for Codex `@`-import, Claude `~/.claude/rules`, OpenCode `opencode.json` | — |
+| 2026-10-19 | `-g` manifest `rules[]`/`hooks[]` with per-item `installed` (off = unwired); OpenCode `instructions` per-file, runs with rules not skills; link `detail` kept across re-runs; ps1 `Backup-Inplace` pitfall: `-Filter` ignores `[0-9]`; harness 8s–8y | #126 |
+| 2026-10-19 | `-g` manifest `harnesses{}` (false = skip + remove by on-disk detection; uninstall ungated); `enabled` status on symlink records; ps1 pitfall: strict mode throws on a manifest without `skills`; harness 9a–9f | #126 |

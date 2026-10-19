@@ -50,6 +50,8 @@ $script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-a
 
 Switches filter the run only; nothing about the selection is persisted. `-d` is an opt-in flag (not a category) — it never defaults on. `-g` and `--uninstall` are a separate **global** mode: `-g` refuses to combine with `SKILLS_ROOT`, and `--uninstall` only applies together with `-g`.
 
+The global manifest (`~/.smooth-ai-devex/installation.json`) lists every owned skill, rule and hook with an `installed` flag. Set an entry to `false` and re-run `-g` to switch that one item off. Its `harnesses` object (`claude-code`, `codex`, `opencode`, default `true`) switches a whole tool off the same way: nothing is installed into it and what is already there is removed (see `scripts/SKILLS_INSTALLER.md`).
+
 A Claude Code plugin is also available for the owned skills — install it from a marketplace to add the seven skills to Claude Code directly. It installs **skills only**: unlike the installer script, it does **not** copy over rules or hooks.
 
 ---

@@ -210,12 +210,96 @@ category switches (`-g -s -r -h`), so you can install just skills, just rules, o
 | Layer | Where it lands |
 |---|---|
 | Skills | copied into `~/.smooth-ai-devex/skills/` (skill `AGENTS.md` stripped), then symlinked into `~/.codex/skills/<name>` — coexisting with Codex's own `.system/`, which is never touched. When Claude is installed, each is also symlinked into `~/.claude/skills/<name>`; when OpenCode is installed, each is referenced from a `~/.config/opencode/commands` folder symlink to the store's `opencode-commands/` (`<name>.md` → `SKILL.md`) and the store's rules are added to `opencode.json` `instructions` (never copied into the opencode skills folder) |
-| Rules | the **full** template rules tree is copied into `~/.smooth-ai-devex/rules/` and imported by a generated `~/.smooth-ai-devex/AGENTS.md`; `~/.codex/AGENTS.md` pulls that file in with one marker-guarded `@`-line. No `*.instructions.md` is written into `~/.codex/rules/` — Codex treats that directory as a Starlark `prefix_rule` namespace, and the `@`-import chain is the supported delivery shape. When Claude is installed the rules are also symlinked into `~/.claude/rules/`; when OpenCode is installed they are added to `opencode.json` `instructions`. The per-repo install ships only the 4 `OWNED_RULES`; the global install ships all of them |
+| Rules | the **full** template rules tree is copied into `~/.smooth-ai-devex/rules/` and imported by a generated `~/.smooth-ai-devex/AGENTS.md`; `~/.codex/AGENTS.md` pulls that file in with one marker-guarded `@`-line. No `*.instructions.md` is written into `~/.codex/rules/` — Codex treats that directory as a Starlark `prefix_rule` namespace, and the `@`-import chain is the supported delivery shape. When Claude is installed the rules are also symlinked into `~/.claude/rules/`; when OpenCode is installed each rule is added to `opencode.json` `instructions` as its own absolute path (never a `rules/**` glob, which could not exclude one rule). The per-repo install ships only the 4 `OWNED_RULES`; the global install ships all of them |
 | Hooks | copied into `~/.smooth-ai-devex/hooks/` and JSON-merged into `~/.codex/hooks.json` under `UserPromptSubmit` only, with absolute store commands (relative `.agents/...` commands would break outside the repo), deduped by command match, preserving the `gk` and `code-review-graph` entries already there |
 
-State is `~/.smooth-ai-devex/installation.json` — the same `skills`/`decisions_enabled` shape as the
-per-repo manifest plus a `links[]` array recording every symlink and config edit, so `-g --uninstall`
-removes exactly what was installed. Before appending to any pre-existing file it does not own, the
+State is `~/.smooth-ai-devex/installation.json` — `decisions_enabled` and `skills[]` as in the per-repo
+manifest, plus `rules[]` and `hooks[]` (below) and a `links[]` array recording every symlink and config
+edit, so `-g --uninstall` removes exactly what was installed.
+
+### Switching one rule or hook off
+
+Every owned rule and hook has the same `{ "name", "installed" }` entry a skill has:
+
+```json
+{
+  "skills": [ { "name": "ai-terse", "installed": true } ],
+  "rules":  [ { "name": "clean-code.instructions.md", "installed": false },
+              { "name": "git/git-policy.instructions.md", "installed": true } ],
+  "hooks":  [ { "name": "worktask-skill-trigger.sh", "installed": false } ]
+}
+```
+
+Rule names are paths relative to `.github/instructions/`; hook names are file names. They reconcile on
+every run exactly as skills do: a name the manifest has not seen joins as `installed: true`, a name no
+longer owned is dropped, and the flag you set — `false` included — is kept. Edit the flag, re-run
+`install-skills -g`.
+
+`installed: false` switches the item **off**, not just out of the update loop:
+
+| Item | Not copied or refreshed | Removed from |
+|---|---|---|
+| rule | the store copy (an edit you made there survives) | the generated `~/.smooth-ai-devex/AGENTS.md` import, its `~/.claude/rules/` symlink, its `opencode.json` `instructions` entry |
+| hook | the store copy | its command in `~/.codex/hooks.json` (a group left empty goes with it; the `gk` entries and the other owned hook stay) |
+
+Flip it back to `true` and the next run copies a fresh version and rewires it. A skill set to
+`installed: false` differs on purpose: it keeps its existing symlinks and stays discoverable, it is only
+never refreshed.
+
+A category-only run (`-g -r`, `-g -h`, `-g -s`) reconciles just its own list and carries the others
+forward unchanged; `hooks[]` does not appear until a run that covers hooks. `-g -r` now also updates
+`opencode.json` — that step used to run only with skills — and rewrites the `rules/*.instructions.md` and
+`rules/**/*.instructions.md` glob pair an earlier install wrote into per-file entries. The per-repo
+install has no per-item rules/hooks flags: it ships its fixed owned subset.
+
+### Switching a whole harness off
+
+`harnesses` turns an entire tool on or off for this machine:
+
+```json
+{
+  "harnesses": { "claude-code": true, "codex": false, "opencode": true }
+}
+```
+
+A harness the manifest has not seen is added as `true` (the object always lists exactly these three, in
+this order; any other key is dropped). `true` installs into it as usual. `false` installs nothing into it
+**and** removes whatever this installer already put there, on every run:
+
+| Harness | Wired when `true`; removed when `false` |
+|---|---|
+| `claude-code` | symlinks in `~/.claude/skills/` and `~/.claude/rules/` |
+| `codex` | symlinks in `~/.codex/skills/`, the marker-guarded import block in `~/.codex/AGENTS.md` (the lines around it stay), the store commands in `~/.codex/hooks.json` (other hooks stay) |
+| `opencode` | symlinks in `~/.config/opencode/skills/`, the store entries in `opencode.json` `instructions` (your own entries stay) |
+
+Removal is found **on disk**, not only in `links[]`: any symlink in those folders that points into the
+store goes, including one whose record was lost; a real file or a link to anywhere else is never touched.
+The store (`~/.smooth-ai-devex/{skills,rules,hooks}` and its `AGENTS.md`) is shared by all three and stays
+filled. Like the category switches, a narrowed run only cleans what it covers — `-g -r` removes a `false`
+harness's rule wiring but not its skill links.
+
+Every symlink record in `links[]` (`skill-link`, `claude-skill`, `opencode-skill`, `claude-rule`) carries an
+`enabled` field:
+
+```json
+{
+  "type": "claude-rule",
+  "path": "/Users/me/.claude/rules/backend/solid-principles.instructions.md",
+  "detail": "/Users/me/.smooth-ai-devex/rules/backend/solid-principles.instructions.md",
+  "enabled": true
+}
+```
+
+`enabled` is a **status the installer writes**, not a control: it is `true` while the symlink is on disk
+and points at `detail`, and `false` once the link has been removed because its rule or its harness was
+switched off. The record stays so a re-enable and `--uninstall` still know about it. Editing it by hand
+does nothing — the next run recomputes it; use `installed` and `harnesses` to steer. The config-edit records
+(`agents-import`, `hooks-merge`, `opencode-config`, `profile-edit`) have no `enabled`.
+
+`--uninstall` ignores `harnesses` and `enabled`: it removes whatever its records point at that is present,
+and restores the files it edited byte-for-byte, however the flags were toggled before.
+
+Before appending to any pre-existing file it does not own, the
 installer snapshots it **once** as `<file>.smooth-devex-<UTC datetime>` — `~/.codex/hooks.json` and
 `~/.codex/AGENTS.md`, plus the shell profile when decision env vars are written. `--uninstall` restores
 those snapshots (so the operator's earlier content comes back byte-for-byte), removes the `AGENTS.md`

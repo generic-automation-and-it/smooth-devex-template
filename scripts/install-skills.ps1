@@ -566,7 +566,8 @@ function Write-RulesIndex {
     $table = @(
         '| Scope | Rules |',
         '| :---- | :---- |',
-        '| `**` | `code-review-standards` · `git/git-policy` |',
+        '| `**` | `git/git-policy` |',
+        '| `**/*.cs` | `code-review-standards` |',
         '| `**/*AGENTS.md` | `meta/knowledge-conventional-contexts-quality` |',
         '| `.agents/rules/**` | `meta/rules` |'
     ) -join "`n"
@@ -697,7 +698,14 @@ function Install-OwnedHooks {
 # ~/.codex/hooks.json (UserPromptSubmit only). A manifest at
 # $GLB_ROOT/installation.json records every link and edit, and -g --uninstall
 # removes exactly that — never .system/, the gk hooks, or the operator's RTK
-# @-import line. Every pre-existing config file the installer appends to
+# @-import line. The same manifest carries skills[], rules[] and hooks[], each entry
+# {name, installed}; installed:false on a rule or hook switches that one item off (not
+# copied, and removed from the AGENTS.md import, ~/.claude/rules, opencode.json
+# instructions or hooks.json it was wired into; the store copy stays).
+# harnesses{} (claude-code, codex, opencode; missing = true) switches a whole tool off: nothing is
+# installed into it and everything already there is removed, found on disk rather than from links[];
+# -g --uninstall ignores it. Symlink records carry `enabled`, a status recomputed each run, not a control.
+# Every pre-existing config file the installer appends to
 # (~/.codex/AGENTS.md, ~/.codex/hooks.json, and the shell profile when decision
 # env vars are written) is snapshotted once as <file>.smooth-devex-<UTC datetime>
 # before modification, and --uninstall restores it. $SMOOTH_DEVEX_HOME overrides
@@ -713,6 +721,109 @@ $script:CodexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $H
 $script:OpenCodeConfig = if ($env:OPENCODE_CONFIG) { $env:OPENCODE_CONFIG } else { Join-Path $HOME '.config/opencode' }
 $script:ClaudeHome = if ($env:CLAUDE_HOME) { $env:CLAUDE_HOME } else { Join-Path $HOME '.claude' }
 $script:Links = [System.Collections.Generic.List[string]]::new()
+# Per-item state for the rules and hooks categories, resolved from the manifest by
+# Invoke-GlobalInstall: the reconciled {name, installed} lists ($null when the run does not
+# cover the category, so the manifest carries the previous list forward), and the names
+# carrying each installed flag.
+$script:GlbRules = $null
+$script:GlbHooks = $null
+$script:RulesOn = @()
+$script:RulesOff = @()
+$script:HooksOn = @()
+$script:HooksOff = @()
+# The three harnesses the installer can wire into, resolved from the manifest's harnesses object
+# by Invoke-GlobalInstall. $true = install into it, $false = do not, and remove what is there.
+$script:GlbHarnesses = $null
+$script:HarnessClaude = $true
+$script:HarnessCodex = $true
+$script:HarnessOpencode = $true
+
+function Build-Harnesses {
+    # The manifest's harnesses object: exactly the three harnesses the installer can wire into, in a
+    # fixed order. A harness the manifest has not seen joins as true; the value the operator set is
+    # kept, false included; any other key is dropped. Mirrors reconcile_harnesses in the bash port.
+    param([object] $Existing)
+    $found = $null
+    if ($null -ne $Existing -and $Existing.PSObject.Properties['harnesses']) { $found = $Existing.harnesses }
+    $out = [ordered]@{}
+    foreach ($name in 'claude-code', 'codex', 'opencode') {
+        $value = $true
+        if ($null -ne $found -and $found.PSObject.Properties[$name]) { $value = [bool] $found.PSObject.Properties[$name].Value }
+        $out[$name] = $value
+    }
+    return $out
+}
+
+function Remove-StoreLinks {
+    # Remove every symlink under Dir (recursively) that points into the store's Subdir. Found by where
+    # a link points, not by what the manifest recorded, so a link whose record was lost goes too. A real
+    # file, and a link to anywhere else, is never touched.
+    param([string] $Dir, [string] $Subdir)
+    if (-not (Test-Path -LiteralPath $Dir -PathType Container)) { return }
+    $prefix = (Join-Path $script:GlbRoot $Subdir) + [System.IO.Path]::DirectorySeparatorChar
+    foreach ($item in @(Get-ChildItem -LiteralPath $Dir -Recurse -Force -ErrorAction SilentlyContinue)) {
+        if ($item.LinkType -and $item.Target -and ([string] $item.Target).StartsWith($prefix, [System.StringComparison]::Ordinal)) {
+            Remove-Item -LiteralPath $item.FullName -Force
+            Write-Info "Unlinked $($item.FullName) (harness turned off)"
+        }
+    }
+}
+
+function Remove-CodexImport {
+    # Remove the marker-guarded import block this installer appended to File: the marker line, the
+    # @-line after it, and the blank line written before them. Nothing else in the file is touched, and
+    # no snapshot is taken (one was, at install).
+    param([string] $File)
+    if (-not (Test-Path -LiteralPath $File -PathType Leaf)) { return }
+    $content = Get-Content -LiteralPath $File -Raw
+    if ([string]::IsNullOrEmpty($content) -or -not $content.Contains($script:GlobalMarker)) { return }
+    $lines = $content -split "`n"
+    $out = New-Object System.Collections.Generic.List[string]
+    $i = 0
+    while ($i -lt $lines.Count) {
+        if ($lines[$i].Contains($script:GlobalMarker)) {
+            if ($out.Count -gt 0 -and $out[$out.Count - 1].TrimEnd("`r") -eq '') { $out.RemoveAt($out.Count - 1) }
+            $i++
+            if ($i -lt $lines.Count -and $lines[$i].StartsWith('@')) { $i++ }
+            continue
+        }
+        $out.Add($lines[$i])
+        $i++
+    }
+    [System.IO.File]::WriteAllText($File, ($out -join "`n"), [System.Text.UTF8Encoding]::new($false))
+    Write-Info "Removed the global instructions import from $File (codex turned off)"
+}
+
+function Build-GlobalItems {
+    # The manifest's per-item list for one category (rules or hooks). The catalogue is the owned
+    # allowlist, so a name outside it can never enter or survive a hand edit; a name the manifest
+    # has not seen joins as installed:true; the flag the operator already set is kept, false
+    # included. Same rule Build-InstallationJson applies to skills. Sorted ordinally, so the order
+    # matches the bash port rather than the host culture's collation.
+    param([string[]] $Catalog, [object] $Existing)
+    $known = @{}
+    foreach ($entry in @($Existing)) {
+        if ($null -ne $entry -and $entry.PSObject.Properties['name'] -and $entry.name -is [string]) {
+            $flag = $false
+            if ($entry.PSObject.Properties['installed']) { $flag = [bool] $entry.installed }
+            $known[$entry.name] = $flag
+        }
+    }
+    $names = [string[]] @($Catalog | Select-Object -Unique)
+    [Array]::Sort($names, [System.StringComparer]::Ordinal)
+    $items = [System.Collections.Generic.List[object]]::new()
+    foreach ($name in $names) {
+        $installed = $true
+        if ($known.ContainsKey($name)) { $installed = $known[$name] }
+        $items.Add([ordered]@{ name = $name; installed = $installed })
+    }
+    return , $items
+}
+
+function Get-GlobalItemNames {
+    param([object] $Items, [bool] $Installed)
+    @($Items | Where-Object { [bool] $_.installed -eq $Installed } | ForEach-Object { $_.name })
+}
 
 function Add-GlobalLink {
     # Record a link/edit for --uninstall. Tabs separate fields; a tab cannot
@@ -734,8 +845,12 @@ function Backup-Inplace {
     $name = [System.IO.Path]::GetFileName($Path)
     # Only numeric install-time snapshots count as "already backed up"; an
     # uninstall-time snapshot (smooth-devex-uninstall-*) must not suppress a fresh
-    # install backup on the next run.
-    $prior = Get-ChildItem -LiteralPath $dir -Filter "$name.smooth-devex-[0-9]*" -ErrorAction SilentlyContinue
+    # install backup on the next run. Matched by regex: -Filter understands only * and ?,
+    # so a [0-9] class there is taken literally, never finds the earlier snapshot, and a
+    # re-run would then snapshot our own already-modified file as if it were the operator's.
+    $snapshotPattern = '^' + [regex]::Escape("$name.smooth-devex-") + '[0-9]'
+    $prior = Get-ChildItem -LiteralPath $dir -Force -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match $snapshotPattern }
     if ($prior) { return '' }
     $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss')
     $backup = "$Path.smooth-devex-$stamp"
@@ -820,6 +935,10 @@ function Install-GlobalClaude {
     # availability, when Claude's config dir exists. Wired in addition to
     # Codex/OpenCode, never instead of.
     param([object] $Manifest)
+    if (-not $script:HarnessClaude) {
+        Remove-StoreLinks -Dir (Join-Path $script:ClaudeHome 'skills') -Subdir 'skills'
+        return
+    }
     if (-not (Test-Path -LiteralPath $script:ClaudeHome -PathType Container)) {
         Write-Info "Claude Code config not found ($($script:ClaudeHome)) - skipping global Claude wiring"
         return
@@ -835,16 +954,37 @@ function Install-GlobalClaude {
 function Install-GlobalClaudeRules {
     # Symlink every store rule into Claude Code's global rules dir (~/.claude/rules)
     # so Claude Code loads them across sessions.
+    if (-not $script:HarnessClaude) {
+        Remove-StoreLinks -Dir (Join-Path $script:ClaudeHome 'rules') -Subdir 'rules'
+        return
+    }
     if (-not (Test-Path -LiteralPath $script:ClaudeHome -PathType Container)) {
         Write-Info "Claude Code config not found ($($script:ClaudeHome)) - skipping global Claude rules"
         return
     }
-    foreach ($rel in $script:OwnedRules) {
+    foreach ($rel in $script:RulesOn) {
         $target = Join-Path (Join-Path $script:GlbRoot 'rules') $rel
         if (Test-Path -LiteralPath $target -PathType Leaf) {
             $link = Join-Path (Join-Path $script:ClaudeHome 'rules') $rel
             Link-StoreFile -DestLink $link -Target $target -LinkType 'claude-rule'
         }
+    }
+    # A rule flipped to installed:false is unwired too, so the flag turns it off rather than only
+    # stopping updates. The store copy stays (operator edits preserved).
+    foreach ($rel in $script:RulesOff) {
+        Unlink-StoreFile -DestLink (Join-Path (Join-Path $script:ClaudeHome 'rules') $rel) `
+            -Target (Join-Path (Join-Path $script:GlbRoot 'rules') $rel)
+    }
+}
+
+function Unlink-StoreFile {
+    # Remove DestLink only when it is the symlink this installer made (it points at Target). A real
+    # file or a foreign link is never touched.
+    param([string] $DestLink, [string] $Target)
+    $item = Get-Item -LiteralPath $DestLink -Force -ErrorAction SilentlyContinue
+    if ($null -ne $item -and $item.LinkType -and $item.Target -eq $Target) {
+        Remove-Item -LiteralPath $DestLink -Force
+        Write-Info "Unlinked disabled rule $DestLink"
     }
 }
 
@@ -879,6 +1019,10 @@ function Install-GlobalOpencode {
     # loads the full skill (SKILL.md + scripts) via the native skill tool. Skipped
     # when OpenCode's config dir is absent.
     param([object] $Manifest)
+    if (-not $script:HarnessOpencode) {
+        Remove-StoreLinks -Dir (Join-Path $script:OpenCodeConfig 'skills') -Subdir 'skills'
+        return
+    }
     if (-not (Test-Path -LiteralPath $script:OpenCodeConfig -PathType Container)) {
         Write-Info "OpenCode config not found ($($script:OpenCodeConfig)) - skipping global OpenCode wiring"
         return
@@ -893,14 +1037,28 @@ function Install-GlobalOpencode {
 }
 
 function Install-GlobalOpencodeConfig {
-    # Add an instructions glob to the operator's opencode.json so OpenCode loads the
-    # global rules from the store. Snapshots the file, merges + dedupes, records the
-    # edit for --uninstall. instructions must stay a JSON array (a List<string>, never
-    # a bare string), and globs use forward slashes on every platform.
+    # Make the operator's opencode.json `instructions` list exactly the installed:true store rules,
+    # one absolute path per rule. Per-file entries (not a rules/** glob) are what let a single rule
+    # be switched off. Entries under the store's rules dir that are no longer wanted - a disabled
+    # rule, or the glob pair an earlier install wrote - are dropped; everything else the operator
+    # put there is kept. Snapshots the file, records the edit for --uninstall. instructions must
+    # stay a JSON array (a List<string>, never a bare string), and paths use forward slashes on
+    # every platform.
     $config = Join-Path $script:OpenCodeConfig 'opencode.json'
     if (-not (Test-Path -LiteralPath $config -PathType Leaf)) {
         Write-Info "opencode.json not found ($config) - skipping global rules instructions"
         return
+    }
+    $prefix = ((Join-Path $script:GlbRoot 'rules') -replace '\\', '/') + '/'
+    # A harness that is off wants no entries; with none of ours present there is nothing to remove,
+    # and snapshotting the file for no edit would leave a stray first snapshot behind.
+    $wantedRules = $script:RulesOn
+    if (-not $script:HarnessOpencode) {
+        $wantedRules = @()
+        if (-not (Get-Content -LiteralPath $config -Raw).Contains($prefix)) {
+            Write-Info "OpenCode is off and $config holds no store rules - nothing to remove"
+            return
+        }
     }
     $backup = Backup-Inplace -Path $config
     if ($backup) { Write-Info "Backed up $config -> $backup" }
@@ -909,19 +1067,25 @@ function Install-GlobalOpencodeConfig {
     if ($data.ContainsKey('instructions')) {
         foreach ($g in @($data['instructions'])) { if ($g) { $inst.Add([string]$g) } }
     }
-    $rules = (Join-Path $script:GlbRoot 'rules') -replace '\\', '/'
-    $add = @(($rules + '/*.instructions.md'), ($rules + '/**/*.instructions.md'))
-    $changed = $false
-    foreach ($g in $add) {
-        if ($g -notin $inst) { $inst.Add($g); $changed = $true }
+    $wanted = [System.Collections.Generic.List[string]]::new()
+    foreach ($rel in $wantedRules) { $wanted.Add($prefix + $rel) }
+    $wantedSet = [System.Collections.Generic.HashSet[string]]::new([string[]] $wanted.ToArray(), [System.StringComparer]::Ordinal)
+    $kept = [System.Collections.Generic.List[string]]::new()
+    foreach ($g in $inst) {
+        if ($g.StartsWith($prefix, [System.StringComparison]::Ordinal) -and -not $wantedSet.Contains($g)) { continue }
+        $kept.Add($g)
+    }
+    $changed = ($kept.Count -ne $inst.Count)
+    foreach ($w in $wanted) {
+        if (-not $kept.Contains($w)) { $kept.Add($w); $changed = $true }
     }
     if ($changed) {
-        $data['instructions'] = @($inst)
+        if ($kept.Count -gt 0) { $data['instructions'] = @($kept) } else { $data.Remove('instructions') }
         [System.IO.File]::WriteAllText($config, (($data | ConvertTo-Json -Depth 10) + "`n"), [System.Text.UTF8Encoding]::new($false))
         Add-GlobalLink 'opencode-config' $config $backup
-        Write-Info "Added global rules instructions to $config"
+        Write-Info "Updated global rules instructions in $config"
     } else {
-        Write-Info "OpenCode instructions already present in $config"
+        Write-Info "OpenCode instructions already match the installed rules in $config"
     }
 }
 
@@ -949,20 +1113,25 @@ function Install-GlobalSkills {
             Write-Info "WARNING: skill $name not found in repo - not stored"
         }
     }
-    foreach ($name in $enabled) {
-        if (Test-OwnedSkill -Name $name) { Sync-GlobalSkill -Name $name }
+    if ($script:HarnessCodex) {
+        foreach ($name in $enabled) {
+            if (Test-OwnedSkill -Name $name) { Sync-GlobalSkill -Name $name }
+        }
+    } else {
+        Remove-StoreLinks -Dir (Join-Path $script:CodexHome 'skills') -Subdir 'skills'
     }
 }
 
 function Install-GlobalRules {
-    # Copy the owned rule files into the store, preserving relative paths.
-    # Overwrite, never delete.
+    # Copy the installed:true rule files into the store, preserving relative paths. Overwrite,
+    # never delete: an installed:false rule is neither refreshed (operator edits in the store
+    # survive) nor wired.
     $sourceRules = Join-Path $script:TempRepo '.github/instructions'
     if (-not (Test-Path -LiteralPath $sourceRules -PathType Container)) {
         Write-Info 'No .github/instructions in source - nothing to install for global rules'
         return
     }
-    foreach ($rel in $script:OwnedRules) {
+    foreach ($rel in $script:RulesOn) {
         $source = Join-Path $sourceRules $rel
         if (Test-Path -LiteralPath $source -PathType Leaf) {
             $dest = Join-Path (Join-Path $script:GlbRoot 'rules') $rel
@@ -986,7 +1155,7 @@ function Write-GlobalAgents {
     $lines.Add('')
     $lines.Add("<!-- $($script:GlobalMarker): regenerated by install-skills -->")
     $lines.Add('')
-    foreach ($rel in $script:OwnedRules) {
+    foreach ($rel in $script:RulesOn) {
         $lines.Add('@' + ((Join-Path (Join-Path $script:GlbRoot 'rules') $rel) -replace '\\', '/'))
     }
     [System.IO.File]::WriteAllLines($file, $lines, [System.Text.UTF8Encoding]::new($false))
@@ -1000,6 +1169,10 @@ function Install-GlobalInstructions {
     # created with an RTK-preserving header.
     Write-GlobalAgents
     $codexAgents = Join-Path $script:CodexHome 'AGENTS.md'
+    if (-not $script:HarnessCodex) {
+        Remove-CodexImport -File $codexAgents
+        return
+    }
     if (-not (Test-Path -LiteralPath $codexAgents -PathType Leaf)) {
         $lines = New-Object System.Collections.Generic.List[string]
         $rtk = Join-Path $script:CodexHome 'RTK.md'
@@ -1040,11 +1213,12 @@ function Install-GlobalHooks {
     $hooksFile = Join-Path $script:CodexHome 'hooks.json'
     $sourceHooks = Join-Path $script:TempRepo '.agents/hooks'
     $ownedCmds = New-Object System.Collections.Generic.List[string]
+    $disabledCmds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
     if (-not (Test-Path -LiteralPath $sourceHooks -PathType Container)) {
         Write-Info 'No .agents/hooks in source - nothing to install for global hooks'
         return
     }
-    foreach ($name in $script:OwnedHooks) {
+    foreach ($name in $script:HooksOn) {
         $source = Join-Path $sourceHooks $name
         $dest = Join-Path (Join-Path $script:GlbRoot 'hooks') $name
         if (Test-Path -LiteralPath $source) {
@@ -1059,11 +1233,23 @@ function Install-GlobalHooks {
             Write-Info "WARNING: hook $name not found in repo - not stored"
         }
     }
-    foreach ($name in $script:OwnedHooks) {
+    foreach ($name in $script:HooksOn) {
         $dest = Join-Path (Join-Path $script:GlbRoot 'hooks') $name
         if (Test-Path -LiteralPath $dest -PathType Leaf) { $ownedCmds.Add($dest) }
     }
-    if ($ownedCmds.Count -eq 0) { Write-Info 'No owned hooks to register globally'; return }
+    # A disabled hook's command is removed from hooks.json (it stays in the store), so the flag
+    # turns the hook off rather than only stopping updates.
+    foreach ($name in $script:HooksOff) {
+        [void] $disabledCmds.Add((Join-Path (Join-Path $script:GlbRoot 'hooks') $name))
+    }
+    # Codex off: register nothing, and remove every command under the store's hooks dir. They are
+    # matched by that prefix, so a hook that is no longer owned goes too.
+    $purgePrefix = ''
+    if (-not $script:HarnessCodex) {
+        $ownedCmds.Clear()
+        $purgePrefix = (Join-Path $script:GlbRoot 'hooks') + [System.IO.Path]::DirectorySeparatorChar
+    }
+    if ($ownedCmds.Count -eq 0 -and $disabledCmds.Count -eq 0 -and -not $purgePrefix) { Write-Info 'No owned hooks to register globally'; return }
 
     $data = $null
     if (Test-Path -LiteralPath $hooksFile -PathType Leaf) {
@@ -1077,8 +1263,30 @@ function Install-GlobalHooks {
     if (-not $data.ContainsKey('hooks')) { $data['hooks'] = @{} }
     $hooks = $data['hooks']
     $ups = if ($hooks.ContainsKey('UserPromptSubmit')) { $hooks['UserPromptSubmit'] } else { @() }
-    $existing = @{}
+    # Drop the commands of disabled hooks. Only a group this empties is dropped; a group the
+    # operator shares with other commands keeps them.
+    $removed = 0
+    $upsList = New-Object System.Collections.Generic.List[object]
     foreach ($group in @($ups)) {
+        if ($group -is [hashtable] -and $group.ContainsKey('hooks') -and $null -ne $group['hooks']) {
+            $all = @($group['hooks'])
+            $keep = @($all | Where-Object {
+                $dropIt = $_ -is [hashtable] -and $_.ContainsKey('command') -and
+                    ($disabledCmds.Contains([string]$_['command']) -or
+                     ($purgePrefix -and ([string]$_['command']).StartsWith($purgePrefix, [System.StringComparison]::Ordinal)))
+                -not $dropIt
+            })
+            $dropped = $all.Count - $keep.Count
+            if ($dropped -gt 0) {
+                $removed += $dropped
+                if ($keep.Count -eq 0) { continue }
+                $group['hooks'] = $keep
+            }
+        }
+        $upsList.Add($group)
+    }
+    $existing = @{}
+    foreach ($group in $upsList) {
         if ($group -is [hashtable] -and $group.ContainsKey('hooks')) {
             foreach ($h in @($group['hooks'])) {
                 if ($h -is [hashtable] -and $h.ContainsKey('command')) { $existing[[string]$h['command']] = $true }
@@ -1089,25 +1297,25 @@ function Install-GlobalHooks {
     foreach ($cmd in $ownedCmds) {
         if (-not $existing.ContainsKey([string]$cmd)) { $new += @{ command = $cmd; type = 'command' } }
     }
+    $changed = ($new.Count -gt 0) -or ($removed -gt 0)
     $backupPath = ''
-    if ($new.Count -gt 0 -and (Test-Path -LiteralPath $hooksFile -PathType Leaf)) {
+    if ($changed -and (Test-Path -LiteralPath $hooksFile -PathType Leaf)) {
         $backupPath = Backup-Inplace -Path $hooksFile
     }
-    if ($new.Count -gt 0) {
-        $upsList = New-Object System.Collections.Generic.List[object]
-        foreach ($g in @($ups)) { $upsList.Add($g) }
-        $upsList.Add(@{ hooks = $new })
+    if ($changed) {
+        if ($new.Count -gt 0) { $upsList.Add(@{ hooks = $new }) }
         $hooks['UserPromptSubmit'] = $upsList
         [System.IO.File]::WriteAllText($hooksFile, (($data | ConvertTo-Json -Depth 10) + "`n"), [System.Text.UTF8Encoding]::new($false))
     }
     if ($backupPath) { Write-Info "Backed up $hooksFile -> $backupPath" }
-    if ($new.Count -gt 0) {
+    if ($changed) {
         Add-GlobalLink 'hooks-merge' $hooksFile $backupPath
-        Write-Info "Registered $($new.Count) owned hook(s) in $hooksFile"
+        if ($new.Count -gt 0) { Write-Info "Registered $($new.Count) owned hook(s) in $hooksFile" }
+        if ($removed -gt 0) { Write-Info "Unregistered $removed disabled hook(s) from $hooksFile" }
     } else {
-        Write-Info "Owned hooks already registered in $hooksFile"
+        Write-Info "Owned hooks already match the installed set in $hooksFile"
     }
-    Write-Info 'Trust the newly registered Codex hooks with: /hooks'
+    if ($script:HarnessCodex) { Write-Info 'Trust the newly registered Codex hooks with: /hooks' }
 }
 
 function Write-GlobalManifest {
@@ -1142,6 +1350,21 @@ function Write-GlobalManifest {
     if (-not $data.ContainsKey('decisions_enabled')) {
         $data['decisions_enabled'] = $false
     }
+    # A category this run covered brings its reconciled list; one it did not keeps the list the
+    # previous run recorded (absent until that category has run once).
+    $perItem = [ordered]@{ rules = $script:GlbRules; hooks = $script:GlbHooks }
+    foreach ($key in $perItem.Keys) {
+        if ($null -ne $perItem[$key]) {
+            $data[$key] = $perItem[$key]
+        } elseif (-not $data.ContainsKey($key) -and $null -ne $existing -and $existing.ContainsKey($key)) {
+            $data[$key] = $existing[$key]
+        }
+    }
+    if ($null -ne $script:GlbHarnesses) {
+        $data['harnesses'] = $script:GlbHarnesses
+    } elseif (-not $data.ContainsKey('harnesses') -and $null -ne $existing -and $existing.ContainsKey('harnesses')) {
+        $data['harnesses'] = $existing['harnesses']
+    }
     # Merge links: carry forward the previous run's records, upsert new ones by
     # (type, path) so a re-run updates in place instead of accumulating.
     $merged = New-Object System.Collections.Generic.List[object]
@@ -1156,16 +1379,48 @@ function Write-GlobalManifest {
         $key = "$($link.type)|$($link.path)"
         if ($seen.ContainsKey($key)) {
             for ($i = 0; $i -lt $merged.Count; $i++) {
-                if ($merged[$i].type -eq $link.type -and $merged[$i].path -eq $link.path) { $merged[$i] = $link; break }
+                if ($merged[$i].type -eq $link.type -and $merged[$i].path -eq $link.path) {
+                    # A re-run that edits the same file again (a rule or hook flipped off)
+                    # snapshots nothing, because the first run already did. Its record has no
+                    # detail, and must not overwrite the one that points at the snapshot
+                    # --uninstall restores from.
+                    if (-not $link.Contains('detail') -and $merged[$i] -is [System.Collections.IDictionary] -and $merged[$i].Contains('detail')) {
+                        $link['detail'] = $merged[$i]['detail']
+                    }
+                    $merged[$i] = $link
+                    break
+                }
             }
         } else {
             $merged.Add($link)
             $seen[$key] = $true
         }
     }
+    # `enabled` is a status the installer recomputes every run, not a control: true exactly when the
+    # symlink is on disk and points where the record says. A link the installer unwired (its item or
+    # its harness turned off) stays recorded, as enabled:false, so --uninstall and a re-enable still
+    # know about it. Config-edit records (agents-import, hooks-merge, ...) carry no such field. Every
+    # record is rewritten with a fixed key order (type, path, detail, enabled).
+    $symlinkTypes = 'skill-link', 'claude-skill', 'opencode-skill', 'claude-rule'
+    for ($i = 0; $i -lt $merged.Count; $i++) {
+        $rec = $merged[$i]
+        if ($symlinkTypes -contains [string] $rec['type']) {
+            $item = Get-Item -LiteralPath ([string] $rec['path']) -Force -ErrorAction SilentlyContinue
+            $rec['enabled'] = ($null -ne $item) -and [bool] $item.LinkType -and (([string] $item.Target) -eq [string] $rec['detail'])
+        }
+        $ordered = [ordered]@{}
+        foreach ($k in 'type', 'path', 'detail', 'enabled') { if ($rec.Contains($k)) { $ordered[$k] = $rec[$k] } }
+        foreach ($k in $rec.Keys) { if (-not $ordered.Contains($k)) { $ordered[$k] = $rec[$k] } }
+        $merged[$i] = $ordered
+    }
     $data['updated'] = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
     $data['links'] = $merged
-    [System.IO.File]::WriteAllText($script:GlobalManifest, (($data | ConvertTo-Json -Depth 10) + "`n"), [System.Text.UTF8Encoding]::new($false))
+    $out = [ordered]@{}
+    foreach ($k in 'updated', 'decisions_enabled', 'harnesses', 'skills', 'rules', 'hooks', 'links') {
+        if ($data.ContainsKey($k)) { $out[$k] = $data[$k] }
+    }
+    foreach ($k in $data.Keys) { if (-not $out.Contains($k)) { $out[$k] = $data[$k] } }
+    [System.IO.File]::WriteAllText($script:GlobalManifest, (($out | ConvertTo-Json -Depth 10) + "`n"), [System.Text.UTF8Encoding]::new($false))
     Write-Info "Wrote global manifest $($script:GlobalManifest)"
 }
 
@@ -1182,6 +1437,32 @@ function Invoke-GlobalInstall {
     $existing = Read-GlobalManifest -Path $script:GlobalManifest
     $newJson = ''
 
+    # Which harnesses to wire into. Resolved whatever categories this run covers: a harness the
+    # manifest has not seen joins as on, and an off one is not installed into and is cleaned of
+    # anything this installer put there.
+    $script:GlbHarnesses = Build-Harnesses -Existing $existing
+    $script:HarnessClaude = [bool] $script:GlbHarnesses['claude-code']
+    $script:HarnessCodex = [bool] $script:GlbHarnesses['codex']
+    $script:HarnessOpencode = [bool] $script:GlbHarnesses['opencode']
+    if (-not $script:HarnessClaude) { Write-Info 'Harness claude-code is off - not installing, removing what is wired' }
+    if (-not $script:HarnessCodex) { Write-Info 'Harness codex is off - not installing, removing what is wired' }
+    if (-not $script:HarnessOpencode) { Write-Info 'Harness opencode is off - not installing, removing what is wired' }
+
+    # Rules and hooks carry the same per-item installed flag skills do. Only a category this run
+    # covers is reconciled; the others keep what the manifest already says.
+    if ($script:DoRules) {
+        $existingRules = if ($existing -and $existing.PSObject.Properties['rules']) { $existing.rules } else { $null }
+        $script:GlbRules = Build-GlobalItems -Catalog $script:OwnedRules -Existing $existingRules
+        $script:RulesOn = @(Get-GlobalItemNames -Items $script:GlbRules -Installed $true)
+        $script:RulesOff = @(Get-GlobalItemNames -Items $script:GlbRules -Installed $false)
+    }
+    if ($script:DoHooks) {
+        $existingHooks = if ($existing -and $existing.PSObject.Properties['hooks']) { $existing.hooks } else { $null }
+        $script:GlbHooks = Build-GlobalItems -Catalog $script:OwnedHooks -Existing $existingHooks
+        $script:HooksOn = @(Get-GlobalItemNames -Items $script:GlbHooks -Installed $true)
+        $script:HooksOff = @(Get-GlobalItemNames -Items $script:GlbHooks -Installed $false)
+    }
+
     if ($script:DoSkills) {
         $hasPref = Test-DecisionsPropertyExists -ExistingJson $existing
         if ($script:DoDecisions) {
@@ -1197,8 +1478,10 @@ function Invoke-GlobalInstall {
 
         $diskSkills = @(Get-Skills -Root (Join-Path $script:GlbRoot 'skills'))
         $sourceSkills = @(Get-Skills -Root (Join-Path $script:TempRepo '.agents/skills'))
+        # The global manifest may hold only harnesses{} (an operator pre-seeded it before a first
+        # install), and strict mode throws on a property that is absent.
         $existingSkills = @()
-        if ($existing -and $existing.skills) { $existingSkills = @($existing.skills) }
+        if ($existing -and $existing.PSObject.Properties['skills'] -and $existing.skills) { $existingSkills = @($existing.skills) }
         $newJson = Build-InstallationJson -Updated ([DateTime]::UtcNow.ToString('yyyy-MM-ddTHH\:mm\:ssZ')) `
             -DiskSkills $diskSkills -SourceSkills $sourceSkills -ExistingSkills $existingSkills `
             -DecisionsEnabled $script:DecisionsEnabled
@@ -1207,7 +1490,6 @@ function Invoke-GlobalInstall {
         Install-GlobalSkills -Manifest ($newJson | ConvertFrom-Json)
         Write-Info 'Registering global OpenCode commands...'
         Install-GlobalOpencode -Manifest ($newJson | ConvertFrom-Json)
-        Install-GlobalOpencodeConfig
         Write-Info 'Registering global Claude skills...'
         Install-GlobalClaude -Manifest ($newJson | ConvertFrom-Json)
     }
@@ -1219,6 +1501,8 @@ function Invoke-GlobalInstall {
         Install-GlobalInstructions
         Write-Info 'Wiring Claude global rules...'
         Install-GlobalClaudeRules
+        Write-Info 'Adding global rules to OpenCode instructions...'
+        Install-GlobalOpencodeConfig
     }
 
     if ($script:DoHooks) {
