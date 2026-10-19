@@ -1,16 +1,18 @@
 ---
 description: 'Code review standards and intentional design decisions — prevent false positive AI review feedback'
-globs: "**"
+globs: "**/*.cs"
 # Claude Code only: deferred (NOT auto-loaded every session). Injected on review prompts by
 # .agents/hooks/code-review-standards-context.sh — saves ~900 tokens on non-review sessions.
 # The sentinel below never matches a real file, so Claude's path-scoper skips it at session start.
-# Cursor/Copilot still load it always via globs / alwaysApply / applyTo below (they don't run Claude hooks).
+# Cursor/Copilot scope it to C# files via globs / alwaysApply / applyTo below (they don't run Claude hooks).
 paths:
   - ".review-only--injected-via-hook"
-applyTo: '**'
-alwaysApply: true
+applyTo: '**/*.cs'
+alwaysApply: false
 ---
 # Code Review Standards & Design Decisions
+
+Applies only when reviewing C# (`**/*.cs`) files.
 
 Intentional patterns for AI reviewers to prevent false positives. Updated: 2026-03-07
 
@@ -89,3 +91,4 @@ Modern .NET SDK auto-enables the latest C# version. `<LangVersion>` in csproj is
 |:-----|:-------|
 | 2026-05-30 | Initial version. |
 | 2026-10-16 | DR-003: L0 logic contracts, L1 unhappy paths, minimum L2 happy path per feature. |
+| 2026-10-19 | Scope review guidance to C# files; retain Claude review-hook deferral. |

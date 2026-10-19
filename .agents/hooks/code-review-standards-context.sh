@@ -7,7 +7,7 @@
 # sentinel). This hook re-injects it on demand when the prompt is review-related,
 # saving ~900 tokens on every non-review session.
 #
-# Cursor/Copilot still load the rule unconditionally via their own frontmatter
+# Cursor/Copilot scope the rule to C# files via their own frontmatter
 # (`globs`/`alwaysApply`/`applyTo`), since they do not run Claude Code hooks.
 #
 # Triggers on:

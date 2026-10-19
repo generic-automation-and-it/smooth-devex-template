@@ -12,15 +12,19 @@
 
 ---
 
-## Use skills, rules and hooks in another repository
+## Install skills, rules and hooks into a brownfield repository
 
-Reuse in another repo. One command — ships owned set only (7 skills, 4 rules, 2 hooks). Details and owned-set table: [`docs/wiki/reuse.md`](docs/wiki/reuse.md).
+Reuse in another repo. One command — ships owned set only (15 skills, all owned rules, 2 hooks). Details and owned-set table: [`docs/wiki/reuse.md`](docs/wiki/reuse.md).
 
 ```bash
 # Mac/Linux
 curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -r -s -h
 # Add -d to enable AI decision validation for ralph loop (no prompt):
 curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -r -s -h -d
+# Add -g to install the owned set globally for Codex (store at ~/.smooth-ai-devex, wired into ~/.codex):
+curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -r -s -h -d -g
+# Remove that global install (Codex + Claude skills, OpenCode commands):
+curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -g --uninstall
 ```
 
 ```powershell
@@ -28,17 +32,27 @@ curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-de
 $script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.ps1)); & $script -r -s -h
 # Add -d to enable AI decision validation (no prompt):
 $script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.ps1)); & $script -r -s -h -d
+# Add -g to install the owned set globally for Codex (store + ~/.codex wiring):
+$script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.ps1)); & $script -r -s -h -d -g
+# Remove that global install:
+$script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.ps1)); & $script -g --uninstall
 ```
 
 | Switch | Meaning |
 |---|---|
-| `-r` | Install the owned rules (`.github/instructions/` subset) |
+| `-r` | Install the owned rules (the template's `.github/instructions/` tree) |
 | `-s` | Install the owned skills (`.agents/skills/` flat folders) |
 | `-h` | Install the owned hooks (`.agents/hooks/`) |
 | `-d` | Enable AI decision validation for the ralph loop — writes `SMOOTH_DEVEX_DECISIONS_*` env vars and sets `decisions_enabled: true` in `installation.json` |
+| `-g` | Install the owned set **globally** — `~/.smooth-ai-devex/{skills,rules,hooks}` store, wired into Codex's `~/.codex/` (skills symlinks, a rules index in `AGENTS.md`, `rules/smooth-devex.rules` command policy, `hooks.json` merge), Claude's `~/.claude/skills` + `~/.claude/rules` (when Claude is installed), and OpenCode's `skills/` dir + `opencode.json` `instructions` (when OpenCode is installed) |
+| `--uninstall` | Remove the global install (`-g --uninstall`) — removes only manifest-recorded links/edits, restores `smooth-devex-<datetime>` snapshots, leaves `.system/`, `gk` hooks, and the RTK line intact |
 | _(none)_ | All of the above (rules + skills + hooks) — the default; decisions are then prompted for, or disabled with no terminal |
 
-Switches filter the run only; nothing about the selection is persisted. `-d` is an opt-in flag (not a category) — it never defaults on.
+Switches filter the run only; nothing about the selection is persisted. `-d` is an opt-in flag (not a category) — it never defaults on. `-g` and `--uninstall` are a separate **global** mode: `-g` refuses to combine with `SKILLS_ROOT`, and `--uninstall` only applies together with `-g`.
+
+The global manifest (`~/.smooth-ai-devex/installation.json`) lists every owned skill, rule and hook with an `installed` flag. Set an entry to `false` and re-run `-g` to switch that one item off. Its `harnesses` object (`claude-code`, `codex`, `opencode`, default `true`) switches a whole tool off the same way: nothing is installed into it and what is already there is removed (see `scripts/SKILLS_INSTALLER.md`).
+
+A Claude Code plugin is also available for the owned skills — install it from a marketplace to add the owned skills to Claude Code directly. It installs **skills only**: unlike the installer script, it does **not** copy over rules or hooks.
 
 ---
 

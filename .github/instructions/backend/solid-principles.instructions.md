@@ -1,10 +1,10 @@
 ---
 description: 'When SOLID is a real diagnosis and when applying it makes the code worse — premature abstraction, ADR precedence, the triggers worth acting on'
-globs: "**"
+globs: "**/*.cs"
 paths:
-  - "**"
-applyTo: '**'
-alwaysApply: true
+  - "**/*.cs"
+applyTo: '**/*.cs'
+alwaysApply: false
 ---
 
 # SOLID Principles

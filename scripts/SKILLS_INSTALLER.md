@@ -48,8 +48,10 @@ the run fails the same way.
 In this repository `.claude` and `.codex` are symlinks to `.agents`, so all paths resolve to the
 same tree and the first match is the real one.
 
-**2. Reconcile the manifest — for the owned skills only.** The installer manages exactly seven skills:
-`ai-asset-sync`, `ai-ralph-loop`, `ai-template-sync`, `ai-terse`, `create-hld`, `create-worktask`, `manage-rule-system`.
+**2. Reconcile the manifest — for the owned skills only.** The installer manages exactly fifteen skills:
+`agile-github-breakdown`, `agile-github-task-from-diff`, `ai-asset-sync`, `ai-ralph-loop`, `ai-template-sync`,
+`ai-terse`, `context-load-agents-context`, `context-load-context`, `create-hld`, `create-worktask`,
+`git-commit`, `git-commit-push`, `git-commit-push-pr`, `git-sync`, `manage-rule-system`.
 The catalogue is the **owned union** of what the clone source offers and what is already on disk.
 Anything else in the target tree — local coding skills, operator experiments, the seven `mimisbrunnr-*`
 skills that belong to `smooth-ai-product-context-memory` and other repositories' skills — is left
@@ -89,20 +91,31 @@ match byte-for-byte (the harness holds them to each other).
 
 | Skill | Why owned here |
 |---|---|
+| `agile-github-breakdown` | Turns a braindump or Feature into GitHub Feature + Task issues; generally useful across consumer projects |
+| `agile-github-task-from-diff` | Creates a GitHub Task from the branch diff; generally useful across consumer projects |
 | `ai-asset-sync` | Syncs AI assets across projects; core template mechanism |
 | `ai-template-sync` | Syncs this template into consumer repos; literal purpose of the template |
 | `ai-ralph-loop` | Review → fix → verify loop over a branch diff, or over a plan with `--plan`; generally useful across consumer projects |
 | `ai-terse` | Token compression; generally useful across consumer projects |
+| `context-load-agents-context` | Loads ancestor `AGENTS.md` context for a file; `ai-ralph-loop` and `manage-rule-system` use it |
+| `context-load-context` | Loads or creates functional `AGENTS.md` context before implementation work |
 | `create-hld` | Design workflow authoring |
 | `create-worktask` | Task authoring workflow |
+| `git-commit` | Conventional-commit workflow; follows the shipped `git/git-policy` rule |
+| `git-commit-push` | Commit and push; follows the shipped `git/git-policy` rule |
+| `git-commit-push-pr` | Commit, push and open or update a PR; follows the shipped `git/git-policy` rule |
+| `git-sync` | Sync the branch with `origin/main`, optionally resolving conflicts |
 | `manage-rule-system` | Rule lifecycle management |
 
-Everything else in this template's `.agents/skills/` is treated as **local** — `agile-github-*` may be
-claimed by a GitHub-specific installer; `context-load-*` and `git-commit*` / `git-sync` are local
-helpers; `ai-brain-dump` and `ai-understanding` are session-scoped or archival and excluded for the
-same reason as the prior deny list. Skills owned by other repositories (the seven `mimisbrunnr-*`
-skills plus `ai-review` from `smooth-ai-product-context-memory`) are not installed here either — install
-them with that repository's own installer.
+Everything else in this template's `.agents/skills/` is treated as **local** — `ai-brain-dump` and
+`ai-understanding` are session-scoped or archival and excluded for the same reason as the prior deny
+list. Skills owned by other repositories (the seven `mimisbrunnr-*` skills plus `ai-review` from
+`smooth-ai-product-context-memory`) are not installed here either — install them with that
+repository's own installer.
+
+`load-agents-context.sh`, the `PostToolUse` hook that runs `context-load-agents-context` automatically
+in Claude Code, is not in `OWNED_HOOKS`: `-g` registers hooks under `UserPromptSubmit` only, so shipping it
+would fire it on the wrong event. Without the hook the skill still works; agents invoke its script explicitly.
 
 ## Deny list
 
@@ -117,13 +130,16 @@ unowned folder even
 if the manifest was hand-edited. The harness covers the third case for every entry on the list.
 
 **3. Update only the owned skills marked `installed: true`.** The repo is shallow-cloned once and
-those folders are copied over the existing ones. A skill marked `false` is never touched, so a local
+those folders are copied over the existing ones. A skill's own `AGENTS.md` is stripped from every copy —
+it documents the owner repo's local-dev context and improvements, not the runnable payload a consumer
+should inherit. A skill marked `false` is never touched, so a local
 edit inside one survives every run until you set its flag back. A skill outside the owned set is
 never copied even when a hand-edited manifest asks for it. Skipped entirely unless `-s` (or no
 switches).
 
-**4. Update the owned rules (`-r`).** The four `OWNED_RULES` files copy from the source's
-`.github/instructions/` into `<repo>/.github/instructions/`, preserving relative paths:
+**4. Update the owned rules (`-r`).** Every rule in this template is owned, so all of the
+`.instructions.md` files copy from the source's `.github/instructions/` into `<repo>/.github/instructions/`,
+preserving relative paths:
 
 | Owned rule | Why |
 |---|---|
@@ -197,6 +213,148 @@ The flag only governs **updates**. It does not remove or disable anything: a `fa
 and stays discoverable, it is simply never overwritten again. Delete the folder if you want it gone — the
 next run drops it from the manifest.
 
+## Global install (`-g`)
+
+`-g` installs the same owned set **once, machine-wide**, into `~/.smooth-ai-devex/`, then wires it into
+Codex's own config dir (`~/.codex`, or `$CODEX_HOME`). It is a separate mode from the per-repo install
+above — the two never mix, and `-g` refuses to be combined with `SKILLS_ROOT`. It composes with the same
+category switches (`-g -s -r -h`), so you can install just skills, just rules, or just hooks globally.
+
+| Layer | Where it lands |
+|---|---|
+| Skills | copied into `~/.smooth-ai-devex/skills/` (skill `AGENTS.md` stripped), then symlinked into `~/.codex/skills/<name>` — coexisting with Codex's own `.system/`, which is never touched. When Claude is installed, each is also symlinked into `~/.claude/skills/<name>`; when OpenCode is installed, each is referenced from a `~/.config/opencode/commands` folder symlink to the store's `opencode-commands/` (`<name>.md` → `SKILL.md`) and the store's rules are added to `opencode.json` `instructions` (never copied into the opencode skills folder) |
+| Rules | the **full** template rules tree is copied into `~/.smooth-ai-devex/rules/`. Codex gets a compact **index** of the enabled rules (absolute path, scope, one-line description, ~5 KiB) in a delimited block of `~/.codex/AGENTS.md` — see [Codex](#codex-rules-index-and-command-policy). When Claude is installed the rules are also symlinked into `~/.claude/rules/`; when OpenCode is installed each rule is added to `opencode.json` `instructions` as its own absolute path (never a `rules/**` glob, which could not exclude one rule). The per-repo install ships only the 4 `OWNED_RULES`; the global install ships all of them |
+| Hooks | copied into `~/.smooth-ai-devex/hooks/` and JSON-merged into `~/.codex/hooks.json` under `UserPromptSubmit` only, with absolute store commands (relative `.agents/...` commands would break outside the repo), deduped by command match, preserving the `gk` and `code-review-graph` entries already there |
+
+State is `~/.smooth-ai-devex/installation.json` — `decisions_enabled` and `skills[]` as in the per-repo
+manifest, plus `rules[]` and `hooks[]` (below) and a `links[]` array recording every symlink and config
+edit, so `-g --uninstall` removes exactly what was installed.
+
+### Switching one rule or hook off
+
+Every owned rule and hook has the same `{ "name", "installed" }` entry a skill has:
+
+```json
+{
+  "skills": [ { "name": "ai-terse", "installed": true } ],
+  "rules":  [ { "name": "clean-code.instructions.md", "installed": false },
+              { "name": "git/git-policy.instructions.md", "installed": true } ],
+  "hooks":  [ { "name": "worktask-skill-trigger.sh", "installed": false } ]
+}
+```
+
+Rule names are paths relative to `.github/instructions/`; hook names are file names. They reconcile on
+every run exactly as skills do: a name the manifest has not seen joins as `installed: true`, a name no
+longer owned is dropped, and the flag you set — `false` included — is kept. Edit the flag, re-run
+`install-skills -g`.
+
+`installed: false` switches the item **off**, not just out of the update loop:
+
+| Item | Not copied or refreshed | Removed from |
+|---|---|---|
+| rule | the store copy (an edit you made there survives) | the Codex `AGENTS.md` index and the store `AGENTS.md`, its `~/.claude/rules/` symlink, its `opencode.json` `instructions` entry |
+| hook | the store copy | its command in `~/.codex/hooks.json` (a group left empty goes with it; the `gk` entries and the other owned hook stay) |
+
+Flip it back to `true` and the next run copies a fresh version and rewires it. A skill set to
+`installed: false` differs on purpose: it keeps its existing symlinks and stays discoverable, it is only
+never refreshed.
+
+A category-only run (`-g -r`, `-g -h`, `-g -s`) reconciles just its own list and carries the others
+forward unchanged; `hooks[]` does not appear until a run that covers hooks. `-g -r` now also updates
+`opencode.json` — that step used to run only with skills — and rewrites the `rules/*.instructions.md` and
+`rules/**/*.instructions.md` glob pair an earlier install wrote into per-file entries. The per-repo
+install has no per-item rules/hooks flags: it ships its fixed owned subset.
+
+### Codex: rules index and command policy
+
+Codex has two things called "rules", and neither is an `@`-import:
+
+- **Instructions** reach Codex through `~/.codex/AGENTS.md`, which Codex reads as plain text: global file
+  first, then each `AGENTS.md` from the repo root down, joined and capped at `project_doc_max_bytes`
+  (32 KiB by default). It does **not** resolve `@path` imports, and the 20 rule files total ~84 KB, so the
+  installer cannot import or inline them. Instead the block holds an index — "read these at the start of
+  every task", "read these when editing files matching `<scope>`" — and the model opens the files it needs.
+  The block is replaced in place on every run, so it follows each rule's `installed` flag; an `@RTK.md`
+  line or any other text of yours outside it is never touched. This relies on the model following the
+  index; it is not enforced.
+- **Codex `.rules` files** (`~/.codex/rules/*.rules`) are a Starlark command-approval policy
+  (`prefix_rule()` with `allow` / `prompt` / `forbidden`), not instructions. The installer writes one,
+  `~/.codex/rules/smooth-devex.rules`, from the `git/git-policy` rule: `git commit` and `git push` prompt,
+  and a push whose first flag is `--force`, `-f` or `--force-with-lease` is forbidden. It is a separate
+  file because Codex appends your permanent approvals to `default.rules`, which the installer never
+  touches. Matching is by command prefix only, so `git -C <dir> commit` is not caught and
+  `git push origin x --force` is prompted rather than forbidden — a guard rail, not enforcement. The
+  file exists only while `codex` is on and `git/git-policy` is `installed: true`, is removed otherwise
+  (only if it still carries its header), and Codex reads it at startup, so restart Codex after a change.
+
+### Switching a whole harness off
+
+`harnesses` turns an entire tool on or off for this machine:
+
+```json
+{
+  "harnesses": { "claude-code": true, "codex": false, "opencode": true }
+}
+```
+
+A harness the manifest has not seen is added as `true` (the object always lists exactly these three, in
+this order; any other key is dropped). `true` installs into it as usual. `false` installs nothing into it
+**and** removes whatever this installer already put there, on every run:
+
+| Harness | Wired when `true`; removed when `false` |
+|---|---|
+| `claude-code` | symlinks in `~/.claude/skills/` and `~/.claude/rules/` |
+| `codex` | symlinks in `~/.codex/skills/`, the rules block in `~/.codex/AGENTS.md` (the lines around it stay), `~/.codex/rules/smooth-devex.rules`, the store commands in `~/.codex/hooks.json` (other hooks stay) |
+| `opencode` | symlinks in `~/.config/opencode/skills/`, the store entries in `opencode.json` `instructions` (your own entries stay) |
+
+Removal is found **on disk**, not only in `links[]`: any symlink in those folders that points into the
+store goes, including one whose record was lost; a real file or a link to anywhere else is never touched.
+The store (`~/.smooth-ai-devex/{skills,rules,hooks}` and its `AGENTS.md`) is shared by all three and stays
+filled. Like the category switches, a narrowed run only cleans what it covers — `-g -r` removes a `false`
+harness's rule wiring but not its skill links.
+
+Every symlink record in `links[]` (`skill-link`, `claude-skill`, `opencode-skill`, `claude-rule`) carries an
+`enabled` field:
+
+```json
+{
+  "type": "claude-rule",
+  "path": "/Users/me/.claude/rules/backend/solid-principles.instructions.md",
+  "detail": "/Users/me/.smooth-ai-devex/rules/backend/solid-principles.instructions.md",
+  "enabled": true
+}
+```
+
+`enabled` is a **status the installer writes**, not a control: it is `true` while the symlink is on disk
+and points at `detail`, and `false` once the link has been removed because its rule or its harness was
+switched off. The record stays so a re-enable and `--uninstall` still know about it. Editing it by hand
+does nothing — the next run recomputes it; use `installed` and `harnesses` to steer. The config-edit records
+(`agents-import`, `hooks-merge`, `opencode-config`, `profile-edit`) have no `enabled`.
+
+`--uninstall` ignores `harnesses` and `enabled`: it removes whatever its records point at that is present,
+and restores the files it edited byte-for-byte, however the flags were toggled before.
+
+Before appending to any pre-existing file it does not own, the
+installer snapshots it **once** as `<file>.smooth-devex-<UTC datetime>` — `~/.codex/hooks.json` and
+`~/.codex/AGENTS.md`, plus the shell profile when decision env vars are written. `--uninstall` restores
+those snapshots (so the operator's earlier content comes back byte-for-byte), removes the `AGENTS.md`
+rules block and `~/.codex/rules/smooth-devex.rules`, and deletes the skill symlinks — leaving Codex's
+`.system/`, an operator's `gk` hooks, and their `RTK.md` `@`-import line untouched. The store directory itself is left in place
+(`rm -rf ~/.smooth-ai-devex` to reclaim it).
+
+`$SMOOTH_DEVEX_HOME` overrides the store location and `$CODEX_HOME` overrides Codex's config dir — both
+are how a test harness isolates a run from a real `~/.codex`.
+
+```bash
+scripts/install-skills.sh -g                  # all layers
+scripts/install-skills.sh -g -s               # skills only
+scripts/install-skills.sh -g --uninstall      # remove the global install
+```
+
+Windows (PowerShell 7) mirrors the contract: `./scripts/install-skills.ps1 -g`. Symlinks need Developer
+Mode or elevation; on a machine without either the ps1 port falls back to a junction — degraded, because
+git records a junction's target contents as real files, so prefer symlinks.
+
 ## Write ordering is load-bearing
 
 The manifest is written **after** the update, not before. The manifest lives inside
@@ -236,6 +394,8 @@ the owned set still need a manual copy of those files alongside the install.
 | `create-hld` | `.agents/rules/meta/` rules used by `hld-agents-rules.sh` |
 | `manage-rule-system` | the rules themselves if you want to manage them via this skill |
 | `context-load-context` / `context-load-agents-context` | `.agents/rules/` for the context files to reference |
+| `git-commit` / `git-commit-push` / `git-commit-push-pr` | the `git/git-policy` rule (ships); `git-commit-push-pr` also needs `gh` and reads the repo's `.github/pull_request_template.md` |
+| `agile-github-breakdown` / `agile-github-task-from-diff` | `gh` authenticated against the target repo; task-from-diff links into a GitHub Project unless run with `--noparentid` |
 
 ## Layout move (2026-10): manifest and payload live at the agent root
 
@@ -258,7 +418,7 @@ and payload purposes.
 bash scripts/test-install-skills.sh
 ```
 
-48 cases against the bash port, no network and no container engine needed: the clone source is the
+70 cases against the bash port, no network and no container engine needed: the clone source is the
 checkout itself (`SKILLS_REPO` pointed at the repo, `SKILLS_BRANCH` at the current branch), so a harness
 that reached GitHub would be red for reasons unrelated to the code. Runs in the PR gate. The shared
 payload, canonical links, stale-entry sweep, legacy-manifest ignore, and real-dir-at-link-path cases
