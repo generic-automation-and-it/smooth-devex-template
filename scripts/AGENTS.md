@@ -14,7 +14,7 @@ repository's source outside its declared contract.
   `<agent-root>/hooks/` files, the owned `.github/instructions/` subset, and canonical symlinks —
   or, when force-pinned via `SKILLS_ROOT`, into exactly that path and its siblings. The `-g`
   global mode is the explicit exception: it writes `$HOME/.smooth-ai-devex/` (its store + manifest)
-  and wires into Codex's `$HOME/.codex/` (skills symlinks, an `AGENTS.md` import, `hooks.json`), plus
+  and wires into Codex's `$HOME/.codex/` (skills symlinks, an `AGENTS.md` rules index, `rules/smooth-devex.rules`, `hooks.json`), plus
   Claude's `$HOME/.claude/skills` and OpenCode's `$HOME/.config/opencode/commands`.
   Anything else that wants to touch the calling repo's `src/`, `tests/`, `.github/` or other
   top-level directories belongs elsewhere — most likely as a workflow under `.github/workflows/` or an
@@ -37,7 +37,7 @@ documentation.
 | --- | --- |
 | `install-skills.sh` | bash port. macOS / Linux. Needs `bash`, `git`, `python3`. |
 | `install-skills.ps1` | PowerShell 7 port. Windows or anywhere `pwsh` runs. Needs `pwsh`, `git`. |
-| `test-install-skills.sh` | Harness. 83 cases, bash port only (the ps1 port is read, not run). |
+| `test-install-skills.sh` | Harness. 90 cases, bash port only (the ps1 port is read, not run). |
 
 The installer pulls a flat list of folders from `.agents/skills/` in this repository into a consumer
 repository, controlled by a per-skill `installed` flag in
@@ -51,8 +51,10 @@ files from every skill folder it copies (per-repo and `-g` global), leaving `SKI
 references intact.
 
 A small hardcoded **owned set** (`OWNED_LIST` in `install-skills.sh`, `$script:OwnedList` in
-`install-skills.ps1`) scopes the installer to seven template-purpose skills: `ai-asset-sync`,
-`ai-ralph-loop`, `ai-template-sync`, `ai-terse`, `create-hld`, `create-worktask`, `manage-rule-system`. Everything
+`install-skills.ps1`) scopes the installer to fifteen skills: `agile-github-breakdown`,
+`agile-github-task-from-diff`, `ai-asset-sync`, `ai-ralph-loop`, `ai-template-sync`, `ai-terse`,
+`context-load-agents-context`, `context-load-context`, `create-hld`, `create-worktask`, `git-commit`,
+`git-commit-push`, `git-commit-push-pr`, `git-sync`, `manage-rule-system`. Everything
 else in `.agents/skills/` is treated as local and never enters a consumer's manifest, even when a
 hand-edited manifest names it `installed: true` — the update loop refuses unowned names as well as
 the manifest builder. This is the same shape `smooth-ai-product-context-memory` PR #245 introduced;
@@ -69,11 +71,9 @@ installs the same owned set once, machine-wide, into `~/.smooth-ai-devex/` and w
 and made vendorable into any agent tree; the skills' own `SKILL.md` files reference a repo-local
 `.agents/...` tree (own scripts, rules, `.context/`), so a globally-installed skill is *discoverable*
 but its scripts only run when the consumer has that tree (a per-repo install, or this template).
-the full template rules tree is copied into the store and imported through a generated
-`~/.smooth-ai-devex/AGENTS.md` that `~/.codex/AGENTS.md` pulls in with one marker-guarded `@`-line
-(never written into `~/.codex/rules/`, a Starlark `prefix_rule` namespace), symlinked into
-`~/.claude/rules/` when Claude is installed, and added to `opencode.json` `instructions` when OpenCode
-is installed. The per-repo install ships the same rules (every rule is owned — it is the DevEx rules
+the full template rules tree is copied into the store, symlinked into
+`~/.claude/rules/` when Claude is installed, added to `opencode.json` `instructions` when OpenCode
+is installed, and indexed for Codex (below). The per-repo install ships the same rules (every rule is owned — it is the DevEx rules
 tree). And the owned hooks are JSON-merged into `~/.codex/hooks.json`
 under `UserPromptSubmit` only, with absolute store commands. When Claude is installed, owned skills
 are also symlinked into `~/.claude/skills/`. When OpenCode is installed, each owned skill is
@@ -91,12 +91,20 @@ without `-g` is refused.
 
 The global manifest also carries `rules[]` and `hooks[]` (`{name, installed}`, like `skills[]`; a run
 reconciles only the categories it covers). Unlike a skill, `installed: false` on a rule or hook
-**unwires** it (`AGENTS.md` import, `~/.claude/rules` link, `opencode.json` entry, `hooks.json`
+**unwires** it (`AGENTS.md` index line, `~/.claude/rules` link, `opencode.json` entry, `hooks.json`
 command); its store copy stays. OpenCode `instructions` therefore holds one absolute path per rule,
 never a `rules/**` glob — a glob cannot exclude one. The per-repo install has no per-item flags.
 
+**Codex does not resolve `@path` imports** (its `AGENTS.md` docs describe plain concatenation, capped at
+`project_doc_max_bytes` = 32 KiB; the rules total ~84 KB). So `~/.codex/AGENTS.md` carries a generated
+**index** (path, scope, description) in a delimited block that is replaced in place each run — never
+`@` lines and never rule bodies. Codex `.rules` files are a Starlark `prefix_rule` command-approval policy,
+not instructions: the installer owns only `~/.codex/rules/smooth-devex.rules` (from `git/git-policy`) and
+must never touch `default.rules`, where Codex appends the operator's approvals. A file we created whose
+only other content is the RTK header is removed outright when codex goes off, not left empty.
+
 `harnesses{}` (`claude-code`, `codex`, `opencode`; missing = `true`) is the same switch for a whole tool,
-and `false` **removes** as well as skips: store symlinks, the `~/.codex/AGENTS.md` import block, `hooks.json`
+and `false` **removes** as well as skips: store symlinks, the `~/.codex/AGENTS.md` rules block, `smooth-devex.rules`, `hooks.json`
 commands and `opencode.json` entries are found on disk by where they point, not from `links[]`.
 `--uninstall` is deliberately not gated by it. `enabled` on the four symlink record types is a status the
 writer recomputes from disk each run — never read it as a control, and never add it to the config-edit records.
@@ -146,3 +154,5 @@ Two known gaps:
 | 2026-10-18 | `-g` global rules ship the **full** template rules tree (incl. `backend/`, `skills/`, clean-code, solid-principles), not just the 4 `OWNED_RULES` a consumer gets — for Codex `@`-import, Claude `~/.claude/rules`, OpenCode `opencode.json` | — |
 | 2026-10-19 | `-g` manifest `rules[]`/`hooks[]` with per-item `installed` (off = unwired); OpenCode `instructions` per-file, runs with rules not skills; link `detail` kept across re-runs; ps1 `Backup-Inplace` pitfall: `-Filter` ignores `[0-9]`; harness 8s–8y | #126 |
 | 2026-10-19 | `-g` manifest `harnesses{}` (false = skip + remove by on-disk detection; uninstall ungated); `enabled` status on symlink records; ps1 pitfall: strict mode throws on a manifest without `skills`; harness 9a–9f | #126 |
+| 2026-10-19 | Owned skills 7→15 (+`agile-github-*`, `context-load-*`, `git-commit*`, `git-sync`); `load-agents-context.sh` stays local: PostToolUse, `-g` registers `UserPromptSubmit` only; harness unowned probe is `ai-brain-dump` | #126 |
+| 2026-10-19 | Codex pitfall: no `@path` imports, 32 KiB cap — `~/.codex/AGENTS.md` gets a rule index block (replaced in place, legacy `@` block migrated), not `@` lines; `~/.codex/rules/smooth-devex.rules` (git-policy → prompt/forbidden), never `default.rules`; ps1 shared `Test-InstallSnapshot`; harness 10a–10g | #126 |

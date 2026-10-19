@@ -64,20 +64,29 @@ SKILLS_BRANCH="${SKILLS_BRANCH-main}"
 # pulled a target repo's local-only skills into its manifest as `installed:true` — that is the bug
 # PR #245 fixed in `smooth-ai-product-context-memory`, and the same shape applies here.
 #
-# The owned set is deliberately small. This is a template repo, not a domain plugin; the few skills
+# The owned set is deliberately explicit. This is a template repo, not a domain plugin; the skills
 # worth carrying to a consumer are the ones that operate on the template's own shape (asset sync,
-# template sync, rule system) or that are useful in any consumer project (terse response, ralph
-# review-fix loop, hld + worktask authoring).
+# template sync, rule system, context loading) or that are useful in any consumer project (terse
+# response, ralph review-fix loop, hld + worktask authoring, GitHub issue breakdown, git commit/sync
+# workflow). Session-scoped skills (ai-brain-dump, ai-understanding) stay local.
 #
 # If a skill you want to distribute lands here, add it to this list and to the harness's owned
 # set in test-install-skills.sh. Anything else stays local.
 OWNED_LIST=(
+  agile-github-breakdown
+  agile-github-task-from-diff
   ai-asset-sync
   ai-ralph-loop
   ai-template-sync
   ai-terse
+  context-load-agents-context
+  context-load-context
   create-hld
   create-worktask
+  git-commit
+  git-commit-push
+  git-commit-push-pr
+  git-sync
   manage-rule-system
 )
 
@@ -115,10 +124,10 @@ OWNED_RULES=(
 #   manage-rule-system-context.sh referenced by manage-rule-system (delegates into the owned skill)
 #   worktask-skill-trigger.sh     referenced by create-worktask (self-contained router)
 #
-# load-agents-context.sh is referenced by ai-template-sync but delegates to
-# context-load-agents-context/scripts/, which is NOT owned and never ships — copying the wrapper
-# alone installs a hook that silently does nothing (it exits 0 when the implementation is absent).
-# It stays local until its implementation is owned too. The rest (slnx-docs-sync.py,
+# load-agents-context.sh is referenced by ai-template-sync and its implementation now ships
+# (context-load-agents-context is owned), but it is a PostToolUse hook and -g registers hooks under
+# UserPromptSubmit only — registering it there would fire it on the wrong event. It stays local until
+# the installer can register a hook by its own event. The rest (slnx-docs-sync.py,
 # agentmd-create-update.sh, code-review-standards-context.sh, knowledge-rule-enforce.sh) is
 # template-local and stays.
 OWNED_HOOKS=(
@@ -745,11 +754,13 @@ install_hooks() {
 # default, or $CODEX_HOME):
 #   - skills:  copied into the store and symlinked into ~/.codex/skills/<name>,
 #              which coexists with Codex's own .system/ (never touched).
-#   - rules:   copied into the store and imported by the generated
-#              $GLB_ROOT/AGENTS.md; ~/.codex/AGENTS.md pulls that in with one
-#              @-line. No *.instructions.md is written into ~/.codex/rules/ --
-#              Codex treats that dir as a Starlark prefix_rule namespace, and
-#              the @-import chain is the supported delivery shape.
+#   - rules:   copied into the store, and ~/.codex/AGENTS.md carries a compact
+#              index of them (path, scope, one-line description) in a delimited
+#              block. Codex does not resolve @-imports and caps combined AGENTS.md
+#              content at 32 KiB, so neither @-lines nor the rule bodies can go
+#              there. No *.instructions.md is written into ~/.codex/rules/: Codex
+#              .rules files are a Starlark prefix_rule() command-approval policy.
+#              One is generated from git-policy as ~/.codex/rules/smooth-devex.rules.
 #   - hooks:   JSON-merged into ~/.codex/hooks.json (UserPromptSubmit only) with
 #              absolute store commands; relative .agents/... commands would
 #              break outside the repo and from subdirectories.
@@ -776,7 +787,6 @@ install_hooks() {
 GLB_ROOT="${SMOOTH_DEVEX_HOME:-$HOME/.smooth-ai-devex}"
 GLOBAL_MANIFEST="$GLB_ROOT/installation.json"
 GLOBAL_MARKER="installer-owned-global-instructions"
-GLOBAL_CODEX_MARKER_LINE="# $GLOBAL_MARKER (added by install-skills)"
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 OPENCODE_CONFIG="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
 CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
@@ -922,32 +932,143 @@ purge_store_links() {
   done < <(find -H "$dir" -type l 2>/dev/null)
 }
 
-# strip_codex_import FILE — remove the marker-guarded import block this installer appended
-# to FILE: the marker line, the @-line after it, and the blank line written before them.
-# Nothing else in the file is touched, and no snapshot is taken (one was, at install).
-strip_codex_import() {
-  local file="$1"
-  [ -f "$file" ] && grep -qF "$GLOBAL_MARKER" "$file" || return 0
-  python3 - "$file" "$GLOBAL_MARKER" <<'PYEOF'
-import sys
-path, marker = sys.argv[1], sys.argv[2]
-lines = open(path, encoding='utf-8').read().split('\n')
-out = []
-i = 0
-while i < len(lines):
-    if marker in lines[i]:
-        if out and out[-1] == '':
-            out.pop()
-        i += 1
-        if i < len(lines) and lines[i].startswith('@'):
-            i += 1
-        continue
-    out.append(lines[i])
-    i += 1
-with open(path, 'w', encoding='utf-8') as f:
-    f.write('\n'.join(out))
+# The delimited block this installer keeps in ~/.codex/AGENTS.md opens with a line carrying
+# GLOBAL_MARKER and closes with a line carrying CODEX_BLOCK_END. An older install wrote only the
+# marker line and one @-line after it (no closing line); that legacy form is recognised too.
+CODEX_BLOCK_END="end of install-skills global rules"
+
+# codex_agents_block FILE MODE [ARG] — edit only our block in FILE, never anything around it.
+#   state          print none | block | legacy
+#   apply  BODY    replace our block in place (or append one) with BODY; print same | changed | appended
+#   remove RTKLINE delete our block and the blank line before it; print none | removed | removed-empty
+#                  (removed-empty: nothing but ARG, the RTK header line, is left)
+codex_agents_block() {
+  python3 - "$1" "$GLOBAL_MARKER" "$CODEX_BLOCK_END" "$2" "${3:-}" <<'PYEOF'
+import os, sys
+path, marker, end_token, mode, arg = sys.argv[1:6]
+begin = '<!-- ' + marker + ' (added by install-skills): regenerated on every run -->'
+end = '<!-- ' + end_token + ' -->'
+text = open(path, encoding='utf-8').read() if os.path.exists(path) else ''
+lines = text.split('\n')
+
+start = next((i for i, line in enumerate(lines) if marker in line), None)
+stop = None
+legacy = False
+if start is not None:
+    for j in range(start + 1, len(lines)):
+        if marker in lines[j]:
+            break
+        if end_token in lines[j]:
+            stop = j
+            break
+    if stop is None:
+        legacy = True
+        stop = start + 1 if start + 1 < len(lines) and lines[start + 1].startswith('@') else start
+
+if mode == 'state':
+    print('none' if start is None else ('legacy' if legacy else 'block'))
+elif mode == 'apply':
+    block = [begin] + arg.rstrip('\n').split('\n') + [end]
+    if start is None:
+        prefix = text
+        if prefix and not prefix.endswith('\n'):
+            prefix += '\n'
+        if prefix:
+            prefix += '\n'
+        result, outcome = prefix + '\n'.join(block) + '\n', 'appended'
+    elif lines[start:stop + 1] == block:
+        result, outcome = text, 'same'
+    else:
+        result, outcome = '\n'.join(lines[:start] + block + lines[stop + 1:]), 'changed'
+    if outcome != 'same':
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(result)
+    print(outcome)
+elif mode == 'remove':
+    if start is None:
+        print('none')
+    else:
+        kept = lines[:start]
+        if kept and kept[-1] == '':
+            kept.pop()
+        kept += lines[stop + 1:]
+        result = '\n'.join(kept)
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(result)
+        print('removed-empty' if result.strip() in ('', arg) else 'removed')
 PYEOF
-  log "Removed the global instructions import from $file (codex turned off)"
+}
+
+# strip_codex_import FILE RTKLINE — codex is off: remove our block from FILE. No snapshot is taken
+# (one was, at install). A file that was created by this installer and now holds nothing else is
+# removed, the exact inverse of creating it; one that pre-dates the install (it has a snapshot) stays.
+strip_codex_import() {
+  local file="$1" rtk_line="${2:-}" outcome
+  [ -f "$file" ] || return 0
+  outcome="$(codex_agents_block "$file" remove "$rtk_line")"
+  case "$outcome" in
+    removed*) log "Removed the global rules block from $file (codex turned off)" ;;
+  esac
+  if [ "$outcome" = "removed-empty" ] && ! ls "$file".smooth-devex-[0-9]* >/dev/null 2>&1; then
+    rm -f "$file"
+    log "Removed $file (the installer created it and nothing else is in it)"
+  fi
+}
+
+# render_rules_index — the text Codex is given in place of the rule files. Codex does not resolve
+# @-imports and caps combined AGENTS.md content at 32 KiB, so the 20 rule bodies cannot travel
+# in it; this lists each enabled rule's path, scope and one-line description instead.
+render_rules_index() {
+  python3 - "$GLB_ROOT/rules" "$RULES_ON" <<'PYEOF'
+import os, re, sys
+root, enabled = sys.argv[1], [r for r in sys.argv[2].splitlines() if r]
+
+
+def unquote(value):
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in '\'"':
+        value = value[1:-1]
+    return value
+
+
+def describe(path):
+    text = open(path, encoding='utf-8').read()
+    match = re.match(r'^---\r?\n(.*?)\r?\n---\r?\n', text, re.S)
+    front = match.group(1) if match else ''
+
+    def field(key):
+        found = re.search(r'^%s:\s*(.+?)\s*$' % key, front, re.M)
+        return unquote(found.group(1)) if found else ''
+
+    scope = field('applyTo') or field('globs') or '**'
+    summary = field('description')
+    if not summary:
+        heading = re.search(r'^#\s+(.+)$', text[match.end():] if match else text, re.M)
+        summary = heading.group(1).strip() if heading else os.path.basename(path)
+    if len(summary) > 100:
+        summary = summary[:99].rstrip() + '…'
+    return scope, summary
+
+
+groups = {}
+for rel in enabled:
+    path = os.path.join(root, rel)
+    if os.path.isfile(path):
+        scope, summary = describe(path)
+        groups.setdefault(scope, []).append('- %s - %s' % (path, summary))
+
+if not groups:
+    print('No global rules are installed.')
+    raise SystemExit(0)
+print('Codex does not import files from AGENTS.md, so the rules below are NOT loaded for you.')
+print('Open the ones that apply with your file tools before you work, and follow them.')
+if '**' in groups:
+    print('\nRead at the start of every task:')
+    print('\n'.join(groups.pop('**')))
+for scope, entries in groups.items():
+    print('\nWhen editing files matching `%s`:' % scope)
+    print('\n'.join(entries))
+PYEOF
 }
 
 # link_skill_into DEST_DIR NAME LINKTYPE — link the store's copy of NAME into
@@ -1229,61 +1350,135 @@ install_global_rules() {
   done <<< "$RULES_ON"
 }
 
-# write_global_agents — generate the store-level AGENTS.md that imports each
-# owned rule by absolute @-line. This is the single delivery shape for global
-# rules: ~/.codex/AGENTS.md @-imports this file, which @-imports each rule.
+# write_global_agents — generate the store-level AGENTS.md: the rule index (see
+# render_rules_index). It is the same text install_global_instructions inlines into
+# ~/.codex/AGENTS.md; this copy is for people and for tools that read the store directly.
 write_global_agents() {
   local file="$GLB_ROOT/AGENTS.md"
   {
     printf '# Smooth DevEx — installed global instructions\n'
     printf '# (managed by install-skills -g; do not edit)\n\n'
     printf '<!-- %s: regenerated by install-skills -->\n\n' "$GLOBAL_MARKER"
-    local rel
-    while IFS= read -r rel; do
-      [ -n "$rel" ] || continue
-      printf '@%s/rules/%s\n' "$GLB_ROOT" "$rel"
-    done <<< "$RULES_ON"
+    render_rules_index
+    printf '\n'
   } > "$file"
-  log "Wrote global instructions importer $file"
+  log "Wrote global rules index $file"
 }
 
-# install_global_instructions — append one @-import of $GLB_ROOT/AGENTS.md to
-# $CODEX_HOME/AGENTS.md, marker-guarded so a re-run does not duplicate it and an
-# operator's existing @-imports (notably @.../RTK.md) are never touched. A
-# missing AGENTS.md is created with an RTK-preserving header.
+# install_global_instructions — keep one delimited block in $CODEX_HOME/AGENTS.md holding the rule
+# index. Codex does not resolve @-imports, so the index is inlined, not imported. The block is
+# replaced in place on every run (it follows the installed:false flags) and an older two-line
+# @-import block is migrated by the same replacement. Anything outside the block, notably an
+# operator's @.../RTK.md line, is never touched. A missing AGENTS.md is created with an
+# RTK-preserving header.
 install_global_instructions() {
   write_global_agents
-  local codex_agents="$CODEX_HOME/AGENTS.md" backup_path
+  local codex_agents="$CODEX_HOME/AGENTS.md" rtk_line="" backup_path outcome index
+  if [ -f "$CODEX_HOME/RTK.md" ]; then
+    rtk_line="@$CODEX_HOME/RTK.md"
+  fi
   if [ "$HARNESS_CODEX" != "1" ]; then
-    strip_codex_import "$codex_agents"
+    strip_codex_import "$codex_agents" "$rtk_line"
     return 0
   fi
+  index="$(render_rules_index)"
   if [ ! -f "$codex_agents" ]; then
-    {
-      if [ -f "$CODEX_HOME/RTK.md" ]; then
-        printf '@%s/RTK.md\n\n' "$CODEX_HOME"
-      fi
-      printf '%s\n@%s/AGENTS.md\n' "$GLOBAL_CODEX_MARKER_LINE" "$GLB_ROOT"
-    } > "$codex_agents"
+    if [ -n "$rtk_line" ]; then
+      printf '%s\n' "$rtk_line" > "$codex_agents"
+    else
+      : > "$codex_agents"
+    fi
+    codex_agents_block "$codex_agents" apply "$index" >/dev/null
     record_link "agents-import" "$codex_agents"
-    log "Created $codex_agents with global instructions import"
+    log "Created $codex_agents with the global rules index"
     return 0
   fi
-  if grep -q "$GLOBAL_MARKER" "$codex_agents"; then
-    log "Global instructions already imported into $codex_agents"
+  if [ "$(codex_agents_block "$codex_agents" state)" = "none" ]; then
+    # We are about to add to a pre-existing operator-owned file: snapshot it first so
+    # --uninstall can restore the operator's content. Only here: a file that already holds our
+    # block either has its snapshot from the first install or was created by us, and a snapshot
+    # of that would capture our own block.
+    backup_path="$(backup_inplace "$codex_agents")"
+    if [ -n "$backup_path" ]; then
+      log "Backed up $codex_agents -> $backup_path"
+    fi
+    codex_agents_block "$codex_agents" apply "$index" >/dev/null
+    record_link "agents-import" "$codex_agents" "$backup_path"
+    log "Appended the global rules index to $codex_agents"
     return 0
   fi
-  # We are about to append to a pre-existing operator-owned file: snapshot it
-  # first so --uninstall can restore the operator's content.
-  backup_path="$(backup_inplace "$codex_agents")"
-  if [ -n "$backup_path" ]; then
-    log "Backed up $codex_agents -> $backup_path"
+  outcome="$(codex_agents_block "$codex_agents" apply "$index")"
+  if [ "$outcome" = "changed" ]; then
+    log "Updated the global rules index in $codex_agents"
+  else
+    log "Global rules index already current in $codex_agents"
   fi
-  {
-    printf '\n%s\n@%s/AGENTS.md\n' "$GLOBAL_CODEX_MARKER_LINE" "$GLB_ROOT"
-  } >> "$codex_agents"
-  record_link "agents-import" "$codex_agents" "$backup_path"
-  log "Appended global instructions import to $codex_agents"
+}
+
+# install_global_codex_rules — keep ~/.codex/rules/smooth-devex.rules, a Codex command-approval
+# policy derived from the git/git-policy rule. Codex .rules files are Starlark prefix_rule()s that
+# gate which commands run outside the sandbox; they cannot carry instructions, which is why the
+# other rules travel as an AGENTS.md index. A file of our own, never default.rules: Codex appends
+# the operator's permanent approvals there. Written only while codex is on and git-policy is
+# installed:true; otherwise removed, but only when it is ours (first line carries the header).
+CODEX_RULES_HEADER="# installer-owned-global-rules (generated by install-skills -g; do not edit)"
+install_global_codex_rules() {
+  local file="$CODEX_HOME/rules/smooth-devex.rules" want=0
+  if [ "$HARNESS_CODEX" = "1" ] && printf '%s\n' "$RULES_ON" | grep -qx 'git/git-policy.instructions.md'; then
+    want=1
+  fi
+  if [ -e "$file" ] && [ "$(head -n 1 "$file")" != "$CODEX_RULES_HEADER" ]; then
+    log "WARNING: $file exists and is not ours — left untouched"
+    return 0
+  fi
+  if [ "$want" != "1" ]; then
+    if [ -e "$file" ]; then
+      rm -f "$file"
+      log "Removed $file"
+    fi
+    return 0
+  fi
+  local content
+  content="$(cat <<RULESEOF
+$CODEX_RULES_HEADER
+# Command-approval policy derived from the git/git-policy rule; Codex reads it at startup.
+# Prefix matching only: "git -C <dir> commit" is not matched, and "git push origin x --force"
+# is prompted by the push rule rather than forbidden. Keep your own rules in another file;
+# default.rules belongs to Codex.
+
+prefix_rule(
+    pattern = ["git", "commit"],
+    decision = "prompt",
+    justification = "git-policy: never commit unless the user explicitly asks",
+    match = [["git", "commit", "-m", "message"]],
+    not_match = [["git", "status"]],
+)
+
+prefix_rule(
+    pattern = ["git", "push"],
+    decision = "prompt",
+    justification = "git-policy: never push unless the user explicitly asks",
+    match = [["git", "push", "origin", "main"]],
+    not_match = [["git", "pull"]],
+)
+
+prefix_rule(
+    pattern = ["git", "push", ["--force", "-f", "--force-with-lease"]],
+    decision = "forbidden",
+    justification = "git-policy: no force-push; ask the user to do it themselves",
+    match = [["git", "push", "--force", "origin", "main"]],
+    not_match = [["git", "push", "origin", "main"]],
+)
+RULESEOF
+)"
+  if [ -e "$file" ] && [ "$(cat "$file")" = "$content" ]; then
+    log "Codex rules already current in $file"
+    return 0
+  fi
+  mkdir -p "$CODEX_HOME/rules"
+  printf '%s\n' "$content" > "$file"
+  record_link "codex-rules" "$file"
+  log "Wrote $file — restart Codex to load it"
 }
 
 # install_global_hooks — JSON-merge the owned hooks into $CODEX_HOME/hooks.json
@@ -1627,6 +1822,8 @@ print(json.dumps(sorted(line.strip() for line in sys.stdin if line.strip())))
     install_global_claude_rules
     log "Adding global rules to OpenCode instructions…"
     install_global_opencode_config
+    log "Writing Codex command-approval rules…"
+    install_global_codex_rules
   fi
 
   if [ "$DO_HOOKS" = "1" ]; then
@@ -1739,6 +1936,15 @@ for link in links:
             # leaves behind an empty AGENTS.md with our RTK header.
             os.remove(path)
             print('removed agents import file created by installer', path)
+    elif typ == 'codex-rules':
+        # A file this installer wrote, never a snapshot: remove it only while it still carries
+        # our header, so a file the operator replaced it with is left alone.
+        if os.path.isfile(path):
+            with open(path, encoding='utf-8') as f:
+                first = f.readline()
+            if 'installer-owned-global-rules' in first:
+                os.remove(path)
+                print('removed codex rules', path)
     elif typ == 'hooks-merge':
         if detail and os.path.exists(detail):
             with open(detail, 'rb') as f:

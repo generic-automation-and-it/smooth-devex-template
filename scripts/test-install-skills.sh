@@ -82,6 +82,8 @@ else
     "bash='$bash_joined' ps1='$ps1_joined'"
 fi
 
+owned_n="$(printf '%s\n' "$bash_owned" | wc -l | tr -d ' ')"
+
 # Same byte-for-byte gate for the owned rules and hooks lists. Rule entries contain slashes and
 # dots, hook entries are filenames — one loose-enough pattern each, anchored on the declaration.
 bash_rules="$(awk '/^OWNED_RULES=\($/,/^\)$/' "$installer_sh" \
@@ -177,10 +179,10 @@ manifest="$root/_smooth-devex-shared/installation.json"
 if [ ! -f "$manifest" ]; then no "first run creates installation.json"; exit 1; fi
 # The catalogue is the owned intersection of source + disk. Real owned skills from source (the seven
 # .agents/skills names from this template) plus the harness's synthetic owned names (alpha/beta via
-# SKILLS_TEST_OWNED_EXTRA). An unowned skill like agile-github-breakdown is in source but NOT in
+# SKILLS_TEST_OWNED_EXTRA). An unowned skill like ai-brain-dump is in source but NOT in
 # the catalogue - the contract this case pins.
 names=" $(manifest_names "$root") "
-for expected in alpha beta ai-terse create-hld; do
+for expected in alpha beta ai-terse create-hld agile-github-breakdown context-load-context git-sync; do
   case "$names" in
     *" $expected "*) ;;
     *) no "first run lists source skills as well as those on disk" "$expected missing from: $names"; exit 1 ;;
@@ -192,11 +194,11 @@ if [ "$(manifest_flag "$root" alpha)" != "true" ] || [ "$(manifest_flag "$root" 
 fi
 if ! manifest_timestamp_ok "$root"; then no "first run stamps an ISO-8601 UTC time"; exit 1; fi
 
-# Unowned check: agile-github-breakdown ships in source but is NOT owned - must not enter the manifest.
+# Unowned check: ai-brain-dump ships in source but is NOT owned - must not enter the manifest.
 # This is the contract this whole PR fixes; the unscoped installer pulled such names in.
 case "$names" in
-  *" agile-github-breakdown "*) no "first run: unowned source skill is not in the manifest" "found: $names" ;;
-  *) ok "first run: unowned source skill (agile-github-breakdown) is not in the manifest" ;;
+  *" ai-brain-dump "*) no "first run: unowned source skill is not in the manifest" "found: $names" ;;
+  *) ok "first run: unowned source skill (ai-brain-dump) is not in the manifest" ;;
 esac
 
 ok "first run: manifest from owned source ∪ disk, all installed:true, ISO-8601 UTC stamp"
@@ -387,19 +389,19 @@ fi
 # manifest. This is the bug the unscoped installer had - it pulled a foreign repo's local-only
 # skills into its manifest and marked them installed:true. The owned-set gate stops that here.
 #
-# agile-github-breakdown is in source but NOT in OWNED_LIST, so it is the unowned probe for this
+# ai-brain-dump is in source but NOT in OWNED_LIST, so it is the unowned probe for this
 # case. We plant it on disk with operator-local content (a non-source SKILL.md), run, and assert
 # the disk content is unchanged AND the manifest has no such name.
-root="$(make_root "update-unowned" agile-github-breakdown)"
-printf 'operator-local content\n' >"$root/skills/agile-github-breakdown/SKILL.md"
+root="$(make_root "update-unowned" ai-brain-dump)"
+printf 'operator-local content\n' >"$root/skills/ai-brain-dump/SKILL.md"
 run_sh "$root" >/dev/null 2>&1
-if [ "$(cat "$root/skills/agile-github-breakdown/SKILL.md")" = "operator-local content" ]; then
+if [ "$(cat "$root/skills/ai-brain-dump/SKILL.md")" = "operator-local content" ]; then
   ok "an unowned source skill left on disk is left byte-identical (not copied over)"
 else
-  no "an unowned source skill left on disk is left byte-identical" "now: $(cat "$root/skills/agile-github-breakdown/SKILL.md")"
+  no "an unowned source skill left on disk is left byte-identical" "now: $(cat "$root/skills/ai-brain-dump/SKILL.md")"
 fi
 case " $(manifest_names "$root") " in
-  *" agile-github-breakdown "*) no "an unowned source skill on disk is not listed in the manifest" "found in manifest" ;;
+  *" ai-brain-dump "*) no "an unowned source skill on disk is not listed in the manifest" "found in manifest" ;;
   *) ok "an unowned source skill on disk is not listed in the manifest" ;;
 esac
 
@@ -413,14 +415,14 @@ python3 - "$root/_smooth-devex-shared/installation.json" <<'PYEOF'
 import json, sys
 path = sys.argv[1]
 data = json.load(open(path))
-data["skills"].append({"name": "agile-github-breakdown", "installed": True})
+data["skills"].append({"name": "ai-brain-dump", "installed": True})
 json.dump(data, open(path, "w"), indent=2)
 PYEOF
 run_sh "$root" >/dev/null 2>&1
-if [ ! -d "$root/skills/agile-github-breakdown" ]; then
+if [ ! -d "$root/skills/ai-brain-dump" ]; then
   ok "reconcile: a hand-edited manifest's unowned entry is dropped, not copied"
 else
-  no "reconcile: a hand-edited manifest's unowned entry is dropped, not copied" "agile-github-breakdown/ landed"
+  no "reconcile: a hand-edited manifest's unowned entry is dropped, not copied" "ai-brain-dump/ landed"
 fi
 
 # 4d. Direct update-loop guard check. The normal entry point rebuilds the manifest before updating,
@@ -435,30 +437,30 @@ fi
 #
 # This case fails when the update-loop guard is deleted - the assertion is the regression test.
 root="$(make_root "update-guard" alpha)"
-mkdir -p "$root/skills/agile-github-breakdown"
-printf 'operator-local content\n' >"$root/skills/agile-github-breakdown/SKILL.md"
+mkdir -p "$root/skills/ai-brain-dump"
+printf 'operator-local content\n' >"$root/skills/ai-brain-dump/SKILL.md"
 run_sh "$root" >/dev/null 2>&1
 python3 - "$root/_smooth-devex-shared/installation.json" <<'PYEOF'
 import json, sys
 path = sys.argv[1]
 data = json.load(open(path))
-data["skills"].append({"name": "agile-github-breakdown", "installed": True})
+data["skills"].append({"name": "ai-brain-dump", "installed": True})
 json.dump(data, open(path, "w"), indent=2)
 PYEOF
 # Set up the synthetic source with DIFFERENT content for the unowned skill.
 INSTALL_TMP="$(mktemp -d)"
 mkdir -p "$INSTALL_TMP/repo/.agents/skills"
-mkdir -p "$INSTALL_TMP/repo/.agents/skills/agile-github-breakdown"
-printf 'upstream-source content\n' >"$INSTALL_TMP/repo/.agents/skills/agile-github-breakdown/SKILL.md"
+mkdir -p "$INSTALL_TMP/repo/.agents/skills/ai-brain-dump"
+printf 'upstream-source content\n' >"$INSTALL_TMP/repo/.agents/skills/ai-brain-dump/SKILL.md"
 SKILLS_ROOT="$root/skills" SKILLS_TEST_OWNED_EXTRA="alpha beta gamma delta epsilon" \
   SKILLS_TEST_SKIP_RECONCILE=1 INSTALL_TMP="$INSTALL_TMP" \
   bash "$installer_sh" >/dev/null 2>&1 || true
 rm -rf "$INSTALL_TMP"
-if [ "$(cat "$root/skills/agile-github-breakdown/SKILL.md")" = "operator-local content" ]; then
+if [ "$(cat "$root/skills/ai-brain-dump/SKILL.md")" = "operator-local content" ]; then
   ok "update-guard: a hand-edited unowned entry is refused by the updater loop (operator content preserved)"
 else
   no "update-guard: a hand-edited unowned entry is refused by the updater loop" \
-    "SKILL.md content is now: $(cat "$root/skills/agile-github-breakdown/SKILL.md")"
+    "SKILL.md content is now: $(cat "$root/skills/ai-brain-dump/SKILL.md")"
 fi
 
 # ---------------------------------------------------------------------------------------------
@@ -857,7 +859,7 @@ run_sh_global "$ghome" >/dev/null 2>&1
 groot="$(glb_root "$ghome")"
 gok=1
 for d in skills rules hooks; do [ -d "$groot/$d" ] || gok=0; done
-for s in ai-asset-sync ai-ralph-loop ai-template-sync ai-terse create-hld create-worktask manage-rule-system; do
+for s in $bash_owned; do
   [ -e "$groot/skills/$s" ] || gok=0
   [ -L "$ghome/.codex/skills/$s" ] || gok=0
   [ "$(readlink "$ghome/.codex/skills/$s")" = "$groot/skills/$s" ] || gok=0
@@ -868,9 +870,11 @@ for r in code-review-standards.instructions.md git/git-policy.instructions.md \
   meta/knowledge-conventional-contexts-quality.instructions.md meta/rules.instructions.md; do
   [ -f "$groot/rules/$r" ] || gok=0
 done
-grep -q "@$groot/rules/code-review-standards.instructions.md" "$groot/AGENTS.md" || gok=0
+grep -q "$groot/rules/code-review-standards.instructions.md" "$groot/AGENTS.md" || gok=0
 grep -q 'installer-owned-global-instructions' "$ghome/.codex/AGENTS.md" || gok=0
-grep -q "@$groot/AGENTS.md" "$ghome/.codex/AGENTS.md" || gok=0
+# Codex does not resolve @-imports, so its AGENTS.md carries the index itself, never an @ line.
+grep -q "$groot/rules/code-review-standards.instructions.md" "$ghome/.codex/AGENTS.md" || gok=0
+grep -q "^@$groot" "$ghome/.codex/AGENTS.md" "$groot/AGENTS.md" && gok=0
 grep -q "$groot/hooks/manage-rule-system-context.sh" "$ghome/.codex/hooks.json" || gok=0
 grep -q "$groot/hooks/worktask-skill-trigger.sh" "$ghome/.codex/hooks.json" || gok=0
 [ -f "$(global_manifest "$ghome")" ] || gok=0
@@ -1063,7 +1067,7 @@ run_sh_global "$ghome" --uninstall >/dev/null 2>&1
 for s in ai-asset-sync ai-terse create-hld; do [ -e "$ghome/.codex/skills/$s" ] && gok=0; done
 [ -d "$(glb_root "$ghome")/skills" ] || gok=0
 grep -q 'installer-owned-global-instructions' "$ghome/.codex/AGENTS.md" && gok=0
-grep -q "@$(glb_root "$ghome")/AGENTS.md" "$ghome/.codex/AGENTS.md" && gok=0
+grep -q "$(glb_root "$ghome")/rules/" "$ghome/.codex/AGENTS.md" && gok=0
 # AGENTS.md is restored to the operator's earlier content, byte-for-byte.
 cmp -s "$scratch/orig-8h-agents.md" "$ghome/.codex/AGENTS.md" || gok=0
 grep -q 'gk ai hook run --host codex' "$ghome/.codex/hooks.json" || gok=0
@@ -1290,7 +1294,7 @@ rule="clean-code.instructions.md"
 sibling="git/git-policy.instructions.md"
 gok=1
 [ -L "$ghome/.claude/rules/$rule" ] || gok=0
-grep -q "@$groot/rules/$rule" "$groot/AGENTS.md" || gok=0
+grep -q "$groot/rules/$rule" "$groot/AGENTS.md" || gok=0
 opencode_instr_has "$ghome" "$groot/rules/$rule" || gok=0
 printf 'local edit\n' >"$groot/rules/$rule"
 set_global_item_flag "$ghome" rules "$rule" false
@@ -1300,12 +1304,12 @@ grep -q "$rule" "$groot/AGENTS.md" && gok=0
 opencode_instr_has "$ghome" "$groot/rules/$rule" && gok=0
 [ "$(cat "$groot/rules/$rule")" = "local edit" ] || gok=0
 [ -L "$ghome/.claude/rules/$sibling" ] || gok=0
-grep -q "@$groot/rules/$sibling" "$groot/AGENTS.md" || gok=0
+grep -q "$groot/rules/$sibling" "$groot/AGENTS.md" || gok=0
 opencode_instr_has "$ghome" "$groot/rules/$sibling" || gok=0
 set_global_item_flag "$ghome" rules "$rule" true
 run_sh_global "$ghome" >/dev/null 2>&1
 [ -L "$ghome/.claude/rules/$rule" ] || gok=0
-grep -q "@$groot/rules/$rule" "$groot/AGENTS.md" || gok=0
+grep -q "$groot/rules/$rule" "$groot/AGENTS.md" || gok=0
 opencode_instr_has "$ghome" "$groot/rules/$rule" || gok=0
 [ "$(cat "$groot/rules/$rule")" != "local edit" ] || gok=0
 if [ "$gok" = "1" ]; then
@@ -1524,8 +1528,8 @@ gok=1
 [ -d "$ghome/.claude/skills/operator-skill" ] || gok=0
 [ -e "$ghome/.claude/skills/stray-alias" ] || [ -L "$ghome/.claude/skills/stray-alias" ] && gok=0
 [ "$(count_links "$ghome/.claude/skills")" = "1" ] || gok=0
-[ "$(count_links "$ghome/.codex/skills")" = "7" ] || gok=0
-[ "$(count_links "$ghome/.config/opencode/skills")" = "7" ] || gok=0
+[ "$(count_links "$ghome/.codex/skills")" = "$owned_n" ] || gok=0
+[ "$(count_links "$ghome/.config/opencode/skills")" = "$owned_n" ] || gok=0
 [ "$(link_enabled "$ghome" claude-skill)" = "false" ] || gok=0
 [ "$(link_enabled "$ghome" claude-rule)" = "false" ] || gok=0
 [ "$(link_enabled "$ghome" skill-link)" = "true" ] || gok=0
@@ -1564,14 +1568,14 @@ assert all(g.get('hooks') for g in groups), 'an emptied group was left behind'
 PYEOF
 [ -f "$groot/hooks/worktask-skill-trigger.sh" ] || gok=0
 [ -f "$groot/skills/ai-terse/SKILL.md" ] || gok=0
-[ "$(count_links "$ghome/.claude/skills")" = "7" ] || gok=0
-[ "$(count_links "$ghome/.config/opencode/skills")" = "7" ] || gok=0
+[ "$(count_links "$ghome/.claude/skills")" = "$owned_n" ] || gok=0
+[ "$(count_links "$ghome/.config/opencode/skills")" = "$owned_n" ] || gok=0
 opencode_instr_has "$ghome" "$groot/rules/clean-code.instructions.md" || gok=0
 [ "$(link_enabled "$ghome" skill-link)" = "false" ] || gok=0
 [ "$(link_enabled "$ghome" claude-skill)" = "true" ] || gok=0
 set_harness "$ghome" codex true
 run_sh_global "$ghome" >/dev/null 2>&1
-[ "$(count_links "$ghome/.codex/skills")" = "7" ] || gok=0
+[ "$(count_links "$ghome/.codex/skills")" = "$owned_n" ] || gok=0
 [ "$(grep -c 'installer-owned-global-instructions' "$ghome/.codex/AGENTS.md")" = "1" ] || gok=0
 grep -q "$groot/hooks/worktask-skill-trigger.sh" "$ghome/.codex/hooks.json" || gok=0
 [ "$(link_enabled "$ghome" skill-link)" = "true" ] || gok=0
@@ -1596,12 +1600,12 @@ d = json.load(open(sys.argv[1]))
 assert d['instructions'] == ['operator/own.md'], d['instructions']
 assert d['provider'] == {'name': 'x'}, d
 PYEOF
-[ "$(count_links "$ghome/.claude/skills")" = "7" ] || gok=0
-[ "$(count_links "$ghome/.codex/skills")" = "7" ] || gok=0
+[ "$(count_links "$ghome/.claude/skills")" = "$owned_n" ] || gok=0
+[ "$(count_links "$ghome/.codex/skills")" = "$owned_n" ] || gok=0
 [ "$(link_enabled "$ghome" opencode-skill)" = "false" ] || gok=0
 set_harness "$ghome" opencode true
 run_sh_global "$ghome" >/dev/null 2>&1
-[ "$(count_links "$ghome/.config/opencode/skills")" = "7" ] || gok=0
+[ "$(count_links "$ghome/.config/opencode/skills")" = "$owned_n" ] || gok=0
 opencode_instr_has "$ghome" "operator/own.md" || gok=0
 opencode_instr_has "$ghome" "$groot/rules/clean-code.instructions.md" || gok=0
 [ "$(link_enabled "$ghome" opencode-skill)" = "true" ] || gok=0
@@ -1636,7 +1640,7 @@ PYEOF
 [ -f "$groot/skills/ai-terse/SKILL.md" ] || gok=0
 [ -f "$groot/rules/clean-code.instructions.md" ] || gok=0
 [ -f "$groot/hooks/manage-rule-system-context.sh" ] || gok=0
-[ "$(count_links "$ghome/.claude/skills")" = "7" ] || gok=0
+[ "$(count_links "$ghome/.claude/skills")" = "$owned_n" ] || gok=0
 if [ "$gok" = "1" ]; then
   ok "global harness false from the first run: nothing installed into it (files untouched, no records), store filled, others wired"
 else
@@ -1670,6 +1674,197 @@ if [ "$gok" = "1" ]; then
   ok "global --uninstall ignores harnesses{}/enabled and restores every edited file byte-for-byte after harness toggles"
 else
   no "global --uninstall ignores harnesses{}/enabled and restores every edited file byte-for-byte after harness toggles" "links=$(find -H "$ghome/.claude" "$ghome/.codex/skills" "$ghome/.config/opencode/skills" -type l 2>/dev/null | wc -l | tr -d ' ') agents=$(cat "$ghome/.codex/AGENTS.md" | tr '\n' '|')"
+fi
+
+# ---------------------------------------------------------------------------------------------
+# 10. Codex: the rule index in ~/.codex/AGENTS.md and the ~/.codex/rules/smooth-devex.rules policy
+# ---------------------------------------------------------------------------------------------
+# Codex does not resolve @-imports and caps combined AGENTS.md content at 32 KiB, so the global rules
+# reach it as a compact index inside a delimited block, never as @ lines or inlined bodies. Codex's
+# own .rules files are a command-approval policy (prefix_rule), so one is generated from git-policy.
+
+# codex_decision RULESFILE CMD... -> the execpolicy decision (prompt / forbidden / none), or "skip"
+# when the codex binary is not installed (CI): those assertions then fall back to the file's text.
+codex_decision() {
+  command -v codex >/dev/null 2>&1 || { echo skip; return 0; }
+  local rules="$1"
+  shift
+  codex execpolicy check --rules "$rules" -- "$@" 2>/dev/null | python3 -c "
+import json, sys
+print(json.load(sys.stdin).get('decision', 'none'))"
+}
+
+# 10a. The block holds the index: no @ rule lines, every enabled rule's path, its scope, under 8 KiB,
+# exactly one block after two runs, and the operator's own lines untouched.
+ghome="$(make_wired_ghome "codex-index")"
+run_sh_global "$ghome" >/dev/null 2>&1
+run_sh_global "$ghome" >/dev/null 2>&1
+groot="$(glb_root "$ghome")"
+agents="$ghome/.codex/AGENTS.md"
+gok=1
+[ "$(grep -c 'installer-owned-global-instructions' "$agents")" = "1" ] || gok=0
+[ "$(grep -c 'end of install-skills global rules' "$agents")" = "1" ] || gok=0
+grep -q "^@$groot" "$agents" && gok=0
+for r in $bash_rules; do grep -qF "$groot/rules/$r" "$agents" || gok=0; done
+grep -qF 'Read at the start of every task:' "$agents" || gok=0
+grep -qF 'When editing files matching `**/*.cs`:' "$agents" || gok=0
+grep -q 'operator line' "$agents" || gok=0
+grep -q "^@$ghome/.codex/RTK.md" "$agents" || gok=0
+[ "$(wc -c <"$agents" | tr -d ' ')" -lt 8192 ] || gok=0
+if [ "$gok" = "1" ]; then
+  ok "codex AGENTS.md: one delimited block holding the rule index (paths + scopes, no @ lines, < 8 KiB), operator lines intact"
+else
+  no "codex AGENTS.md: one delimited block holding the rule index (paths + scopes, no @ lines, < 8 KiB), operator lines intact" "bytes=$(wc -c <"$agents" | tr -d ' ') blocks=$(grep -c 'installer-owned-global-instructions' "$agents")"
+fi
+
+# 10b. The block follows the per-item flags: a rule set to installed:false leaves the index (its siblings
+# stay), and returns when switched back on - the block is replaced in place, never duplicated.
+ghome="$(make_wired_ghome "codex-index-flip")"
+run_sh_global "$ghome" >/dev/null 2>&1
+groot="$(glb_root "$ghome")"
+agents="$ghome/.codex/AGENTS.md"
+rule="clean-code.instructions.md"
+gok=1
+set_global_item_flag "$ghome" rules "$rule" false
+run_sh_global "$ghome" >/dev/null 2>&1
+grep -qF "$groot/rules/$rule" "$agents" && gok=0
+grep -qF "$groot/rules/git/git-policy.instructions.md" "$agents" || gok=0
+[ "$(grep -c 'installer-owned-global-instructions' "$agents")" = "1" ] || gok=0
+set_global_item_flag "$ghome" rules "$rule" true
+run_sh_global "$ghome" >/dev/null 2>&1
+grep -qF "$groot/rules/$rule" "$agents" || gok=0
+[ "$(grep -c 'installer-owned-global-instructions' "$agents")" = "1" ] || gok=0
+grep -q 'operator line' "$agents" || gok=0
+if [ "$gok" = "1" ]; then
+  ok "codex AGENTS.md: a rule set to installed:false leaves the index, siblings stay, switching it back returns it (one block)"
+else
+  no "codex AGENTS.md: a rule set to installed:false leaves the index, siblings stay, switching it back returns it (one block)" "$(tr '\n' '|' <"$agents" | cut -c1-300)"
+fi
+
+# 10c. An AGENTS.md written by the earlier installer (marker line + one @-line, no closing line) is migrated
+# to the index block; the operator's lines around it survive.
+ghome="$(make_wired_ghome "codex-index-legacy")"
+groot="$(glb_root "$ghome")"
+agents="$ghome/.codex/AGENTS.md"
+mkdir -p "$groot"
+printf '@%s/.codex/RTK.md\n\noperator line\n\n# installer-owned-global-instructions (added by install-skills)\n@%s/AGENTS.md\n' "$ghome" "$groot" >"$agents"
+run_sh_global "$ghome" >/dev/null 2>&1
+gok=1
+grep -qxF '# installer-owned-global-instructions (added by install-skills)' "$agents" && gok=0
+grep -q "^@$groot" "$agents" && gok=0
+grep -qF "$groot/rules/git/git-policy.instructions.md" "$agents" || gok=0
+[ "$(grep -c 'installer-owned-global-instructions' "$agents")" = "1" ] || gok=0
+grep -q 'operator line' "$agents" || gok=0
+grep -q "^@$ghome/.codex/RTK.md" "$agents" || gok=0
+if [ "$gok" = "1" ]; then
+  ok "codex AGENTS.md: the legacy marker + @-line block is migrated to the index block, operator lines kept"
+else
+  no "codex AGENTS.md: the legacy marker + @-line block is migrated to the index block, operator lines kept" "$(tr '\n' '|' <"$agents" | cut -c1-300)"
+fi
+
+# 10d. codex:false removes the block (operator lines stay) and the .rules file; true restores both.
+ghome="$(make_wired_ghome "codex-off-rules")"
+run_sh_global "$ghome" >/dev/null 2>&1
+rf="$ghome/.codex/rules/smooth-devex.rules"
+agents="$ghome/.codex/AGENTS.md"
+gok=1
+[ -f "$rf" ] || gok=0
+set_harness "$ghome" codex false
+run_sh_global "$ghome" >/dev/null 2>&1
+[ -e "$rf" ] && gok=0
+grep -q 'installer-owned-global-instructions' "$agents" && gok=0
+grep -q 'end of install-skills global rules' "$agents" && gok=0
+grep -q 'operator line' "$agents" || gok=0
+set_harness "$ghome" codex true
+run_sh_global "$ghome" >/dev/null 2>&1
+[ -f "$rf" ] || gok=0
+[ "$(grep -c 'installer-owned-global-instructions' "$agents")" = "1" ] || gok=0
+if [ "$gok" = "1" ]; then
+  ok "codex:false removes the rules block and smooth-devex.rules (operator lines kept); true restores both"
+else
+  no "codex:false removes the rules block and smooth-devex.rules (operator lines kept); true restores both" "rules=$([ -e "$rf" ] && echo present || echo absent) agents=$(tr '\n' '|' <"$agents" | cut -c1-200)"
+fi
+
+# 10e. smooth-devex.rules: ours (header), valid and behaving as intended (commit/push prompt, a leading force
+# flag is forbidden, other git commands unmatched), gone while git-policy is installed:false, never replacing
+# a file that is not ours, and never creating default.rules (Codex appends the operator's approvals there).
+ghome="$(make_wired_ghome "codex-rules-file")"
+run_sh_global "$ghome" >/dev/null 2>&1
+rf="$ghome/.codex/rules/smooth-devex.rules"
+gok=1
+[ "$(head -n 1 "$rf")" = "# installer-owned-global-rules (generated by install-skills -g; do not edit)" ] || gok=0
+d_commit="$(codex_decision "$rf" git commit -m x)"
+d_push="$(codex_decision "$rf" git push origin main)"
+d_force="$(codex_decision "$rf" git push --force origin main)"
+d_status="$(codex_decision "$rf" git status)"
+if [ "$d_commit" = "skip" ]; then
+  grep -qF 'pattern = ["git", "commit"],' "$rf" || gok=0
+  grep -qF 'decision = "forbidden"' "$rf" || gok=0
+else
+  [ "$d_commit" = "prompt" ] && [ "$d_push" = "prompt" ] && [ "$d_force" = "forbidden" ] && [ "$d_status" = "none" ] || gok=0
+fi
+[ -e "$ghome/.codex/rules/default.rules" ] && gok=0
+set_global_item_flag "$ghome" rules git/git-policy.instructions.md false
+run_sh_global "$ghome" >/dev/null 2>&1
+[ -e "$rf" ] && gok=0
+set_global_item_flag "$ghome" rules git/git-policy.instructions.md true
+run_sh_global "$ghome" >/dev/null 2>&1
+[ -f "$rf" ] || gok=0
+printf 'operator rules\n' >"$rf"
+run_sh_global "$ghome" >/dev/null 2>&1
+[ "$(cat "$rf")" = "operator rules" ] || gok=0
+if [ "$gok" = "1" ]; then
+  ok "smooth-devex.rules: header, prompt/forbidden/unmatched ($d_commit/$d_push/$d_force/$d_status), off with git-policy, a foreign file untouched, no default.rules"
+else
+  no "smooth-devex.rules: header, prompt/forbidden/unmatched, off with git-policy, a foreign file untouched, no default.rules" "commit=$d_commit push=$d_push force=$d_force status=$d_status"
+fi
+
+# 10f. --uninstall removes smooth-devex.rules and restores ~/.codex/AGENTS.md byte-for-byte, even after the
+# block was rewritten by a flag flip in between.
+ghome="$(make_wired_ghome "codex-uninstall")"
+cp "$ghome/.codex/AGENTS.md" "$scratch/agents.h10"
+run_sh_global "$ghome" >/dev/null 2>&1
+set_global_item_flag "$ghome" rules clean-code.instructions.md false
+run_sh_global "$ghome" >/dev/null 2>&1
+run_sh_global "$ghome" --uninstall >/dev/null 2>&1
+gok=1
+[ -e "$ghome/.codex/rules/smooth-devex.rules" ] && gok=0
+[ -e "$ghome/.codex/rules/default.rules" ] && gok=0
+cmp -s "$ghome/.codex/AGENTS.md" "$scratch/agents.h10" || gok=0
+if [ "$gok" = "1" ]; then
+  ok "global --uninstall removes smooth-devex.rules and restores ~/.codex/AGENTS.md byte-for-byte after a rewrite"
+else
+  no "global --uninstall removes smooth-devex.rules and restores ~/.codex/AGENTS.md byte-for-byte after a rewrite" "$(tr '\n' '|' <"$ghome/.codex/AGENTS.md" | cut -c1-200)"
+fi
+
+# 10g. A ~/.codex/AGENTS.md the installer created from nothing holds only the RTK header and our block, so
+# switching codex off removes the file outright (the exact inverse of creating it), switching it on creates
+# it again, and --uninstall removes it. A file that pre-dates the install is never removed (cases 9c, 10d).
+ghome="$(make_ghome "codex-created")"
+printf '# RTK\n' >"$ghome/.codex/RTK.md"
+agents="$ghome/.codex/AGENTS.md"
+gok=1
+run_sh_global "$ghome" >/dev/null 2>&1
+[ -f "$agents" ] || gok=0
+grep -q "^@$ghome/.codex/RTK.md" "$agents" || gok=0
+[ "$(grep -c 'installer-owned-global-instructions' "$agents")" = "1" ] || gok=0
+set_harness "$ghome" codex false
+run_sh_global "$ghome" >/dev/null 2>&1
+[ -e "$agents" ] && gok=0
+set_harness "$ghome" codex true
+run_sh_global "$ghome" >/dev/null 2>&1
+[ -f "$agents" ] || gok=0
+[ "$(grep -c 'installer-owned-global-instructions' "$agents")" = "1" ] || gok=0
+# A plain re-run must not snapshot the file: it holds only our own block, and --uninstall would then
+# "restore" that snapshot instead of removing the file.
+run_sh_global "$ghome" >/dev/null 2>&1
+ls "$agents".smooth-devex-[0-9]* >/dev/null 2>&1 && gok=0
+run_sh_global "$ghome" --uninstall >/dev/null 2>&1
+[ -e "$agents" ] && gok=0
+if [ "$gok" = "1" ]; then
+  ok "codex AGENTS.md created by the installer: removed outright by codex:false and by --uninstall (even after a re-run), recreated by true"
+else
+  no "codex AGENTS.md created by the installer: removed outright by codex:false and by --uninstall (even after a re-run), recreated by true" "agents=$([ -e "$agents" ] && tr '\n' '|' <"$agents" | cut -c1-160 || echo absent)"
 fi
 
 # ---------------------------------------------------------------------------------------------

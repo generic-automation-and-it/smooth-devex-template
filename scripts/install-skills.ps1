@@ -73,20 +73,29 @@ $ErrorActionPreference = 'Stop'
 # pulled a target repo's local-only skills into its manifest as `installed:true` - that is the bug
 # PR #245 fixed in `smooth-ai-product-context-memory`, and the same shape applies here.
 #
-# The owned set is deliberately small. This is a template repo, not a domain plugin; the few skills
+# The owned set is deliberately explicit. This is a template repo, not a domain plugin; the skills
 # worth carrying to a consumer are the ones that operate on the template's own shape (asset sync,
-# template sync, rule system) or that are useful in any consumer project (terse response, ralph
-# review-fix loop, hld + worktask authoring).
+# template sync, rule system, context loading) or that are useful in any consumer project (terse
+# response, ralph review-fix loop, hld + worktask authoring, GitHub issue breakdown, git commit/sync
+# workflow). Session-scoped skills (ai-brain-dump, ai-understanding) stay local.
 #
 # If a skill you want to distribute lands here, add it to this list and to the harness's owned
 # set in test-install-skills.sh. Anything else stays local.
 $script:OwnedList = @(
+    'agile-github-breakdown'
+    'agile-github-task-from-diff'
     'ai-asset-sync'
     'ai-ralph-loop'
     'ai-template-sync'
     'ai-terse'
+    'context-load-agents-context'
+    'context-load-context'
     'create-hld'
     'create-worktask'
+    'git-commit'
+    'git-commit-push'
+    'git-commit-push-pr'
+    'git-sync'
     'manage-rule-system'
 )
 
@@ -119,8 +128,9 @@ $script:OwnedRules = @(
 
 # Hooks the installer is allowed to carry across: a hook is owned iff an owned skill's SKILL.md
 # references it AND its implementation ships with it. load-agents-context.sh is referenced by
-# ai-template-sync but delegates to an unowned skill that never ships — copying the wrapper alone
-# installs a silently dead hook, so it stays local. Mirrors OWNED_HOOKS in install-skills.sh
+# ai-template-sync and its implementation now ships (context-load-agents-context is owned), but it
+# is a PostToolUse hook and -g registers hooks under UserPromptSubmit only, so it stays local until
+# the installer can register a hook by its own event. Mirrors OWNED_HOOKS in install-skills.sh
 # (harness-held byte-for-byte).
 $script:OwnedHooks = @(
     'manage-rule-system-context.sh'
@@ -692,9 +702,11 @@ function Install-OwnedHooks {
 # are standing in. -g instead installs the same owned set once, machine-wide,
 # into a store and wires it into Codex's config dir (~/.codex by default, or
 # $CODEX_HOME): skills symlinked into its skills dir (coexisting with .system/),
-# rules imported through a generated $GLB_ROOT/AGENTS.md that ~/.codex/AGENTS.md
-# pulls in with one @-line (never written into ~/.codex/rules/, which Codex
-# treats as a Starlark prefix_rule namespace), and hooks JSON-merged into
+# rules copied into the store with a compact index of them (path, scope, description) in a
+# delimited block of ~/.codex/AGENTS.md - Codex does not resolve @-imports and caps combined
+# AGENTS.md content at 32 KiB - and a command-approval policy generated from git-policy as
+# ~/.codex/rules/smooth-devex.rules (Codex .rules files are Starlark prefix_rule()s, not
+# instructions), and hooks JSON-merged into
 # ~/.codex/hooks.json (UserPromptSubmit only). A manifest at
 # $GLB_ROOT/installation.json records every link and edit, and -g --uninstall
 # removes exactly that — never .system/, the gk hooks, or the operator's RTK
@@ -716,7 +728,6 @@ function Install-OwnedHooks {
 $script:GlbRoot = if ($env:SMOOTH_DEVEX_HOME) { $env:SMOOTH_DEVEX_HOME } else { Join-Path $HOME '.smooth-ai-devex' }
 $script:GlobalManifest = Join-Path $script:GlbRoot 'installation.json'
 $script:GlobalMarker = 'installer-owned-global-instructions'
-$script:GlobalCodexMarkerLine = "# $($script:GlobalMarker) (added by install-skills)"
 $script:CodexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
 $script:OpenCodeConfig = if ($env:OPENCODE_CONFIG) { $env:OPENCODE_CONFIG } else { Join-Path $HOME '.config/opencode' }
 $script:ClaudeHome = if ($env:CLAUDE_HOME) { $env:CLAUDE_HOME } else { Join-Path $HOME '.claude' }
@@ -769,29 +780,157 @@ function Remove-StoreLinks {
     }
 }
 
-function Remove-CodexImport {
-    # Remove the marker-guarded import block this installer appended to File: the marker line, the
-    # @-line after it, and the blank line written before them. Nothing else in the file is touched, and
-    # no snapshot is taken (one was, at install).
-    param([string] $File)
-    if (-not (Test-Path -LiteralPath $File -PathType Leaf)) { return }
-    $content = Get-Content -LiteralPath $File -Raw
-    if ([string]::IsNullOrEmpty($content) -or -not $content.Contains($script:GlobalMarker)) { return }
-    $lines = $content -split "`n"
-    $out = New-Object System.Collections.Generic.List[string]
-    $i = 0
-    while ($i -lt $lines.Count) {
-        if ($lines[$i].Contains($script:GlobalMarker)) {
-            if ($out.Count -gt 0 -and $out[$out.Count - 1].TrimEnd("`r") -eq '') { $out.RemoveAt($out.Count - 1) }
-            $i++
-            if ($i -lt $lines.Count -and $lines[$i].StartsWith('@')) { $i++ }
-            continue
-        }
-        $out.Add($lines[$i])
-        $i++
+# The delimited block this installer keeps in ~/.codex/AGENTS.md opens with a line carrying
+# GlobalMarker and closes with a line carrying CodexBlockEnd. An older install wrote only the marker
+# line and one @-line after it (no closing line); that legacy form is recognised too. Mirrors
+# codex_agents_block in the bash port.
+$script:CodexBlockEnd = 'end of install-skills global rules'
+
+function Get-CodexBlockSpan {
+    # Where our block sits in an array of lines: @{ Start; Stop; Legacy }, or $null when there is none.
+    param([string[]] $Lines)
+    $start = -1
+    for ($i = 0; $i -lt $Lines.Count; $i++) {
+        if ($Lines[$i].Contains($script:GlobalMarker)) { $start = $i; break }
     }
-    [System.IO.File]::WriteAllText($File, ($out -join "`n"), [System.Text.UTF8Encoding]::new($false))
-    Write-Info "Removed the global instructions import from $File (codex turned off)"
+    if ($start -lt 0) { return $null }
+    $stop = -1
+    for ($j = $start + 1; $j -lt $Lines.Count; $j++) {
+        if ($Lines[$j].Contains($script:GlobalMarker)) { break }
+        if ($Lines[$j].Contains($script:CodexBlockEnd)) { $stop = $j; break }
+    }
+    $legacy = $false
+    if ($stop -lt 0) {
+        $legacy = $true
+        $stop = $start
+        if (($start + 1) -lt $Lines.Count -and $Lines[$start + 1].StartsWith('@')) { $stop = $start + 1 }
+    }
+    return @{ Start = $start; Stop = $stop; Legacy = $legacy }
+}
+
+function Get-CodexBlockState {
+    # none | block | legacy
+    param([string] $File)
+    if (-not (Test-Path -LiteralPath $File -PathType Leaf)) { return 'none' }
+    $text = Get-Content -LiteralPath $File -Raw
+    if ([string]::IsNullOrEmpty($text)) { return 'none' }
+    $span = Get-CodexBlockSpan -Lines ($text -split "`n")
+    if ($null -eq $span) { return 'none' }
+    if ($span.Legacy) { return 'legacy' }
+    return 'block'
+}
+
+function Set-CodexBlock {
+    # Replace our block in File in place, or append one when there is none; nothing around it is
+    # touched. Returns same | changed | appended.
+    param([string] $File, [string] $Body)
+    $begin = "<!-- $($script:GlobalMarker) (added by install-skills): regenerated on every run -->"
+    $end = "<!-- $($script:CodexBlockEnd) -->"
+    $block = @($begin) + @($Body.TrimEnd("`n") -split "`n") + @($end)
+    $text = ''
+    if (Test-Path -LiteralPath $File -PathType Leaf) {
+        $raw = Get-Content -LiteralPath $File -Raw
+        if ($null -ne $raw) { $text = $raw }
+    }
+    $lines = $text -split "`n"
+    $span = Get-CodexBlockSpan -Lines $lines
+    if ($null -eq $span) {
+        $prefix = $text
+        if ($prefix -and -not $prefix.EndsWith("`n")) { $prefix += "`n" }
+        if ($prefix) { $prefix += "`n" }
+        $result = $prefix + ($block -join "`n") + "`n"
+        $outcome = 'appended'
+    } else {
+        $current = @($lines[$span.Start..$span.Stop] | ForEach-Object { $_.TrimEnd("`r") })
+        if (-not $span.Legacy -and ($current -join "`n") -ceq ($block -join "`n")) { return 'same' }
+        $before = @()
+        if ($span.Start -gt 0) { $before = $lines[0..($span.Start - 1)] }
+        $after = @()
+        if (($span.Stop + 1) -lt $lines.Count) { $after = $lines[($span.Stop + 1)..($lines.Count - 1)] }
+        $result = (@($before) + $block + @($after)) -join "`n"
+        $outcome = 'changed'
+    }
+    [System.IO.File]::WriteAllText($File, $result, [System.Text.UTF8Encoding]::new($false))
+    return $outcome
+}
+
+function Remove-CodexImport {
+    # Codex is off: remove our block (and the blank line before it) from File. No snapshot is taken
+    # (one was, at install). A file this installer created that now holds nothing else is removed, the
+    # exact inverse of creating it; one that pre-dates the install (it has a snapshot) stays.
+    param([string] $File, [string] $RtkLine = '')
+    if (-not (Test-Path -LiteralPath $File -PathType Leaf)) { return }
+    $text = Get-Content -LiteralPath $File -Raw
+    if ([string]::IsNullOrEmpty($text)) { return }
+    $lines = $text -split "`n"
+    $span = Get-CodexBlockSpan -Lines $lines
+    if ($null -eq $span) { return }
+    $kept = New-Object System.Collections.Generic.List[string]
+    for ($i = 0; $i -lt $span.Start; $i++) { $kept.Add($lines[$i]) }
+    if ($kept.Count -gt 0 -and $kept[$kept.Count - 1].TrimEnd("`r") -eq '') { $kept.RemoveAt($kept.Count - 1) }
+    for ($i = $span.Stop + 1; $i -lt $lines.Count; $i++) { $kept.Add($lines[$i]) }
+    $result = $kept -join "`n"
+    [System.IO.File]::WriteAllText($File, $result, [System.Text.UTF8Encoding]::new($false))
+    Write-Info "Removed the global rules block from $File (codex turned off)"
+    $remaining = $result.Trim()
+    if (($remaining -eq '' -or $remaining -eq $RtkLine) -and -not (Test-InstallSnapshot -Path $File)) {
+        Remove-Item -LiteralPath $File -Force
+        Write-Info "Removed $File (the installer created it and nothing else is in it)"
+    }
+}
+
+function Format-RulesIndex {
+    # The text Codex is given in place of the rule files. Codex does not resolve @-imports and caps
+    # combined AGENTS.md content at 32 KiB, so the rule bodies cannot travel in it; this lists each
+    # enabled rule's path, scope and one-line description instead. Mirrors render_rules_index.
+    $root = Join-Path $script:GlbRoot 'rules'
+    $groups = [ordered]@{}
+    foreach ($rel in $script:RulesOn) {
+        $path = Join-Path $root $rel
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
+        $text = Get-Content -LiteralPath $path -Raw
+        $front = ''
+        $rest = $text
+        $fm = [regex]::Match($text, '(?s)\A---\r?\n(.*?)\r?\n---\r?\n')
+        if ($fm.Success) { $front = $fm.Groups[1].Value; $rest = $text.Substring($fm.Length) }
+        $read = {
+            param([string] $Key)
+            $f = [regex]::Match($front, '(?m)^' + $Key + ':\s*(.+?)\s*$')
+            if (-not $f.Success) { return '' }
+            $v = $f.Groups[1].Value.Trim()
+            if ($v.Length -ge 2 -and $v[0] -eq $v[$v.Length - 1] -and ($v[0] -eq [char]39 -or $v[0] -eq [char]34)) {
+                $v = $v.Substring(1, $v.Length - 2)
+            }
+            return $v
+        }
+        $scope = & $read 'applyTo'
+        if (-not $scope) { $scope = & $read 'globs' }
+        if (-not $scope) { $scope = '**' }
+        $summary = & $read 'description'
+        if (-not $summary) {
+            $h = [regex]::Match($rest, '(?m)^#\s+(.+)$')
+            $summary = if ($h.Success) { $h.Groups[1].Value.Trim() } else { [System.IO.Path]::GetFileName($path) }
+        }
+        if ($summary.Length -gt 100) { $summary = $summary.Substring(0, 99).TrimEnd() + [char]0x2026 }
+        if (-not $groups.Contains($scope)) { $groups[$scope] = New-Object System.Collections.Generic.List[string] }
+        $groups[$scope].Add('- ' + ($path -replace '\\', '/') + ' - ' + $summary)
+    }
+    if ($groups.Count -eq 0) { return 'No global rules are installed.' }
+    $out = New-Object System.Collections.Generic.List[string]
+    $out.Add('Codex does not import files from AGENTS.md, so the rules below are NOT loaded for you.')
+    $out.Add('Open the ones that apply with your file tools before you work, and follow them.')
+    if ($groups.Contains('**')) {
+        $out.Add('')
+        $out.Add('Read at the start of every task:')
+        foreach ($entry in $groups['**']) { $out.Add($entry) }
+        $groups.Remove('**')
+    }
+    foreach ($scope in @($groups.Keys)) {
+        $out.Add('')
+        $out.Add('When editing files matching `' + $scope + '`:')
+        foreach ($entry in $groups[$scope]) { $out.Add($entry) }
+    }
+    return ($out -join "`n")
 }
 
 function Build-GlobalItems {
@@ -832,6 +971,20 @@ function Add-GlobalLink {
     if ($Detail) { $script:Links.Add("$Type`t$Path`t$Detail") } else { $script:Links.Add("$Type`t$Path") }
 }
 
+function Test-InstallSnapshot {
+    # True when an install-time snapshot (<FILE>.smooth-devex-<digits>) of Path already exists. Only
+    # numeric install-time snapshots count; an uninstall-time one (smooth-devex-uninstall-*) must not
+    # suppress a fresh install backup on the next run. Matched by regex: -Filter understands only *
+    # and ?, so a [0-9] class there is taken literally, never finds the earlier snapshot, and a
+    # re-run would then snapshot our own already-modified file as if it were the operator's.
+    param([string] $Path)
+    $dir = Split-Path -Parent $Path
+    $snapshotPattern = '^' + [regex]::Escape([System.IO.Path]::GetFileName($Path) + '.smooth-devex-') + '[0-9]'
+    $prior = Get-ChildItem -LiteralPath $dir -Force -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match $snapshotPattern }
+    return [bool] $prior
+}
+
 function Backup-Inplace {
     # Snapshot an operator-owned file the installer is about to append to, as
     # <FILE>.smooth-devex-<UTC YYYYMMDD-HHMMSS>, exactly once. Echoes the backup
@@ -841,17 +994,7 @@ function Backup-Inplace {
     # restores the genuinely pre-install content, never our own earlier append).
     param([string] $Path)
     if (-not (Test-Path -LiteralPath $Path)) { return '' }
-    $dir = Split-Path -Parent $Path
-    $name = [System.IO.Path]::GetFileName($Path)
-    # Only numeric install-time snapshots count as "already backed up"; an
-    # uninstall-time snapshot (smooth-devex-uninstall-*) must not suppress a fresh
-    # install backup on the next run. Matched by regex: -Filter understands only * and ?,
-    # so a [0-9] class there is taken literally, never finds the earlier snapshot, and a
-    # re-run would then snapshot our own already-modified file as if it were the operator's.
-    $snapshotPattern = '^' + [regex]::Escape("$name.smooth-devex-") + '[0-9]'
-    $prior = Get-ChildItem -LiteralPath $dir -Force -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match $snapshotPattern }
-    if ($prior) { return '' }
+    if (Test-InstallSnapshot -Path $Path) { return '' }
     $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss')
     $backup = "$Path.smooth-devex-$stamp"
     Copy-Item -LiteralPath $Path -Destination $backup -Force
@@ -1145,9 +1288,9 @@ function Install-GlobalRules {
 }
 
 function Write-GlobalAgents {
-    # Generate the store-level AGENTS.md that imports each owned rule by
-    # absolute @-line. This is the single delivery shape for global rules:
-    # ~/.codex/AGENTS.md @-imports this file, which @-imports each rule.
+    # Generate the store-level AGENTS.md: the rule index (see Format-RulesIndex). It is the same text
+    # Install-GlobalInstructions inlines into ~/.codex/AGENTS.md; this copy is for people and for tools
+    # that read the store directly.
     $file = Join-Path $script:GlbRoot 'AGENTS.md'
     $lines = New-Object System.Collections.Generic.List[string]
     $lines.Add('# Smooth DevEx - installed global instructions')
@@ -1155,51 +1298,120 @@ function Write-GlobalAgents {
     $lines.Add('')
     $lines.Add("<!-- $($script:GlobalMarker): regenerated by install-skills -->")
     $lines.Add('')
-    foreach ($rel in $script:RulesOn) {
-        $lines.Add('@' + ((Join-Path (Join-Path $script:GlbRoot 'rules') $rel) -replace '\\', '/'))
-    }
+    $lines.Add((Format-RulesIndex))
+    $lines.Add('')
     [System.IO.File]::WriteAllLines($file, $lines, [System.Text.UTF8Encoding]::new($false))
-    Write-Info "Wrote global instructions importer $file"
+    Write-Info "Wrote global rules index $file"
 }
 
 function Install-GlobalInstructions {
-    # Append one @-import of $GLB_ROOT/AGENTS.md to $CODEX_HOME/AGENTS.md,
-    # marker-guarded so a re-run does not duplicate it and an operator's existing
-    # @-imports (notably @.../RTK.md) are never touched. A missing AGENTS.md is
-    # created with an RTK-preserving header.
+    # Keep one delimited block in $CODEX_HOME/AGENTS.md holding the rule index. Codex does not resolve
+    # @-imports, so the index is inlined, not imported. The block is replaced in place on every run (it
+    # follows the installed:false flags) and an older two-line @-import block is migrated by the same
+    # replacement. Anything outside the block, notably an operator's @.../RTK.md line, is never
+    # touched. A missing AGENTS.md is created with an RTK-preserving header.
     Write-GlobalAgents
     $codexAgents = Join-Path $script:CodexHome 'AGENTS.md'
+    $rtk = Join-Path $script:CodexHome 'RTK.md'
+    $rtkLine = ''
+    if (Test-Path -LiteralPath $rtk -PathType Leaf) { $rtkLine = '@' + ($rtk -replace '\\', '/') }
     if (-not $script:HarnessCodex) {
-        Remove-CodexImport -File $codexAgents
+        Remove-CodexImport -File $codexAgents -RtkLine $rtkLine
         return
     }
+    $index = Format-RulesIndex
     if (-not (Test-Path -LiteralPath $codexAgents -PathType Leaf)) {
-        $lines = New-Object System.Collections.Generic.List[string]
-        $rtk = Join-Path $script:CodexHome 'RTK.md'
-        if (Test-Path -LiteralPath $rtk -PathType Leaf) {
-            $lines.Add('@' + ($rtk -replace '\\', '/'))
-            $lines.Add('')
-        }
-        $lines.Add($script:GlobalCodexMarkerLine)
-        $lines.Add('@' + ((Join-Path $script:GlbRoot 'AGENTS.md') -replace '\\', '/'))
-        [System.IO.File]::WriteAllLines($codexAgents, $lines, [System.Text.UTF8Encoding]::new($false))
+        $seed = ''
+        if ($rtkLine) { $seed = $rtkLine + "`n" }
+        [System.IO.File]::WriteAllText($codexAgents, $seed, [System.Text.UTF8Encoding]::new($false))
+        [void] (Set-CodexBlock -File $codexAgents -Body $index)
         Add-GlobalLink 'agents-import' $codexAgents
-        Write-Info "Created $codexAgents with global instructions import"
+        Write-Info "Created $codexAgents with the global rules index"
         return
     }
-    $content = Get-Content -LiteralPath $codexAgents -Raw
-    if ($content -match [regex]::Escape($script:GlobalMarker)) {
-        Write-Info "Global instructions already imported into $codexAgents"
+    if ((Get-CodexBlockState -File $codexAgents) -eq 'none') {
+        # We are about to add to a pre-existing operator-owned file: snapshot it first so --uninstall
+        # restores the operator's content. Only here: a file that already holds our block either has
+        # its snapshot from the first install or was created by us, and a snapshot of that would
+        # capture our own block.
+        $backup = Backup-Inplace -Path $codexAgents
+        if ($backup) { Write-Info "Backed up $codexAgents -> $backup" }
+        [void] (Set-CodexBlock -File $codexAgents -Body $index)
+        Add-GlobalLink 'agents-import' $codexAgents $backup
+        Write-Info "Appended the global rules index to $codexAgents"
         return
     }
-    # We are about to append to a pre-existing operator-owned file: snapshot it
-    # first so --uninstall restores the operator's content.
-    $backup = Backup-Inplace -Path $codexAgents
-    if ($backup) { Write-Info "Backed up $codexAgents -> $backup" }
-    $importLine = '@' + ((Join-Path $script:GlbRoot 'AGENTS.md') -replace '\\', '/')
-    Add-Content -LiteralPath $codexAgents -Value ("`n" + $script:GlobalCodexMarkerLine + "`n" + $importLine) -Encoding UTF8
-    Add-GlobalLink 'agents-import' $codexAgents $backup
-    Write-Info "Appended global instructions import to $codexAgents"
+    if ((Set-CodexBlock -File $codexAgents -Body $index) -eq 'changed') {
+        Write-Info "Updated the global rules index in $codexAgents"
+    } else {
+        Write-Info "Global rules index already current in $codexAgents"
+    }
+}
+
+$script:CodexRulesHeader = '# installer-owned-global-rules (generated by install-skills -g; do not edit)'
+
+function Install-GlobalCodexRules {
+    # Keep ~/.codex/rules/smooth-devex.rules, a Codex command-approval policy derived from the
+    # git/git-policy rule. Codex .rules files are Starlark prefix_rule()s that gate which commands run
+    # outside the sandbox; they cannot carry instructions, which is why the other rules travel as an
+    # AGENTS.md index. A file of our own, never default.rules: Codex appends the operator's permanent
+    # approvals there. Written only while codex is on and git-policy is installed:true; otherwise
+    # removed, but only when it is ours (first line carries the header). Mirrors the bash port.
+    $file = Join-Path (Join-Path $script:CodexHome 'rules') 'smooth-devex.rules'
+    $want = $script:HarnessCodex -and ($script:RulesOn -contains 'git/git-policy.instructions.md')
+    if (Test-Path -LiteralPath $file -PathType Leaf) {
+        $first = Get-Content -LiteralPath $file -TotalCount 1
+        if ($first -ne $script:CodexRulesHeader) {
+            Write-Info "WARNING: $file exists and is not ours - left untouched"
+            return
+        }
+    }
+    if (-not $want) {
+        if (Test-Path -LiteralPath $file -PathType Leaf) {
+            Remove-Item -LiteralPath $file -Force
+            Write-Info "Removed $file"
+        }
+        return
+    }
+    $body = @'
+# Command-approval policy derived from the git/git-policy rule; Codex reads it at startup.
+# Prefix matching only: "git -C <dir> commit" is not matched, and "git push origin x --force"
+# is prompted by the push rule rather than forbidden. Keep your own rules in another file;
+# default.rules belongs to Codex.
+
+prefix_rule(
+    pattern = ["git", "commit"],
+    decision = "prompt",
+    justification = "git-policy: never commit unless the user explicitly asks",
+    match = [["git", "commit", "-m", "message"]],
+    not_match = [["git", "status"]],
+)
+
+prefix_rule(
+    pattern = ["git", "push"],
+    decision = "prompt",
+    justification = "git-policy: never push unless the user explicitly asks",
+    match = [["git", "push", "origin", "main"]],
+    not_match = [["git", "pull"]],
+)
+
+prefix_rule(
+    pattern = ["git", "push", ["--force", "-f", "--force-with-lease"]],
+    decision = "forbidden",
+    justification = "git-policy: no force-push; ask the user to do it themselves",
+    match = [["git", "push", "--force", "origin", "main"]],
+    not_match = [["git", "push", "origin", "main"]],
+)
+'@
+    $content = $script:CodexRulesHeader + "`n" + ($body -replace "`r`n", "`n").TrimEnd("`n")
+    if ((Test-Path -LiteralPath $file -PathType Leaf) -and ((Get-Content -LiteralPath $file -Raw).TrimEnd("`r", "`n") -ceq $content)) {
+        Write-Info "Codex rules already current in $file"
+        return
+    }
+    New-Item -ItemType Directory -Path (Split-Path -Parent $file) -Force | Out-Null
+    [System.IO.File]::WriteAllText($file, $content + "`n", [System.Text.UTF8Encoding]::new($false))
+    Add-GlobalLink 'codex-rules' $file
+    Write-Info "Wrote $file - restart Codex to load it"
 }
 
 function Install-GlobalHooks {
@@ -1503,6 +1715,8 @@ function Invoke-GlobalInstall {
         Install-GlobalClaudeRules
         Write-Info 'Adding global rules to OpenCode instructions...'
         Install-GlobalOpencodeConfig
+        Write-Info 'Writing Codex command-approval rules...'
+        Install-GlobalCodexRules
     }
 
     if ($script:DoHooks) {
@@ -1594,6 +1808,13 @@ function Uninstall-Global {
                 # removing it is the exact inverse of the install (a splice would
                 # leave an empty AGENTS.md behind with our RTK header).
                 Remove-Item -LiteralPath $path -Force
+            }
+        } elseif ($typ -eq 'codex-rules') {
+            # A file this installer wrote, never a snapshot: remove it only while it still carries
+            # our header, so a file the operator replaced it with is left alone.
+            if (Test-Path -LiteralPath $path -PathType Leaf) {
+                $first = Get-Content -LiteralPath $path -TotalCount 1
+                if ($first -and $first.Contains('installer-owned-global-rules')) { Remove-Item -LiteralPath $path -Force }
             }
         } elseif ($typ -eq 'hooks-merge') {
             if ($detail -and (Test-Path -LiteralPath $detail -PathType Leaf)) {

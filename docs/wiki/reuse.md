@@ -28,9 +28,8 @@ documentation: [`scripts/SKILLS_INSTALLER.md`](../../scripts/SKILLS_INSTALLER.md
 
 ## Owned set
 
-Ships **exactly seven** skills. Anything else in this template's `.agents/skills/` — the
-`agile-github-*` pair, `context-load-*`, `git-commit*` / `git-sync`, `ai-brain-dump`,
-`ai-understanding` — is **local** and never enters a consumer's manifest. Skills owned by other
+Ships **exactly fifteen** skills. Anything else in this template's `.agents/skills/` — `ai-brain-dump`
+and `ai-understanding` — is **local** and never enters a consumer's manifest. Skills owned by other
 repositories (the `mimisbrunnr-*` set plus `ai-review`, `git-commit-review-push`, etc., owned by
 `smooth-ai-product-context-memory`) install via that repository's own installer.
 
@@ -43,6 +42,14 @@ repositories (the `mimisbrunnr-*` set plus `ai-review`, `git-commit-review-push`
 | `create-hld` | skill | Authors design-only HLD (intent + spec, no code) | Only AI/human build contract before implementation |
 | `create-worktask` | skill | Scaffolds self-contained worktask under `.context/work-tasks/` | Only standalone-coder handoff format |
 | `manage-rule-system` | skill | Rule-file lifecycle across Claude/Copilot/Cursor/Codex | Only cross-tool rule compat convention |
+| `agile-github-breakdown` | skill | Turns a braindump or Feature into GitHub Feature + Task issues, dry-run first | Only braindump-to-backlog path |
+| `agile-github-task-from-diff` | skill | Creates a horizontally sliced GitHub Task from the branch diff and links it to its Feature | Only diff-to-task path |
+| `context-load-agents-context` | skill | Loads ancestor `AGENTS.md` context for a target file, once per session | Only per-file context loader; used by `ai-ralph-loop` |
+| `context-load-context` | skill | Loads or creates functional `AGENTS.md` context before implementation work | Gate for the context-first workflow |
+| `git-commit` | skill | Conventional commits, split into logical units | Enforces `git/git-policy` at commit time |
+| `git-commit-push` | skill | Commit and push to the remote | Same policy, one step further |
+| `git-commit-push-pr` | skill | Commit, push, create or update the PR with the repo template | Only policy-checked PR path |
+| `git-sync` | skill | Sync with `origin/main`, optionally resolving conflicts | Safe-sync wrapper around merge |
 | `code-review-standards.instructions.md` | rule | Review standards referenced by `create-worktask` | Required ref; worktask output broken without it |
 | `git/git-policy.instructions.md` | rule | Git policy referenced by `ai-asset-sync`, `create-worktask` | Required ref for sync + worktask flows |
 | `meta/knowledge-conventional-contexts-quality.instructions.md` | rule | Context quality bar referenced by `create-hld` | Required ref for HLD context files |
