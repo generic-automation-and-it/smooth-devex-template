@@ -94,7 +94,9 @@ OWNED_RULES=(
   backend/collection-types.instructions.md
   backend/external-api-clients.instructions.md
   backend/migrations.instructions.md
+  backend/project-overview.instructions.md
   backend/readonly-collections.instructions.md
+  backend/solid-principles.instructions.md
   backend/wiremock-stubbing.instructions.md
   clean-code.instructions.md
   code-review-standards.instructions.md
@@ -103,10 +105,8 @@ OWNED_RULES=(
   meta/knowledge-conventional-contexts-quality.instructions.md
   meta/rules.instructions.md
   meta/understandings.instructions.md
-  project-overview.instructions.md
   skills/skill-secret-handling.instructions.md
   skills/skillspector-pre-pr.instructions.md
-  solid-principles.instructions.md
 )
 
 # Hooks the installer is allowed to carry across. Derived the same way: a hook is owned iff an
@@ -633,7 +633,7 @@ rules_index_table() {
 | Scope | Rules |
 | :---- | :---- |
 | `**` | `ai-workflow-rules` · `clean-code` · `code-review-standards` |
-| `**/*.cs` | `project-overview` · `solid-principles` · `backend/api-mediator-validation` · `backend/architecture-slices` · `backend/backend-logging-conventions` · `backend/collection-types` · `backend/external-api-clients` · `backend/readonly-collections` |
+| `**/*.cs` | `backend/project-overview` · `backend/solid-principles` · `backend/api-mediator-validation` · `backend/architecture-slices` · `backend/backend-logging-conventions` · `backend/collection-types` · `backend/external-api-clients` · `backend/readonly-collections` |
 | `src/*.Infrastructure/Persistence/Migrations/**/*.cs` | `backend/migrations` |
 | `tests/*.TestFramework.Aspire/**/*.cs` | `backend/wiremock-stubbing` |
 | `**` | `git/git-policy` · `git/pr-standards` |

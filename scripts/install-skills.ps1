@@ -102,7 +102,9 @@ $script:OwnedRules = @(
     'backend/collection-types.instructions.md'
     'backend/external-api-clients.instructions.md'
     'backend/migrations.instructions.md'
+    'backend/project-overview.instructions.md'
     'backend/readonly-collections.instructions.md'
+    'backend/solid-principles.instructions.md'
     'backend/wiremock-stubbing.instructions.md'
     'clean-code.instructions.md'
     'code-review-standards.instructions.md'
@@ -111,10 +113,8 @@ $script:OwnedRules = @(
     'meta/knowledge-conventional-contexts-quality.instructions.md'
     'meta/rules.instructions.md'
     'meta/understandings.instructions.md'
-    'project-overview.instructions.md'
     'skills/skill-secret-handling.instructions.md'
     'skills/skillspector-pre-pr.instructions.md'
-    'solid-principles.instructions.md'
 )
 
 # Hooks the installer is allowed to carry across: a hook is owned iff an owned skill's SKILL.md
