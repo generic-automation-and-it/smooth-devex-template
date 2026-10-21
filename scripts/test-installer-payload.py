@@ -360,6 +360,11 @@ class InstallerPayloadTests(unittest.TestCase):
             self.skipTest("PowerShell not selected")
         self.assert_canonical_links_use_pruned_payload("powershell")
 
+    def test_bash_canonical_links_use_pruned_payload(self):
+        if "bash" not in PORTS:
+            self.skipTest("Bash not selected")
+        self.assert_canonical_links_use_pruned_payload("bash")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

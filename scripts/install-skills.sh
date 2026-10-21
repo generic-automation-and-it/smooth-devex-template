@@ -698,9 +698,10 @@ for s in data.get('skills', []):
     log "Updated _smooth-devex-shared"
     # Link the payload back to canonical paths so .agents/setup/... references keep working.
     local entry name
-    for entry in "$shared_source"/*; do
+    for entry in "$shared_dest"/*; do
       [ -e "$entry" ] || continue
       name="$(basename "$entry")"
+      [ "$name" = "installation.json" ] && continue
       ensure_canonical_link "$agent_root" "$shared_dir" "$name"
     done
   fi
