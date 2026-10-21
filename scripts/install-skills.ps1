@@ -665,7 +665,8 @@ function Update-InstalledSkills {
         Remove-StaleEntries -Dest $sharedDest -Source $sharedSource
         Write-Info 'Updated _smooth-devex-shared'
         # Link the payload back to canonical paths so .agents/setup/... references keep working.
-        foreach ($entry in Get-ChildItem -LiteralPath $sharedSource -Force) {
+        foreach ($entry in Get-ChildItem -LiteralPath $sharedDest -Force) {
+            if ($entry.Name -ceq 'installation.json') { continue }
             Ensure-CanonicalLink -AgentRoot $AgentRoot -Name $entry.Name
         }
     }

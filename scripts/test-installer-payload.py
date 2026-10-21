@@ -347,6 +347,19 @@ class InstallerPayloadTests(unittest.TestCase):
                 self.assertEqual((case[2] / "templates/keep.md").read_text(), "template\n")
                 self.assertTrue(case[3].is_file())
 
+    def assert_canonical_links_use_pruned_payload(self, port):
+        case = self.prepare(port)
+        self.run_installer(port, case, "-s")
+        for name in TEST_FILES + TEST_DIRS + ("installation.json",):
+            self.assertFalse(os.path.lexists(case[1] / name), str(case[1] / name))
+        self.assertTrue((case[1] / "templates").is_symlink())
+        self.assertEqual((case[1] / "templates/keep.md").read_text(), "template\n")
+
+    def test_powershell_canonical_links_use_pruned_payload(self):
+        if "powershell" not in PORTS:
+            self.skipTest("PowerShell not selected")
+        self.assert_canonical_links_use_pruned_payload("powershell")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
