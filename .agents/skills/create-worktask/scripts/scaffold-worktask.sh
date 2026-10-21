@@ -94,11 +94,18 @@ TITLE_SED=$(sed_escape "$TITLE")
 
 SRC="$ASSETS_DIR/WORKTASK.template.md"
 [ -f "$SRC" ] || { echo "Error: missing template: $SRC" >&2; exit 1; }
+PROCESS_TEMPLATE="$ASSETS_DIR/AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md"
+[ -f "$PROCESS_TEMPLATE" ] || { echo "Error: missing process template: $PROCESS_TEMPLATE" >&2; exit 1; }
+case "$PROCESS_TEMPLATE" in
+    "$REPO_ROOT"/*) PROCESS_TEMPLATE="../../${PROCESS_TEMPLATE#"$REPO_ROOT"/}" ;;
+esac
+PROCESS_TEMPLATE_SED=$(sed_escape "$PROCESS_TEMPLATE")
 
 # Placeholders: {{TITLE}} {{SLUG}} {{DATE}}
 sed -e "s|{{TITLE}}|${TITLE_SED}|g" \
     -e "s|{{SLUG}}|${SLUG}|g" \
     -e "s|{{DATE}}|${DATE}|g" \
+    -e "s|{{PROCESS_TEMPLATE}}|${PROCESS_TEMPLATE_SED}|g" \
     "$SRC" > "$TARGET"
 
 # Emit JSON (path relative to repo root for portability).

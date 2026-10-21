@@ -208,6 +208,12 @@ accepted:
 
   # --- HIGH/MEDIUM: create-worktask process-manual vocabulary (false positives) ---
   - id: P6
+    file: create-worktask/assets/AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md
+    reason: >-
+      "Direct Prompt Extraction" on the bundled manual's "Phase Output Rules" heading.
+      This intentionally WET first-party workflow asset defines visible phase labels for
+      generated worktasks; it does not request or reveal a runner's system prompt.
+  - id: P6
     file: create-worktask/SKILL.md
     reason: >-
       "Direct Prompt Extraction" on the phrase "phases, gates, output rules", naming what the
