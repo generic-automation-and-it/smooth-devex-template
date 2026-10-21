@@ -1,7 +1,7 @@
-#requires -Version 7.0
+#requires -Version 7.2
 <#
 .SYNOPSIS
-    Cross-platform skills installer for Windows / macOS / Linux (PowerShell 7).
+    Cross-platform skills installer for Windows / macOS / Linux (PowerShell 7.2+).
 
 .DESCRIPTION
     One-liner:
@@ -12,7 +12,7 @@
       1. Finds the agent root in order: .agents -> .claude -> .codex, and errors
          when none exists. It never creates one: a folder the operator did not ask for is not an install.
          The skills root is <agent-root>/skills (override with SKILLS_ROOT, whose parent then counts
-         as the agent root for state purposes).
+         as the agent root for state purposes). Missing category directories are created only when needed.
       2. Reads <agent-root>/_smooth-devex-shared/installation.json.
          - Missing  -> creates it with every skill on disk, installed:true, UTC timestamp.
          - Present  -> syncs: adds new skills, drops skills no longer on disk, keeps every
@@ -21,7 +21,7 @@
          A legacy manifest at the old <skills-root>/_smooth-devex-shared/installation.json location
          is ignored (fresh start): it is reported and otherwise left untouched.
       3. Updates only the skills marked installed:true, cloning the repo once and copying those folders
-         (plus the shared payload, if the source ships one) out of it.
+         (plus the shared payload, if the source ships one) out of it. Tests are pruned from these copies.
       4. Writes the updated installation.json back with a fresh UTC timestamp - after the update, so
          refreshing the shared payload cannot clobber the manifest that update read.
       5. Links every top-level shared-payload entry back to its canonical <agent-root> path
@@ -29,7 +29,7 @@
          canonical paths keep working. An existing real file or directory at the link path is
          never replaced: it is reported and skipped.
 
-    Dependencies: PowerShell 7, git. No Python and no bash.
+    Dependencies: PowerShell 7.2+ (LinkTarget requires .NET 6), git. No Python and no bash.
 
     Environment overrides:
       SKILLS_REPO    - git URL to clone from (default: the upstream GitHub repo)
@@ -368,6 +368,98 @@ function Build-InstallationJson {
     return "{`n  `"updated`": $updatedJson,`n  `"decisions_enabled`": $decisionsJson,`n  `"skills`": [`n$joined  ]`n}"
 }
 
+function Get-RealPath {
+    param([string] $Path)
+    $sep = [System.IO.Path]::DirectorySeparatorChar
+    $pending = if ([System.IO.Path]::IsPathFullyQualified($Path)) { $Path } else { [System.IO.Path]::Combine($PWD.Path, $Path) }
+    for ($hops = 0; $hops -lt 64; $hops++) {
+        $root = [System.IO.Path]::GetPathRoot($pending)
+        $parts = @($pending.Substring($root.Length).Split([char[]]@('/', '\'), [System.StringSplitOptions]::RemoveEmptyEntries))
+        $current = $root
+        $relinked = $false
+        for ($i = 0; $i -lt $parts.Count; $i++) {
+            if ($parts[$i] -eq '.') { continue }
+            if ($parts[$i] -eq '..') {
+                if ($current -ne $root) { $current = [System.IO.Path]::GetDirectoryName($current) }
+                continue
+            }
+            $next = [System.IO.Path]::Combine($current, $parts[$i])
+            $target = [System.IO.FileInfo]::new($next).LinkTarget
+            if ($target) {
+                $rest = if ($i + 1 -lt $parts.Count) { $parts[($i + 1)..($parts.Count - 1)] -join $sep } else { '' }
+                $pending = [System.IO.Path]::Combine($current, $target, $rest)
+                $relinked = $true
+                break
+            }
+            $current = $next
+        }
+        if (-not $relinked) {
+            if ($current -eq $root) { return $root }
+            return $current.TrimEnd('/', '\')
+        }
+    }
+    return $pending
+}
+
+function Remove-PathEntry {
+    param([string] $Path)
+    $existing = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+    if ($null -eq $existing) { return }
+    if ($existing.LinkTarget) { $existing.Delete() } else { Remove-Item -LiteralPath $Path -Recurse -Force }
+}
+
+$script:WetStack = @()
+$script:CloneRoot = $null
+function Copy-Wet {
+    param([string] $Source, [string] $Dest)
+    $sep = [System.IO.Path]::DirectorySeparatorChar
+    if (-not $script:CloneRoot) { $script:CloneRoot = Get-RealPath $script:TempRepo }
+    $item = Get-Item -LiteralPath $Source -Force
+    if ($item.LinkTarget) {
+        $resolved = Get-RealPath $Source
+        $parent = Get-RealPath (Split-Path -Parent $Source)
+        $inClone = "$resolved$sep".StartsWith("$($script:CloneRoot)$sep", [System.StringComparison]::Ordinal)
+        $cyclic = @(@($script:WetStack) + $parent | Where-Object { "$_$sep".StartsWith("$resolved$sep", [System.StringComparison]::Ordinal) }).Count -gt 0
+        if ($inClone -and (-not $cyclic) -and (Test-Path -LiteralPath $resolved)) {
+            $saved = $script:WetStack
+            $script:WetStack = @($script:WetStack) + $resolved
+            try { Copy-Wet -Source $resolved -Dest $Dest } finally { $script:WetStack = $saved }
+            return
+        }
+        Remove-PathEntry -Path $Dest
+        try {
+            New-Item -ItemType SymbolicLink -Path $Dest -Target $item.LinkTarget | Out-Null
+            Write-Info "Kept link $Dest -> $($item.LinkTarget) (outside the source, dangling, or cyclic)"
+        }
+        catch {
+            Write-Info "WARNING: cannot recreate link $Dest -> $($item.LinkTarget) (no symlink privilege) - skipped"
+        }
+        return
+    }
+    if ($item.PSIsContainer) {
+        $existing = Get-Item -LiteralPath $Dest -Force -ErrorAction SilentlyContinue
+        if ($existing -and ($existing.LinkTarget -or -not $existing.PSIsContainer)) { Remove-PathEntry -Path $Dest }
+        New-Item -ItemType Directory -Path $Dest -Force | Out-Null
+        foreach ($entry in Get-ChildItem -LiteralPath $Source -Force) {
+            Copy-Wet -Source $entry.FullName -Dest (Join-Path $Dest $entry.Name)
+        }
+    }
+    else {
+        Remove-PathEntry -Path $Dest
+        Copy-Item -LiteralPath $Source -Destination $Dest -Force
+    }
+}
+
+function Remove-Tests {
+    param([string] $Root)
+    Get-ChildItem -LiteralPath $Root -Recurse -Directory -Force |
+        Where-Object { $_.Name -cin @('test', 'tests', '__tests__') } |
+        ForEach-Object { if (Test-Path -LiteralPath $_.FullName) { Remove-Item -LiteralPath $_.FullName -Recurse -Force } }
+    Get-ChildItem -LiteralPath $Root -Recurse -File -Force |
+        Where-Object { $_.Name -clike 'test_*' -or $_.Name -clike '*_test.*' -or $_.Name -clike '*.test.*' -or $_.Name -clike '*.Tests.ps1' } |
+        Remove-Item -Force
+}
+
 function Remove-StaleEntries {
     # Remove from Dest everything Source does not have, recursively.
     #
@@ -383,8 +475,8 @@ function Remove-StaleEntries {
     foreach ($entry in Get-ChildItem -LiteralPath $Dest -Force) {
         if ($entry.Name -eq 'installation.json') { continue }
         $sourcePath = Join-Path $Source $entry.Name
-        $hasSource = Test-Path -LiteralPath $sourcePath
-        if ($hasSource -and $entry.PSIsContainer) {
+        $hasSource = (Test-Path -LiteralPath $sourcePath) -or ($null -ne (Get-Item -LiteralPath $sourcePath -Force -ErrorAction SilentlyContinue))
+        if ($hasSource -and $entry.PSIsContainer -and -not $entry.LinkTarget) {
             Remove-StaleEntries -Dest $entry.FullName -Source $sourcePath
         }
         elseif (-not $hasSource) {
@@ -525,8 +617,9 @@ function Update-InstalledSkills {
         $source = Join-Path $repoSkills $name
         if (Test-Path -LiteralPath $source -PathType Container) {
             $dest = Join-Path $SkillsRoot $name
-            if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
-            Copy-Item -LiteralPath $source -Destination $dest -Recurse -Force
+            Remove-PathEntry -Path $dest
+            Copy-Wet -Source $source -Dest $dest
+            Remove-Tests -Root $dest
             Remove-SkillContext -Path $dest
             Write-Info "Updated $name"
         } else {
@@ -547,8 +640,8 @@ function Update-InstalledSkills {
     $sharedSource = Join-Path $script:TempRepo '.agents/_smooth-devex-shared'
     if (Test-Path -LiteralPath $sharedSource -PathType Container) {
         $sharedDest = $SharedDir
-        New-Item -ItemType Directory -Path $sharedDest -Force | Out-Null
-        Copy-Item -Path (Join-Path $sharedSource '*') -Destination $sharedDest -Recurse -Force
+        Copy-Wet -Source $sharedSource -Dest $sharedDest
+        Remove-Tests -Root $sharedDest
         Remove-StaleEntries -Dest $sharedDest -Source $sharedSource
         Write-Info 'Updated _smooth-devex-shared'
         # Link the payload back to canonical paths so .agents/setup/... references keep working.
@@ -593,7 +686,7 @@ function Write-RulesIndex {
         '',
         $table,
         '',
-        'File = `<name>.instructions.md` in `.github/instructions/`.'
+        'File = `<name>.instructions.md` in this folder.'
     ) -join "`n"
     if (-not (Test-Path -LiteralPath $index -PathType Leaf)) {
         [System.IO.File]::WriteAllText($index, ($full + "`n"), [System.Text.UTF8Encoding]::new($false))
@@ -613,46 +706,27 @@ function Write-RulesIndex {
 }
 
 function Install-OwnedRules {
-    # Copies the owned rule files from the source's .github/instructions/ into the consumer's,
+    # Copies the owned rule files from the source's .github/instructions/ into <agent-root>/rules/,
     # preserving relative paths. Overwrites, never deletes.
     param([string] $AgentRoot)
-    $repoRoot = Split-Path -Parent $AgentRoot
     $sourceRules = Join-Path $script:TempRepo '.github/instructions'
-    $destRules = Join-Path $repoRoot '.github/instructions'
+    $destRules = Join-Path $AgentRoot 'rules'
     if (-not (Test-Path -LiteralPath $sourceRules -PathType Container)) {
         Write-Info 'No .github/instructions in source - nothing to install for rules'
         return
     }
-    New-Item -ItemType Directory -Path $destRules -Force | Out-Null
+    New-Item -ItemType Directory -Path (Get-RealPath $destRules) -Force | Out-Null
     foreach ($rel in $script:OwnedRules) {
         $source = Join-Path $sourceRules $rel
         if (Test-Path -LiteralPath $source -PathType Leaf) {
             $dest = Join-Path $destRules $rel
             New-Item -ItemType Directory -Path (Split-Path -Parent $dest) -Force | Out-Null
-            Copy-Item -LiteralPath $source -Destination $dest -Force
+            Copy-Wet -Source $source -Dest $dest
             Write-Info "Updated rule $rel"
         }
         else {
             Write-Info "WARNING: rule $rel not found in repo - left on disk untouched"
         }
-    }
-    # Topology: <agent-root>/rules -> ../.github/instructions, but only when nothing is there.
-    # A dangling symlink reads as absent to Test-Path, so check the link itself: re-creating over
-    # an existing path aborts the run under $ErrorActionPreference = Stop.
-    $rulesLink = Join-Path $AgentRoot 'rules'
-    $rulesLinkTaken = Test-Path -LiteralPath $rulesLink
-    if (-not $rulesLinkTaken) {
-        $existing = Get-Item -LiteralPath $rulesLink -Force -ErrorAction SilentlyContinue
-        $rulesLinkTaken = ($null -ne $existing) -and ($null -ne $existing.LinkType)
-    }
-    if (-not $rulesLinkTaken) {
-        try {
-            New-Item -ItemType SymbolicLink -Path $rulesLink -Target '../.github/instructions' | Out-Null
-        }
-        catch {
-            New-Item -ItemType Junction -Path $rulesLink -Target (Join-Path $repoRoot '.github/instructions') | Out-Null
-        }
-        Write-Info "Linked $rulesLink -> ../.github/instructions"
     }
     Write-RulesIndex -DestRules $destRules
 }
@@ -667,11 +741,11 @@ function Install-OwnedHooks {
         Write-Info 'No .agents/hooks in source - nothing to install for hooks'
         return
     }
-    New-Item -ItemType Directory -Path $destHooks -Force | Out-Null
+    New-Item -ItemType Directory -Path (Get-RealPath $destHooks) -Force | Out-Null
     foreach ($name in $script:OwnedHooks) {
         $source = Join-Path $sourceHooks $name
         if (Test-Path -LiteralPath $source) {
-            Copy-Item -LiteralPath $source -Destination (Join-Path $destHooks $name) -Recurse -Force
+            Copy-Wet -Source $source -Dest (Join-Path $destHooks $name)
             Write-Info "Updated hook $name"
         }
         else {
@@ -687,8 +761,8 @@ function Install-OwnedHooks {
             if ($name -like '*.sh') {
                 $src = Join-Path $sourceHooks $name
                 $dst = Join-Path $destHooks $name
-                if ((Test-Path -LiteralPath $src) -and ((Get-Item $src).UnixFileMode -band [System.IO.UnixFileMode]::ExecuteUser)) {
-                    & chmod +x $dst 2>$null
+                if (Test-Path -LiteralPath $src) {
+                    & test -x $src; if ($LASTEXITCODE -eq 0) { & chmod +x $dst 2>$null }
                 }
             }
         }
@@ -1248,8 +1322,9 @@ function Install-GlobalSkills {
         $source = Join-Path $repoSkills $name
         if (Test-Path -LiteralPath $source -PathType Container) {
             $dest = Join-Path (Join-Path $script:GlbRoot 'skills') $name
-            if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
-            Copy-Item -LiteralPath $source -Destination $dest -Recurse -Force
+            Remove-PathEntry -Path $dest
+            Copy-Wet -Source $source -Dest $dest
+            Remove-Tests -Root $dest
             Remove-SkillContext -Path $dest
             Write-Info "Stored global skill $name"
         } else {
@@ -1279,7 +1354,7 @@ function Install-GlobalRules {
         if (Test-Path -LiteralPath $source -PathType Leaf) {
             $dest = Join-Path (Join-Path $script:GlbRoot 'rules') $rel
             New-Item -ItemType Directory -Path (Split-Path -Parent $dest) -Force | Out-Null
-            Copy-Item -LiteralPath $source -Destination $dest -Force
+            Copy-Wet -Source $source -Dest $dest
             Write-Info "Stored global rule $rel"
         } else {
             Write-Info "WARNING: rule $rel not found in repo - not stored"
@@ -1434,7 +1509,7 @@ function Install-GlobalHooks {
         $source = Join-Path $sourceHooks $name
         $dest = Join-Path (Join-Path $script:GlbRoot 'hooks') $name
         if (Test-Path -LiteralPath $source) {
-            Copy-Item -LiteralPath $source -Destination $dest -Recurse -Force
+            Copy-Wet -Source $source -Dest $dest
             # Preserve the source exec bit per owned file, never a wildcard over the
             # directory. `test -x` is portable across Unix; UnixFileMode is not.
             if ($name -like '*.sh' -and ($IsLinux -or $IsMacOS)) {
@@ -1881,10 +1956,8 @@ if ($SkillsRoot) {
 else {
     $script:AgentRootPath = Find-AgentRoot
     $script:SkillsRootPath = Join-Path $script:AgentRootPath 'skills'
-    # The skills directory is only required when the skills category runs: a rules-only or
-    # hooks-only run must work in a tree that has no skills at all.
     if ($script:DoSkills -and (-not (Test-Path -LiteralPath $script:SkillsRootPath -PathType Container))) {
-        Fail "no skills directory found - expected $($script:SkillsRootPath) (create it, or set SKILLS_ROOT)"
+        New-Item -ItemType Directory -Path $script:SkillsRootPath -Force | Out-Null
     }
 }
 

@@ -11,18 +11,18 @@ repository's source outside its declared contract.
 
 - **Read-only by default.** Scripts write only into the paths their contract declares: the
   installer writes the resolved skills root, `<agent-root>/_smooth-devex-shared/`, the owned
-  `<agent-root>/hooks/` files, the owned `.github/instructions/` subset, and canonical symlinks —
+  `<agent-root>/hooks/` files, owned rules under `<agent-root>/rules/`, and canonical symlinks —
   or, when force-pinned via `SKILLS_ROOT`, into exactly that path and its siblings. The `-g`
   global mode is the explicit exception: it writes `$HOME/.smooth-ai-devex/` (its store + manifest)
   and wires into Codex's `$HOME/.codex/` (skills symlinks, an `AGENTS.md` rules index, `rules/smooth-devex.rules`, `hooks.json`), plus
-  Claude's `$HOME/.claude/skills` and OpenCode's `$HOME/.config/opencode/commands`.
+  Claude's `$HOME/.claude/skills` and OpenCode's `$HOME/.config/opencode/skills`.
   Anything else that wants to touch the calling repo's `src/`, `tests/`, `.github/` or other
   top-level directories belongs elsewhere — most likely as a workflow under `.github/workflows/` or an
   action under `.github/actions/`.
 - **Idempotent runs.** Re-running a script with the same inputs must converge on the same state — that
   is the contract the [test harness](test-install-skills.sh) verifies, and the property that makes a
   `curl | bash` one-liner safe to put in onboarding docs.
-- **No silent skips on hard errors.** A missing skills directory, an unparseable manifest, or a failed
+- **No silent skips on hard errors.** A missing agent root, an invalid explicit `SKILLS_ROOT`, an unparseable manifest, or a failed
   clone are all non-zero exits with a one-line reason on stderr. A green exit followed by an empty
   tree is the failure mode the first-install case in the harness exists to catch.
 - **Dependency floor is declared at the top of the file.** If a script needs `python3`, `pwsh`, or any
@@ -36,8 +36,9 @@ documentation.
 | File | Role |
 | --- | --- |
 | `install-skills.sh` | bash port. macOS / Linux. Needs `bash`, `git`, `python3`. |
-| `install-skills.ps1` | PowerShell 7 port. Windows or anywhere `pwsh` runs. Needs `pwsh`, `git`. |
-| `test-install-skills.sh` | Harness. 90 cases, bash port only (the ps1 port is read, not run). |
+| `install-skills.ps1` | PowerShell 7.2+ port. Windows or anywhere `pwsh` runs. Needs `pwsh`, `git`. |
+| `test-install-skills.sh` | Bash harness, including the shared payload regression suite. |
+| `test-installer-payload.py` | Same payload regressions for Bash or PowerShell; `--port all` runs both. |
 
 The installer pulls a flat list of folders from `.agents/skills/` in this repository into a consumer
 repository, controlled by a per-skill `installed` flag in
@@ -49,6 +50,11 @@ A skill's own `AGENTS.md` is **never copied** — it documents the owner repo's 
 improvements, not the runnable payload a consumer should inherit. The installer strips `AGENTS.md`
 files from every skill folder it copies (per-repo and `-g` global), leaving `SKILL.md`, scripts and
 references intact.
+
+Source links inside the temporary clone must be materialized before cleanup; retained external or
+cyclic links must never be traversed by pruning or shared-payload sweeping. Global store copies use
+the same copy/pruning path as per-repo copies. Consumer-owned rules topology is not installer-owned:
+write through an existing `rules` link, but do not create one on the operator's behalf.
 
 A small hardcoded **owned set** (`OWNED_LIST` in `install-skills.sh`, `$script:OwnedList` in
 `install-skills.ps1`) scopes the installer to fifteen skills: `agile-github-breakdown`,
@@ -77,8 +83,7 @@ is installed, and indexed for Codex (below). The per-repo install ships the same
 tree). And the owned hooks are JSON-merged into `~/.codex/hooks.json`
 under `UserPromptSubmit` only, with absolute store commands. When Claude is installed, owned skills
 are also symlinked into `~/.claude/skills/`. When OpenCode is installed, each owned skill is
-referenced from `~/.config/opencode/commands` (a folder symlink to the store's `opencode-commands/`,
-whose `<name>.md` links point at the skill's `SKILL.md`), and the store's rules are added to the
+symlinked into `~/.config/opencode/skills/`, and the store's rules are added to the
 operator's `opencode.json` `instructions` (with a backup). State
 is `~/.smooth-ai-devex/installation.json` (a `links[]` record of what
 was installed); `-g --uninstall` removes exactly that — never `.system/`, an operator's `gk` hooks, or
@@ -118,14 +123,11 @@ network is involved and a red run is about the code under test, not GitHub avail
 
 Two known gaps:
 
-- **The PowerShell port is not exercised.** `install-skills.ps1` is a hand-translated mirror of
-  `install-skills.sh` — same contract, same control flow — and the contract exists to be read, not
-  to be redundantly proven on a platform the gate does not run. Reading the two scripts side by
-  side is the test.
+- **PowerShell runtime coverage is limited to the payload suite.** Run it explicitly with
+  `python3 scripts/test-installer-payload.py --port all`; CI's wider installer harness remains Bash-only.
 - **The `_smooth-devex-shared/` payload is scoped, not comprehensive.** Only cross-cutting,
-  repo-owned items live there (`setup/scripts/`, `templates/`). Skills have their own category;
-  rules and hooks each have an owned allowlist (`OWNED_RULES`, `OWNED_HOOKS`) — template-domain
-  files stay local by default.
+  repo-owned items live there (`setup/scripts/`, `templates/`). Skills, rules, and hooks are
+  separate categories; adding a shared dependency does not add it to a global skill install.
 
 ## Changelog
 
@@ -156,3 +158,4 @@ Two known gaps:
 | 2026-10-19 | `-g` manifest `harnesses{}` (false = skip + remove by on-disk detection; uninstall ungated); `enabled` status on symlink records; ps1 pitfall: strict mode throws on a manifest without `skills`; harness 9a–9f | #126 |
 | 2026-10-19 | Owned skills 7→15 (+`agile-github-*`, `context-load-*`, `git-commit*`, `git-sync`); `load-agents-context.sh` stays local: PostToolUse, `-g` registers `UserPromptSubmit` only; harness unowned probe is `ai-brain-dump` | #126 |
 | 2026-10-19 | Codex pitfall: no `@path` imports, 32 KiB cap — `~/.codex/AGENTS.md` gets a rule index block (replaced in place, legacy `@` block migrated), not `@` lines; `~/.codex/rules/smooth-devex.rules` (git-policy → prompt/forbidden), never `default.rules`; ps1 shared `Test-InstallSnapshot`; harness 10a–10g | #126 |
+| 2026-10-21 | Reapplied #111/#113 payload contract across per-repo/global installs; operator-owned rules topology; pwsh 7.2 floor; shared cross-port payload tests | #110, #112 |

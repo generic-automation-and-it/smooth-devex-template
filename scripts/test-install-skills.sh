@@ -637,13 +637,16 @@ else
   ok "root search: creates no agent directory"
 fi
 
-# A tree with an agent directory but no skills directory: a hard error, and still nothing created.
+# A found agent root is the opt-in; missing category directories are created as needed.
 noskills="$scratch/noskills"
 mkdir -p "$noskills/.agents"
-if run_in_dir_searched "$noskills"; then
-  no "agent without skills exits non-zero" "expected failure, got success"
+if ! run_in_dir_searched "$noskills"; then
+  no "agent without skills installs into created category directories" "run failed"
+elif [ -f "$noskills/.agents/skills/ai-terse/SKILL.md" ] \
+  && [ -d "$noskills/.agents/hooks" ] && [ -d "$noskills/.agents/rules" ]; then
+  ok "agent without skills installs into created category directories"
 else
-  ok "agent without skills exits non-zero"
+  no "agent without skills installs into created category directories" "a category is missing"
 fi
 
 # A tree with no agent directory at all: a hard error, and still nothing created.
@@ -670,13 +673,13 @@ fi
 root="$(make_root "cat-skills" alpha)"
 run_sh "$root" -s >/dev/null 2>&1
 if [ -f "$root/_smooth-devex-shared/installation.json" ] \
-  && [ ! -e "$root/../.github" ] && [ ! -e "$root/hooks" ]; then
+  && [ ! -e "$root/rules" ] && [ ! -e "$root/hooks" ]; then
   ok "-s only: skills install, no rules, no hooks"
 else
   no "-s only: skills install, no rules, no hooks" "rules or hooks leaked in"
 fi
 
-# 7b. -r only: every owned rule lands (all template rules are owned), topology symlink created, no
+# 7b. -r only: every owned rule lands in the agent root, with no topology symlink, no
 # skills, no manifest.
 root="$(make_root "cat-rules" alpha)"
 run_sh "$root" -r >/dev/null 2>&1
@@ -685,22 +688,22 @@ for rel in code-review-standards.instructions.md ai-workflow-rules.instructions.
   clean-code.instructions.md backend/architecture-slices.instructions.md \
   git/git-policy.instructions.md meta/rules.instructions.md \
   skills/skill-secret-handling.instructions.md; do
-  [ -f "$root/../.github/instructions/$rel" ] || rules_ok=0
+  [ -f "$root/rules/$rel" ] || rules_ok=0
 done
 # The template's own index is never copied: a generated index of the shipped set ships instead,
 # referencing the owned rules.
-if [ -f "$root/../.github/instructions/AGENTS.md" ] \
-  && grep -q "installed subset" "$root/../.github/instructions/AGENTS.md" \
-  && grep -q "backend/architecture-slices" "$root/../.github/instructions/AGENTS.md"; then
+if [ -f "$root/rules/AGENTS.md" ] \
+  && grep -q "installed subset" "$root/rules/AGENTS.md" \
+  && grep -q "backend/architecture-slices" "$root/rules/AGENTS.md"; then
   :
 else
   rules_ok=0
 fi
-if [ "$rules_ok" = "1" ] && [ -L "$root/rules" ] \
+if [ "$rules_ok" = "1" ] && [ ! -L "$root/rules" ] && [ ! -e "$root/../.github" ] \
   && [ ! -e "$root/skills/ai-terse" ] && [ ! -f "$root/_smooth-devex-shared/installation.json" ]; then
-  ok "-r only: owned rules land with topology link, no skills, no manifest"
+  ok "-r only: owned rules land in agent rules directory, no skills, no manifest"
 else
-  no "-r only: owned rules land with topology link, no skills, no manifest" "rules_ok=$rules_ok"
+  no "-r only: owned rules land in agent rules directory, no skills, no manifest" "rules_ok=$rules_ok"
 fi
 
 # 7c. The two owned hooks land executable; unowned and operator files are untouched.
@@ -726,7 +729,7 @@ fi
 # 7d. -r -h combined: rules and hooks, still no skills and no manifest.
 root="$(make_root "cat-rules-hooks" alpha)"
 run_sh "$root" -r -h >/dev/null 2>&1
-if [ -f "$root/../.github/instructions/git/git-policy.instructions.md" ] \
+if [ -f "$root/rules/git/git-policy.instructions.md" ] \
   && [ -f "$root/hooks/worktask-skill-trigger.sh" ] \
   && [ ! -e "$root/skills/ai-terse" ] \
   && [ ! -f "$root/_smooth-devex-shared/installation.json" ]; then
@@ -739,23 +742,23 @@ fi
 # (overwrite, never delete, no sweep).
 root="$(make_root "cat-owned" alpha)"
 run_sh "$root" -r >/dev/null 2>&1
-mkdir -p "$root/../.github/instructions/backend"
-printf 'operator rule\n' >"$root/../.github/instructions/backend/operator.instructions.md"
+mkdir -p "$root/rules/backend"
+printf 'operator rule\n' >"$root/rules/backend/operator.instructions.md"
 run_sh "$root" -r >/dev/null 2>&1
-if [ -e "$root/../.github/instructions/backend/api-mediator-validation.instructions.md" ] \
-  && [ "$(cat "$root/../.github/instructions/backend/operator.instructions.md")" = "operator rule" ]; then
+if [ -e "$root/rules/backend/api-mediator-validation.instructions.md" ] \
+  && [ "$(cat "$root/rules/backend/operator.instructions.md")" = "operator rule" ]; then
   ok "-r: owned rules land, operator rules never swept"
 else
   no "-r: owned rules land, operator rules never swept" "owned missing or operator lost"
 fi
 
-# 7f. An existing real rules directory is kept (topology link skipped, files still update).
+# 7f. An existing real rules directory receives owned files without replacing operator content.
 root="$(make_root "cat-realrules" alpha)"
-mkdir -p "$root/../.github/instructions"
 mkdir -p "$root/rules"
 printf 'operator index\n' >"$root/rules/AGENTS.md"
 run_sh "$root" -r >/dev/null 2>&1 || true
-if [ ! -L "$root/rules" ] && [ -d "$root/rules" ]; then
+if [ ! -L "$root/rules" ] && [ -f "$root/rules/git/git-policy.instructions.md" ] \
+  && grep -q "operator index" "$root/rules/AGENTS.md"; then
   ok "-r: an existing real rules entry is never replaced"
 else
   no "-r: an existing real rules entry is never replaced" "real dir replaced by link"
@@ -764,13 +767,13 @@ fi
 # 7j. An existing consumer rules index is merged, not clobbered: the installed subset is
 # appended once, operator content survives, and a second run does not duplicate the section.
 root="$(make_root "cat-indexmerge" alpha)"
-mkdir -p "$root/../.github/instructions"
-printf '# AGENTS.md - Operator rules\n' >"$root/../.github/instructions/AGENTS.md"
+mkdir -p "$root/rules"
+printf '# AGENTS.md - Operator rules\n' >"$root/rules/AGENTS.md"
 run_sh "$root" -r >/dev/null 2>&1
 run_sh "$root" -r >/dev/null 2>&1
-if [ "$(grep -c "installer-owned-rules-subset" "$root/../.github/instructions/AGENTS.md")" = "1" ] \
-  && grep -q "Operator rules" "$root/../.github/instructions/AGENTS.md" \
-  && grep -q "code-review-standards" "$root/../.github/instructions/AGENTS.md"; then
+if [ "$(grep -c "installer-owned-rules-subset" "$root/rules/AGENTS.md")" = "1" ] \
+  && grep -q "Operator rules" "$root/rules/AGENTS.md" \
+  && grep -q "code-review-standards" "$root/rules/AGENTS.md"; then
   ok "-r: existing consumer index is appended once, never rewritten"
 else
   no "-r: existing consumer index is appended once, never rewritten" "clobbered or duplicated"
@@ -797,7 +800,7 @@ else
 fi
 
 # 7i. A relative SKILLS_ROOT resolves against the cwd: state lands beside skills, not inside
-# them, and rules land in the repo root — never nested under the skills dir.
+# them, and rules land in the agent root — never nested under the skills dir.
 relroot="$scratch/relroot"
 mkdir -p "$relroot/.agents/skills/alpha"
 printf '# alpha\n' >"$relroot/.agents/skills/alpha/SKILL.md"
@@ -805,7 +808,7 @@ printf '# alpha\n' >"$relroot/.agents/skills/alpha/SKILL.md"
   SKILLS_TEST_OWNED_EXTRA="alpha" bash "$installer_sh" -s -r ) >/dev/null 2>&1
 if [ -f "$relroot/.agents/_smooth-devex-shared/installation.json" ] \
   && [ ! -e "$relroot/.agents/skills/_smooth-devex-shared" ] \
-  && [ -f "$relroot/.github/instructions/git/git-policy.instructions.md" ]; then
+  && [ -f "$relroot/.agents/rules/git/git-policy.instructions.md" ]; then
   ok "relative SKILLS_ROOT resolves against the cwd"
 else
   no "relative SKILLS_ROOT resolves against the cwd" "state or rules nested inside skills/"
@@ -1868,6 +1871,12 @@ else
 fi
 
 # ---------------------------------------------------------------------------------------------
+
+if python3 "$repo_root/scripts/test-installer-payload.py"; then
+  ok "payload regressions: pruning, WET copies, category roots and global parity"
+else
+  no "payload regressions: pruning, WET copies, category roots and global parity"
+fi
 
 echo
 echo "passed: $passed  failed: $failed"
