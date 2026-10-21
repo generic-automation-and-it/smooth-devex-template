@@ -452,6 +452,7 @@ function Copy-Wet {
 
 function Remove-Tests {
     param([string] $Root)
+    if ([System.IO.FileInfo]::new($Root).LinkTarget) { return }
     Get-ChildItem -LiteralPath $Root -Recurse -Directory -Force |
         Where-Object { $_.Name -cin @('test', 'tests', '__tests__') } |
         ForEach-Object { if (Test-Path -LiteralPath $_.FullName) { Remove-Item -LiteralPath $_.FullName -Recurse -Force } }
@@ -1081,6 +1082,7 @@ function Remove-SkillContext {
     # is not part of the runnable payload a consumer should inherit, so the
     # installer removes it from the copy while leaving the source's in place.
     param([string] $Path)
+    if ([System.IO.FileInfo]::new($Path).LinkTarget) { return }
     if (-not (Test-Path -LiteralPath $Path -PathType Container)) { return }
     Get-ChildItem -LiteralPath $Path -Recurse -Force -File |
         Where-Object { $_.Name -eq 'AGENTS.md' } |

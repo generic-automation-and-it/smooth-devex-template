@@ -81,9 +81,13 @@ class InstallerPayloadTests(unittest.TestCase):
         (hooks / "worktask-skill-trigger.sh").symlink_to("../../payload/hook.sh")
         write(".agents/hooks/manage-rule-system-context.sh", "#!/bin/sh\nexit 0\n").chmod(0o755)
         subprocess.run(["git", "init", "-q", str(cls.source)], check=True)
-        subprocess.run(["git", "-C", str(cls.source), "add", "."], check=True)
+        cls.commit_source(cls.source)
+
+    @staticmethod
+    def commit_source(source):
+        subprocess.run(["git", "-C", str(source), "add", "-A"], check=True)
         subprocess.run(
-            ["git", "-C", str(cls.source), "-c", "user.name=Installer Test",
+            ["git", "-C", str(source), "-c", "user.name=Installer Test",
              "-c", "user.email=installer@example.invalid", "-c", "commit.gpgsign=false",
              "-c", "core.hooksPath=/dev/null", "commit", "-qm", "test: create payload fixture"],
             check=True,
@@ -93,6 +97,11 @@ class InstallerPayloadTests(unittest.TestCase):
         self.case = tempfile.TemporaryDirectory(dir=self.root)
         self.addCleanup(self.case.cleanup)
         self.case_root = Path(self.case.name)
+
+    def copy_source(self, name):
+        source = self.case_root / (name + "-source")
+        shutil.copytree(self.source, source, symlinks=True)
+        return source
 
     def prepare(self, port, name="case", global_install=False):
         consumer = self.case_root / port / name
@@ -248,6 +257,37 @@ class InstallerPayloadTests(unittest.TestCase):
                     (skill / "test_local.py").write_text("operator edit\n")
                     self.run_installer(port, case, *flags)
                     self.assertEqual((skill / "test_local.py").read_text(), "operator edit\n")
+
+    def test_retained_skill_root_is_not_cleaned(self):
+        for port in PORTS:
+            for global_install in (False, True):
+                with self.subTest(port=port, global_install=global_install):
+                    name = str(global_install)
+                    case = self.prepare(port, name, global_install)
+                    external = case[0] / "external-skill"
+                    (external / "tests").mkdir(parents=True)
+                    expected = {
+                        "SKILL.md": "# External skill\n",
+                        "AGENTS.md": "operator context\n",
+                        "test_main.py": "operator test\n",
+                        "tests/fixture.txt": "operator fixture\n",
+                        "runtime.py": "operator runtime\n",
+                    }
+                    for path, text in expected.items():
+                        (external / path).write_text(text)
+                    source = self.copy_source(port + name)
+                    skill_source = source / ".agents/skills/alpha"
+                    shutil.rmtree(skill_source)
+                    skill_source.symlink_to(external, target_is_directory=True)
+                    self.commit_source(source)
+                    case[4]["SKILLS_REPO"] = str(source)
+                    flags = ("-g", "-s") if global_install else ("-s",)
+                    self.run_installer(port, case, *flags)
+                    installed = (case[2] if global_install else case[1]) / "skills/alpha"
+                    self.assertTrue(installed.is_symlink())
+                    actual = {str(path.relative_to(external)): path.read_text()
+                              for path in external.rglob("*") if path.is_file()}
+                    self.assertEqual(actual, expected)
 
 
 if __name__ == "__main__":

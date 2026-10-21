@@ -56,6 +56,9 @@ cyclic links must never be traversed by pruning or shared-payload sweeping. Glob
 the same copy/pruning path as per-repo copies. Consumer-owned rules topology is not installer-owned:
 write through an existing `rules` link, but do not create one on the operator's behalf.
 
+PowerShell traverses a symlink supplied as the explicit `Get-ChildItem` root even without
+`-FollowSymlink`; cleanup guards must protect the root itself, not only linked children.
+
 Installer tests must pin every agent-home override, including `CLAUDE_HOME`: changing `HOME` alone
 does not sandbox a run when the invoking shell supplies a different tool configuration directory.
 
@@ -161,4 +164,4 @@ Two known gaps:
 | 2026-10-19 | `-g` manifest `harnesses{}` (false = skip + remove by on-disk detection; uninstall ungated); `enabled` status on symlink records; ps1 pitfall: strict mode throws on a manifest without `skills`; harness 9a–9f | #126 |
 | 2026-10-19 | Owned skills 7→15 (+`agile-github-*`, `context-load-*`, `git-commit*`, `git-sync`); `load-agents-context.sh` stays local: PostToolUse, `-g` registers `UserPromptSubmit` only; harness unowned probe is `ai-brain-dump` | #126 |
 | 2026-10-19 | Codex pitfall: no `@path` imports, 32 KiB cap — `~/.codex/AGENTS.md` gets a rule index block (replaced in place, legacy `@` block migrated), not `@` lines; `~/.codex/rules/smooth-devex.rules` (git-policy → prompt/forbidden), never `default.rules`; ps1 shared `Test-InstallSnapshot`; harness 10a–10g | #126 |
-| 2026-10-21 | Reapplied #111/#113 payload contract across per-repo/global installs; operator-owned rules topology; pwsh 7.2 floor; cross-port tests pin all agent-home overrides | #110, #112, #130 |
+| 2026-10-21 | Reapplied #111/#113 payload contract; operator-owned rules topology; pwsh 7.2 floor; root-link cleanup guards; cross-port tests pin all agent-home overrides | #110, #112, #130 |
