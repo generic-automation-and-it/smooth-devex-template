@@ -16,6 +16,10 @@
 
 Reuse in another repo. One command — ships owned set only (15 skills, all owned rules, 2 hooks). Details and owned-set table: [`docs/wiki/reuse.md`](docs/wiki/reuse.md).
 
+Missing category folders are created beneath an existing agent root. Installed skills omit tests and
+owner `AGENTS.md` files; in-template symlinks are materialized. Per-repo rules land in `<agent-root>/rules/`;
+an operator's existing rules symlink is written through, not replaced. PowerShell requires 7.2+.
+
 ```bash
 # Mac/Linux
 curl -fsSL https://raw.githubusercontent.com/generic-automation-and-it/smooth-devex-template/main/scripts/install-skills.sh | bash -s -- -r -s -h

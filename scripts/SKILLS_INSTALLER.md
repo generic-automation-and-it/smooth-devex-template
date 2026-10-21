@@ -6,9 +6,9 @@ Codex and Copilot discover.
 | Script | Platform | Interpreter |
 |---|---|---|
 | [`install-skills.sh`](install-skills.sh) | macOS, Linux | bash, `git`, `python3` |
-| [`install-skills.ps1`](install-skills.ps1) | Windows, or anywhere `pwsh` 7 runs | PowerShell 7.0 or later, `git` |
+| [`install-skills.ps1`](install-skills.ps1) | Windows, or anywhere `pwsh` 7.2+ runs | PowerShell 7.2 or later (.NET 6 link resolution), `git` |
 
-The bash script needs `python3` only to read and write the manifest JSON; most skills shipped here use
+The bash script needs `python3` for manifest JSON and canonical path resolution; most skills shipped here use
 Python or Node tooling, so it is rarely a fresh dependency. The PowerShell port has no such dependency —
 `ConvertFrom-Json` and `ConvertTo-Json` are built in.
 
@@ -42,8 +42,9 @@ Both take the same three environment overrides, so a local clone or a fork works
 **1. Find the agent root, in this order.** `.agents` → `.claude` → `.codex`. The
 first that exists is used. If none exists the run **fails and creates nothing** — a folder the operator
 never asked for is not an install. The skills root is `<agent-root>/skills` (override with `SKILLS_ROOT`,
-whose parent directory then counts as the agent root). If the agent root has no `skills/` directory
-the run fails the same way.
+whose parent directory then counts as the agent root). Once an agent root is found, missing category
+directories are created only for the categories that run. A rules-only or hooks-only run creates no
+`skills/` directory. An explicit `SKILLS_ROOT` must already exist.
 
 In this repository `.claude` and `.codex` are symlinks to `.agents`, so all paths resolve to the
 same tree and the first match is the real one.
@@ -132,14 +133,18 @@ if the manifest was hand-edited. The harness covers the third case for every ent
 **3. Update only the owned skills marked `installed: true`.** The repo is shallow-cloned once and
 those folders are copied over the existing ones. A skill's own `AGENTS.md` is stripped from every copy —
 it documents the owner repo's local-dev context and improvements, not the runnable payload a consumer
-should inherit. A skill marked `false` is never touched, so a local
+should inherit. Tests are also pruned from skills and the shared payload: folders named `test/`,
+`tests/`, or `__tests__/`, and files matching `test_*`, `*_test.*`, `*.test.*`, or `*.Tests.ps1`.
+The same pruning applies to global skill-store copies. A skill marked `false` is never touched, so a local
 edit inside one survives every run until you set its flag back. A skill outside the owned set is
 never copied even when a hand-edited manifest asks for it. Skipped entirely unless `-s` (or no
 switches).
 
 **4. Update the owned rules (`-r`).** Every rule in this template is owned, so all of the
-`.instructions.md` files copy from the source's `.github/instructions/` into `<repo>/.github/instructions/`,
-preserving relative paths:
+`.instructions.md` files copy from the source's `.github/instructions/` into `<agent-root>/rules/`,
+preserving relative paths. An operator's `rules` symlink (for example, `rules → ../.github/instructions`)
+is written through, including creation of a dangling target. Otherwise `rules/` is a real directory;
+the installer no longer creates the topology symlink itself. Examples of shipped rules:
 
 | Owned rule | Why |
 |---|---|
@@ -148,24 +153,18 @@ preserving relative paths:
 | `meta/knowledge-conventional-contexts-quality.instructions.md` | referenced by `create-hld` |
 | `meta/rules.instructions.md` | rule lifecycle convention (`manage-rule-system`) |
 
-The template's own `AGENTS.md` index is **never copied** — it catalogues rules that don't ship
-(dangling refs on a fresh install) and would clobber an existing consumer index. Instead the run
+The template's own `AGENTS.md` index is **never copied** — it would clobber an existing consumer index. Instead the run
 writes a generated subset index: missing index → created; installer-generated index → refreshed;
 an existing operator index → the subset section is appended once, never rewritten. Overwrite,
 never delete — an operator's own rules are never swept. Skipped entirely unless `-r` (or no
 switches).
 
-Overwrite, never delete — an operator's own rules are never swept. Everything else in
-`.github/instructions/` (backend/\*, skills/\*, clean-code, solid-principles, …) stays local.
-The run also ensures the `<agent-root>/rules → ../.github/instructions` topology symlink when
-nothing is there; a real directory is never replaced. Skipped entirely unless `-r` (or no switches).
-
 **5. Update the owned hooks (`-h`).** The two `OWNED_HOOKS` files copy from the source's
 `.agents/hooks/` into `<agent-root>/hooks/`, kept executable (exec bit preserved per owned file,
 never a wildcard over the directory). A hook is owned iff an owned skill's `SKILL.md` references
 it *and* its implementation ships with it (`manage-rule-system-context.sh`,
-`worktask-skill-trigger.sh`); `load-agents-context.sh` stays local because it delegates to an
-unowned skill that never ships — copying the wrapper alone would install a silently dead hook.
+`worktask-skill-trigger.sh`); `load-agents-context.sh` stays local because it requires a different
+registration event (`PostToolUse` rather than `UserPromptSubmit`).
 Overwrite, never delete. Hook *registration* (`settings.json`) is deliberately out of scope —
 copy the wiring by hand for the hooks you want live. Skipped entirely unless `-h` (or no
 switches).
@@ -181,6 +180,18 @@ Every top-level payload entry is then linked back to its canonical `<agent-root>
 (e.g. `<agent-root>/setup` → `_smooth-devex-shared/setup`), so the `.agents/setup/...` references
 in `SKILL.md` files keep working. An existing real file or directory at a link path is never
 replaced — the run reports it and moves on.
+
+**WET copies.** Both per-repo and global installs materialize source symlinks whose resolved targets
+remain inside the temporary clone. File and directory links become real content; external, dangling,
+and cyclic links remain links. Installed skill references therefore survive deletion of the temporary
+clone. These copy rules apply to skills, rules, hooks, and the per-repo shared payload. The canonical
+`setup/` and `templates/` links created by the installer are separate and remain links. On Windows
+without symlink privilege, a link that must be preserved is warned about and skipped.
+
+The manifest-bearing shared-payload root must remain a real directory. Its source may be an
+in-clone link that can be materialized, but external, dangling, and ancestor-pointing shared roots
+are rejected before replacing the destination. A linked shared destination is also rejected;
+cleanup never traverses retained payload-root links.
 
 **Symlink support.** The temp clone forces `-c core.symlinks=true` so committed symlinks in the
 source check out as links even under a Windows-default git (otherwise the payload copy would copy
@@ -222,8 +233,8 @@ category switches (`-g -s -r -h`), so you can install just skills, just rules, o
 
 | Layer | Where it lands |
 |---|---|
-| Skills | copied into `~/.smooth-ai-devex/skills/` (skill `AGENTS.md` stripped), then symlinked into `~/.codex/skills/<name>` — coexisting with Codex's own `.system/`, which is never touched. When Claude is installed, each is also symlinked into `~/.claude/skills/<name>`; when OpenCode is installed, each is referenced from a `~/.config/opencode/commands` folder symlink to the store's `opencode-commands/` (`<name>.md` → `SKILL.md`) and the store's rules are added to `opencode.json` `instructions` (never copied into the opencode skills folder) |
-| Rules | the **full** template rules tree is copied into `~/.smooth-ai-devex/rules/`. Codex gets a compact **index** of the enabled rules (absolute path, scope, one-line description, ~5 KiB) in a delimited block of `~/.codex/AGENTS.md` — see [Codex](#codex-rules-index-and-command-policy). When Claude is installed the rules are also symlinked into `~/.claude/rules/`; when OpenCode is installed each rule is added to `opencode.json` `instructions` as its own absolute path (never a `rules/**` glob, which could not exclude one rule). The per-repo install ships only the 4 `OWNED_RULES`; the global install ships all of them |
+| Skills | copied into `~/.smooth-ai-devex/skills/` (tests and owner `AGENTS.md` stripped), then symlinked into `~/.codex/skills/<name>` — coexisting with Codex's own `.system/`, which is never touched. When Claude is installed, each is also symlinked into `~/.claude/skills/<name>`; when OpenCode is installed, each is symlinked into `~/.config/opencode/skills/<name>` and the store's rules are added to `opencode.json` `instructions` |
+| Rules | the **full** template rules tree is copied into `~/.smooth-ai-devex/rules/`. Codex gets a compact **index** of the enabled rules (absolute path, scope, one-line description, ~5 KiB) in a delimited block of `~/.codex/AGENTS.md` — see [Codex](#codex-rules-index-and-command-policy). When Claude is installed the rules are also symlinked into `~/.claude/rules/`; when OpenCode is installed each rule is added to `opencode.json` `instructions` as its own absolute path (never a `rules/**` glob, which could not exclude one rule). The per-repo install ships the same owned rules |
 | Hooks | copied into `~/.smooth-ai-devex/hooks/` and JSON-merged into `~/.codex/hooks.json` under `UserPromptSubmit` only, with absolute store commands (relative `.agents/...` commands would break outside the repo), deduped by command match, preserving the `gk` and `code-review-graph` entries already there |
 
 State is `~/.smooth-ai-devex/installation.json` — `decisions_enabled` and `skills[]` as in the per-repo
@@ -351,7 +362,7 @@ scripts/install-skills.sh -g -s               # skills only
 scripts/install-skills.sh -g --uninstall      # remove the global install
 ```
 
-Windows (PowerShell 7) mirrors the contract: `./scripts/install-skills.ps1 -g`. Symlinks need Developer
+Windows (PowerShell 7.2+) mirrors the contract: `./scripts/install-skills.ps1 -g`. Symlinks need Developer
 Mode or elevation; on a machine without either the ps1 port falls back to a junction — degraded, because
 git records a junction's target contents as real files, so prefer symlinks.
 
@@ -379,9 +390,9 @@ back the folder up first.
 ## Scope
 
 The installer ships `.agents/skills/` (owned set only), the owned `.github/instructions/` rule
-subset, the owned `.agents/hooks/` subset, plus the cross-cutting, repo-owned
+tree (into `<agent-root>/rules/`), the owned `.agents/hooks/` subset, plus the cross-cutting, repo-owned
 `.agents/_smooth-devex-shared/` payload (currently `setup/scripts/` + `templates/`). It does **not**
-carry anything else: template-domain rules, local skills, and unowned hooks stay in this repo.
+carry anything else: local skills and unowned hooks stay in this repo.
 
 A consumer that runs the one-liner into an empty repo gets the owned skills, rules, and hooks plus
 the shared payload, with canonical paths (`setup/`, `templates/`) linked back to
@@ -418,16 +429,22 @@ and payload purposes.
 bash scripts/test-install-skills.sh
 ```
 
-70 cases against the bash port, no network and no container engine needed: the clone source is the
+The Bash harness needs no container engine: the clone source is the
 checkout itself (`SKILLS_REPO` pointed at the repo, `SKILLS_BRANCH` at the current branch), so a harness
 that reached GitHub would be red for reasons unrelated to the code. Runs in the PR gate. The shared
 payload, canonical links, stale-entry sweep, legacy-manifest ignore, and real-dir-at-link-path cases
 all run against the source tree's real `.agents/_smooth-devex-shared/` payload.
 
-The PowerShell port is **not exercised here.** `install-skills.ps1` is a hand-translated mirror of
-`install-skills.sh` — same contract, same control flow — and its defects are the ones a careful read
-catches. A two-port harness doubles the maintenance surface for a contract that exists to be read, not
-to be redundantly proven on platforms the gate does not run. The PowerShell canonical-link step
+The harness also runs `test-installer-payload.py` against Bash. It uses a temporary local Git fixture to
+cover test pruning, in-clone file/directory links, external/dangling/cyclic links, missing category
+folders, rules through dangling operator links, shared-payload refresh, disabled skills, and global
+copy parity. Run the same payload tests against both ports locally (requires `pwsh` 7.2+):
+
+```bash
+python3 scripts/test-installer-payload.py --port all -v
+```
+
+The rest of the Bash harness does not exercise PowerShell at runtime. The PowerShell canonical-link step
 uses a junction fallback (symlinks need elevation or Developer Mode on Windows); the bash port uses
 plain symlinks. A junction is *not* a symlink — git would commit its target's contents as real
 files, so prefer Developer Mode/elevation and treat junctions as a degraded install.

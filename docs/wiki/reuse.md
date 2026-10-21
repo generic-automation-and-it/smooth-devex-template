@@ -1,6 +1,6 @@
 # Reuse Skills, Rules and Hooks in Another Repository
 
-Pull the owned **skills** (`.agents/skills/`), **rules** (`.github/instructions/` subset),
+Pull the owned **skills** (`.agents/skills/`), **rules** (`.github/instructions/` tree),
 and **hooks** (`.agents/hooks/` subset) from this template into an existing repository —
 without copying the rest of the template. One command; per-skill opt-out via editable manifest.
 Never touches the calling repo's `src/` or `tests/`.
@@ -15,6 +15,11 @@ $script = [scriptblock]::Create((irm https://raw.githubusercontent.com/generic-a
 
 `-r` rules, `-s` skills, `-h` hooks — no switches means everything is on, so `-r -s -h` spells the
 default out loud. Narrow with any subset (`-s` for skills only).
+
+Missing category folders are created beneath an existing agent root; no root means an error without
+creating one. Rules land in `<agent-root>/rules/`, writing through an operator's existing rules symlink.
+Copied skills omit tests and owner `AGENTS.md` files. Links to files/directories inside the template
+clone become real content in both per-repo and global installs. PowerShell requires 7.2+.
 
 > **Risk callout.** A first run into an existing `.agents/skills/` **replaces every local skill folder**
 > with the source's version — there is no confirmation prompt. Set `installed: false` in
@@ -60,14 +65,13 @@ repositories (the `mimisbrunnr-*` set plus `ai-review`, `git-commit-review-push`
 ## Scope
 
 Ships owned skills, owned rules, owned hooks, and the shared payload — see
-`scripts/SKILLS_INSTALLER.md` for the owned sets. Template-domain rules, local skills, and unowned
+`scripts/SKILLS_INSTALLER.md` for the owned sets. Local skills and unowned
 hooks stay in this repo.
 
-A consumer that runs the one-liner into an empty repo gets the skill folders plus the
-references inside `SKILL.md` files (`Bash(.agents/rules/.../SKILL.md:*)`, etc.) point at paths that
-exist after a default `-r -s -h` run. Skills whose `SKILL.md` references template-domain rules
-outside the owned set need a manual copy of those files alongside the install. See
-`scripts/SKILLS_INSTALLER.md` for the per-category dependency list.
+A consumer that creates an agent root and runs the default `-r -s -h` command gets owned skill
+folders, rules, hooks, and shared helpers. Source symlink dependencies within the template are copied
+into the installed payload; arbitrary text references inside `SKILL.md` are not rewritten. See
+`scripts/SKILLS_INSTALLER.md` for remaining per-category dependencies.
 
 ## Supported roots
 
