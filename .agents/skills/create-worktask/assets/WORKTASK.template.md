@@ -1,6 +1,6 @@
 # Task: {{TITLE}}
 
-Process: [`AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md`](../../.agents/templates/AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md) defines the phases, gates, and output rules for the workflow below, starting at Phase 0.
+Process: [`AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md`](<{{PROCESS_TEMPLATE}}>) defines the phases, gates, and output rules for the workflow below, starting at Phase 0.
 
 ## Execution Profile
 - **Recommended session effort:** [low | medium | high | xhigh | max — human action: set the runner's effort level BEFORE starting]

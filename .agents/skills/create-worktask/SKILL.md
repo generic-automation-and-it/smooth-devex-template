@@ -16,11 +16,14 @@ effort: xhigh  # investigation + requirement authoring the whole 9-phase workflo
 ## TL;DR
 
 Produce `.context/work-tasks/<slug>.md` carrying **Title, Execution Profile, Contexts, Instructions**
-and (only when needed) **Overrides**. The worktask *links* the process manual
-(`.agents/templates/AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md`) — it never copies it.
+and (only when needed) **Overrides**. The worktask *links* the bundled process manual,
+[`assets/AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md`](assets/AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md) — it never copies it.
 
 The worktask is the input the entire Odin→Bragi workflow runs on. Everything downstream inherits its
 gaps, so populate it from **real investigation**, not placeholders.
+
+The process manual is a bundled **WET asset** so installing this skill does not depend on repo-level
+templates. Generated worktasks still link it rather than embedding the manual.
 
 ## Non-Negotiables
 
@@ -35,7 +38,7 @@ gaps, so populate it from **real investigation**, not placeholders.
 - **The session effort is a human action.** Recommend a level (`low` → `max`); never claim to set it,
   and never recommend a model. The user sets the runner's effort level before starting and can raise
   it at a gate.
-- **No HTML comments in `assets/WORKTASK.template.md`.** Authoring guidance for the asset lives in
+- **No HTML comments in `assets/`.** Authoring guidance for the asset lives in
   this skill's `AGENTS.md` instead. See that file for why.
 - **Do not execute the worktask in the same turn that creates it.** Creating and executing are separate
   invocations; the user chooses the effort and path in between.
@@ -136,6 +139,7 @@ or describe the work in natural language and follow the workflow.
 
 | Date | Change | Ref |
 | :---- | :---- | :---- |
+| 2026-10-21 | Bundled the process manual as a WET asset; scaffolder links the installed copy without depending on repo-level templates. | — |
 | 2026-09-20 | Created — replaces the `worktask-create.sh` UserPromptSubmit hook. Carries the hook's remediated contract (Execution Profile; link-don't-copy; commits per-task and default not allowed; L0/L1/L2 tiers; model as a human action) plus a deterministic scaffolder and an asset template. | — |
 | 2026-09-21 | Reworded the `description` and the P2/hidden-instructions Non-Negotiable to address GHAS SkillSpector advisory findings (Direct Prompt Extraction, Excessive Agency) on PR #71 — dropped the no-questions autonomy phrasing (replaced with "self-contained enough to execute end-to-end") and moved the hidden-instructions rationale to `AGENTS.md` (believed at the time to be outside the scan; it is scanned — see the 2026-09-23 row in `AGENTS.md`). No behavior change. | #71 |
 | 2026-09-27 | Documented the shared Claude Code/Codex prompt hook that routes imperative requests to this skill without duplicating its workflow. | — |

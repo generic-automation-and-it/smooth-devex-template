@@ -10,7 +10,7 @@ allowed-tools:
 effort: medium  # diff analysis + issue authoring across layers
 ---
 
-# Task From Diff
+# Agile GitHub Ticket From Fiff
 
 ## Overview
 
