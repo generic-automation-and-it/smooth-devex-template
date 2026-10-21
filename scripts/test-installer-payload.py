@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 REPO = Path(__file__).resolve().parent.parent
@@ -107,6 +108,7 @@ class InstallerPayloadTests(unittest.TestCase):
         env = {key: value for key, value in os.environ.items()
                if not key.startswith(("SKILLS_", "SMOOTH_DEVEX_", "GIT_")) and key != "CDPATH"}
         env.update(HOME=str(home), TMPDIR=str(self.case_root), CODEX_HOME=str(home / ".codex"),
+                   CLAUDE_HOME=str(home / ".claude"),
                    OPENCODE_CONFIG=str(home / ".config/opencode"), SMOOTH_DEVEX_HOME=str(store),
                    SKILLS_REPO=str(self.source), SKILLS_BRANCH="", SKILLS_ROOT="",
                    SKILLS_TEST_OWNED_EXTRA="alpha", CLONE_ROOT="/")
@@ -186,6 +188,22 @@ class InstallerPayloadTests(unittest.TestCase):
                 self.run_installer(port, case, "-g")
                 self.assert_payload(case[2])
                 self.assertTrue((Path(case[4]["CODEX_HOME"]) / "skills/alpha").is_symlink())
+
+    def test_global_ignores_inherited_claude_home(self):
+        for port in PORTS:
+            with self.subTest(port=port):
+                operator_home = self.case_root / (port + "-operator-claude")
+                operator_home.mkdir()
+                (operator_home / "config.json").write_text("operator configuration\n")
+                with patch.dict(os.environ, {"CLAUDE_HOME": str(operator_home)}):
+                    case = self.prepare(port, global_install=True)
+                expected = case[0] / "home/.claude"
+                self.assertEqual(case[4].get("CLAUDE_HOME"), str(expected))
+                expected.mkdir()
+                self.run_installer(port, case, "-g")
+                self.assertTrue((expected / "skills/alpha").is_symlink())
+                self.assertEqual(sorted(path.name for path in operator_home.iterdir()), ["config.json"])
+                self.assertEqual((operator_home / "config.json").read_text(), "operator configuration\n")
 
     def test_rules_write_through_dangling_operator_link(self):
         for port in PORTS:

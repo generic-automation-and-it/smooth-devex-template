@@ -828,7 +828,7 @@ run_sh_global() {
   # Pin the store/config overrides to the temp home and clear inherited SKILLS_ROOT,
   # so an operator's SMOOTH_DEVEX_HOME / OPENCODE_CONFIG / SKILLS_ROOT env vars cannot
   # leak into an isolated run (and a leaked SKILLS_ROOT would trip -g's refusal).
-  HOME="$ghome" CODEX_HOME="$ghome/.codex" SMOOTH_DEVEX_HOME="$ghome/.smooth-ai-devex" \
+  HOME="$ghome" CODEX_HOME="$ghome/.codex" CLAUDE_HOME="$ghome/.claude" SMOOTH_DEVEX_HOME="$ghome/.smooth-ai-devex" \
     OPENCODE_CONFIG="$ghome/.config/opencode" SKILLS_ROOT="" \
     SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
     SKILLS_TEST_OWNED_EXTRA="alpha beta gamma delta epsilon" \
@@ -953,13 +953,13 @@ case "$(uname -s)" in
   *)      profile="$ghome/.bashrc" ;;
 esac
 printf '# operator shell\nexport MY_CHECK=1\n' >"$profile"
-HOME="$ghome" CODEX_HOME="$ghome/.codex" SMOOTH_DEVEX_HOME="$ghome/.smooth-ai-devex" \
+HOME="$ghome" CODEX_HOME="$ghome/.codex" CLAUDE_HOME="$ghome/.claude" SMOOTH_DEVEX_HOME="$ghome/.smooth-ai-devex" \
   OPENCODE_CONFIG="$ghome/.config/opencode" SKILLS_ROOT="" SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
   SKILLS_TEST_OWNED_EXTRA="alpha beta gamma delta epsilon" bash "$installer_sh" -g -d >/dev/null 2>&1
 gok=1
 grep -q 'SMOOTH_DEVEX_DECISIONS' "$profile" || gok=0
 ls "$profile".smooth-devex-* >/dev/null 2>&1 || gok=0
-HOME="$ghome" CODEX_HOME="$ghome/.codex" SMOOTH_DEVEX_HOME="$ghome/.smooth-ai-devex" \
+HOME="$ghome" CODEX_HOME="$ghome/.codex" CLAUDE_HOME="$ghome/.claude" SMOOTH_DEVEX_HOME="$ghome/.smooth-ai-devex" \
   OPENCODE_CONFIG="$ghome/.config/opencode" SKILLS_ROOT="" SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
   bash "$installer_sh" -g --uninstall >/dev/null 2>&1
 grep -q 'SMOOTH_DEVEX_DECISIONS' "$profile" && gok=0
@@ -1027,7 +1027,7 @@ fi
 # 8f. -g refuses SKILLS_ROOT (the global store owns the agent root, not a per-repo one).
 ghome="$(make_ghome "refuse-skillsroot")"
 st=0
-HOME="$ghome" CODEX_HOME="$ghome/.codex" SKILLS_ROOT="$ghome/.codex/skills" \
+HOME="$ghome" CODEX_HOME="$ghome/.codex" CLAUDE_HOME="$ghome/.claude" SKILLS_ROOT="$ghome/.codex/skills" \
   SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
   bash "$installer_sh" -g >/dev/null 2>&1 || st=$?
 if [ "$st" -ne 0 ]; then
@@ -1039,7 +1039,7 @@ fi
 # 8g. --uninstall is meaningless without -g, and is refused.
 ghome="$(make_ghome "refuse-uninstall")"
 st=0
-HOME="$ghome" CODEX_HOME="$ghome/.codex" SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
+HOME="$ghome" CODEX_HOME="$ghome/.codex" CLAUDE_HOME="$ghome/.claude" SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
   bash "$installer_sh" --uninstall >/dev/null 2>&1 || st=$?
 if [ "$st" -ne 0 ]; then
   ok "--uninstall without -g is refused"
