@@ -289,6 +289,64 @@ class InstallerPayloadTests(unittest.TestCase):
                               for path in external.rglob("*") if path.is_file()}
                     self.assertEqual(actual, expected)
 
+    def test_shared_root_must_be_materialized(self):
+        for port in PORTS:
+            for target in (".", "external", "missing"):
+                with self.subTest(port=port, target=target):
+                    case = self.prepare(port, target)
+                    (case[1] / "operator-note.txt").write_text("operator note\n")
+                    (case[1] / "AGENTS.md").write_text("operator context\n")
+                    (case[1] / "test_local.py").write_text("operator test\n")
+                    original_manifest = case[3].read_bytes()
+                    external = case[0] / "external-shared"
+                    external.mkdir()
+                    (external / "test_external.py").write_text("external test\n")
+                    source = self.copy_source(port + target)
+                    shared_source = source / ".agents/_smooth-devex-shared"
+                    shutil.rmtree(shared_source)
+                    shared_source.symlink_to(external if target == "external" else target,
+                                             target_is_directory=True)
+                    self.commit_source(source)
+                    case[4]["SKILLS_REPO"] = str(source)
+                    output = self.run_installer(port, case, "-s", succeeds=False)
+                    self.assertIn("shared payload root", output)
+                    self.assertFalse(case[2].is_symlink())
+                    self.assertEqual(case[3].read_bytes(), original_manifest)
+                    self.assertEqual((case[1] / "operator-note.txt").read_text(), "operator note\n")
+                    self.assertEqual((case[1] / "AGENTS.md").read_text(), "operator context\n")
+                    self.assertEqual((case[1] / "test_local.py").read_text(), "operator test\n")
+                    self.assertEqual((external / "test_external.py").read_text(), "external test\n")
+
+    def test_shared_destination_root_link_is_refused(self):
+        for port in PORTS:
+            with self.subTest(port=port):
+                case = self.prepare(port)
+                original_manifest = case[3].read_bytes()
+                external = case[0] / "external-shared"
+                case[2].rename(external)
+                (external / "test_external.py").write_text("external test\n")
+                case[2].symlink_to(external, target_is_directory=True)
+                output = self.run_installer(port, case, "-s", succeeds=False)
+                self.assertIn("shared payload destination", output)
+                self.assertTrue(case[2].is_symlink())
+                self.assertEqual((external / "installation.json").read_bytes(), original_manifest)
+                self.assertEqual((external / "test_external.py").read_text(), "external test\n")
+
+    def test_shared_root_inside_clone_is_materialized(self):
+        for port in PORTS:
+            with self.subTest(port=port):
+                case = self.prepare(port)
+                source = self.copy_source(port)
+                shared_source = source / ".agents/_smooth-devex-shared"
+                shared_source.rename(source / "payload/shared")
+                shared_source.symlink_to("../payload/shared", target_is_directory=True)
+                self.commit_source(source)
+                case[4]["SKILLS_REPO"] = str(source)
+                self.run_installer(port, case, "-s")
+                self.assertFalse(case[2].is_symlink())
+                self.assertEqual((case[2] / "templates/keep.md").read_text(), "template\n")
+                self.assertTrue(case[3].is_file())
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

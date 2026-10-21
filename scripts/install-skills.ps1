@@ -408,6 +408,23 @@ function Remove-PathEntry {
     if ($existing.LinkTarget) { $existing.Delete() } else { Remove-Item -LiteralPath $Path -Recurse -Force }
 }
 
+function Assert-SharedRoot {
+    param([string] $Source, [string] $Dest)
+    if ([System.IO.FileInfo]::new($Dest).LinkTarget -or (Test-Path -LiteralPath $Dest -PathType Leaf)) {
+        Fail "shared payload destination must be a real directory: $Dest"
+    }
+    $sep = [System.IO.Path]::DirectorySeparatorChar
+    $resolved = Get-RealPath $Source
+    $parent = Get-RealPath (Split-Path -Parent $Source)
+    $clone = Get-RealPath $script:TempRepo
+    if (-not "$resolved$sep".StartsWith("$clone$sep", [System.StringComparison]::Ordinal) -or
+        "$parent$sep".StartsWith("$resolved$sep", [System.StringComparison]::Ordinal) -or
+        -not (Test-Path -LiteralPath $resolved -PathType Container) -or
+        [System.IO.FileInfo]::new($resolved).LinkTarget) {
+        Fail "shared payload root cannot be materialized inside the clone: $Source"
+    }
+}
+
 $script:WetStack = @()
 $script:CloneRoot = $null
 function Copy-Wet {
@@ -473,6 +490,7 @@ function Remove-StaleEntries {
     # reset of every installed flag on the next one.
     param([string] $Dest, [string] $Source)
 
+    if ([System.IO.FileInfo]::new($Dest).LinkTarget) { return }
     foreach ($entry in Get-ChildItem -LiteralPath $Dest -Force) {
         if ($entry.Name -eq 'installation.json') { continue }
         $sourcePath = Join-Path $Source $entry.Name
@@ -639,8 +657,9 @@ function Update-InstalledSkills {
     # flag from defaults). So: copy across, then delete exactly what the source does not have, except
     # the manifest.
     $sharedSource = Join-Path $script:TempRepo '.agents/_smooth-devex-shared'
-    if (Test-Path -LiteralPath $sharedSource -PathType Container) {
+    if ((Test-Path -LiteralPath $sharedSource -PathType Container) -or [System.IO.FileInfo]::new($sharedSource).LinkTarget) {
         $sharedDest = $SharedDir
+        Assert-SharedRoot -Source $sharedSource -Dest $sharedDest
         Copy-Wet -Source $sharedSource -Dest $sharedDest
         Remove-Tests -Root $sharedDest
         Remove-StaleEntries -Dest $sharedDest -Source $sharedSource

@@ -188,6 +188,11 @@ clone. These copy rules apply to skills, rules, hooks, and the per-repo shared p
 `setup/` and `templates/` links created by the installer are separate and remain links. On Windows
 without symlink privilege, a link that must be preserved is warned about and skipped.
 
+The manifest-bearing shared-payload root must remain a real directory. Its source may be an
+in-clone link that can be materialized, but external, dangling, and ancestor-pointing shared roots
+are rejected before replacing the destination. A linked shared destination is also rejected;
+cleanup never traverses retained payload-root links.
+
 **Symlink support.** The temp clone forces `-c core.symlinks=true` so committed symlinks in the
 source check out as links even under a Windows-default git (otherwise the payload copy would copy
 file-blobs instead of directories). The run also sets `core.symlinks=true` in the consumer repo

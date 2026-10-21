@@ -448,6 +448,7 @@ PYEOF
 # reset of every installed flag on the next one.
 sweep_stale_entries() {
   local dest="$1" source="$2"
+  [ ! -L "$dest" ] || return 0
   local entry name
   for entry in "$dest"/* "$dest"/.[!.]* "$dest"/..?*; do
     [ -e "$entry" ] || [ -L "$entry" ] || continue
@@ -463,6 +464,26 @@ sweep_stale_entries() {
 
 realpath_of() {
   python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1"
+}
+
+validate_shared_root() {
+  local src="$1" dest="$2" resolved parent clone
+  if [ -L "$dest" ] || { [ -e "$dest" ] && [ ! -d "$dest" ]; }; then
+    die "shared payload destination must be a real directory: $dest"
+  fi
+  resolved="$(realpath_of "$src")"
+  parent="$(realpath_of "$(dirname "$src")")"
+  clone="$(realpath_of "$INSTALL_TMP/repo")"
+  case "$resolved/" in
+    "$clone"/*) ;;
+    *) die "shared payload root must resolve inside the clone: $src" ;;
+  esac
+  if [ ! -d "$resolved" ] || [ -L "$resolved" ]; then
+    die "shared payload root cannot be materialized: $src"
+  fi
+  case "$parent/" in
+    "$resolved/"*) die "shared payload root cannot point to an ancestor: $src" ;;
+  esac
 }
 
 WET_STACK=""
@@ -508,6 +529,7 @@ copy_wet() {
 }
 
 prune_tests() {
+  [ ! -L "$1" ] || return 0
   find "$1" -type d \( -name test -o -name tests -o -name __tests__ \) -prune -exec rm -rf {} +
   find "$1" -type f \( -name 'test_*' -o -name '*_test.*' -o -name '*.test.*' -o -name '*.Tests.ps1' \) -exec rm -f {} +
 }
@@ -609,6 +631,7 @@ ensure_canonical_link() {
 # so the installer removes it from the copy while leaving the source's in place.
 strip_skill_context() {
   local dir="$1"
+  [ ! -L "$dir" ] || return 0
   [ -d "$dir" ] || return 0
   find "$dir" -type f -name 'AGENTS.md' -delete 2>/dev/null || true
 }
@@ -663,8 +686,9 @@ for s in data.get('skills', []):
   # it, and a run interrupted between the two would leave the next run rebuilding every flag from
   # defaults). So: copy across, then delete exactly what the source does not have, except the manifest.
   local shared_source="$INSTALL_TMP/repo/.agents/_smooth-devex-shared"
-  if [ -d "$shared_source" ]; then
+  if [ -d "$shared_source" ] || [ -L "$shared_source" ]; then
     local shared_dest="$shared_dir"
+    validate_shared_root "$shared_source" "$shared_dest"
     copy_wet "$shared_source" "$shared_dest"
     prune_tests "$shared_dest"
     # Recursive, and that recursion is the point: a top-level-only sweep keeps every entry the source
