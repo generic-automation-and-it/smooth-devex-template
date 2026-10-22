@@ -8,7 +8,7 @@ alwaysApply: true
 ---
 # AI-Assisted Coding Workflow
 
-Standard execution workflow for all coding tasks. Authoritative for the workflow; `AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md` carries a FALLBACK copy that must be kept in sync with this file. Updated: 2026-10-21
+Standard execution workflow for all coding tasks. Authoritative for the workflow; `AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md` carries a FALLBACK copy that must be kept in sync with this file. Updated: 2026-10-22
 
 ## Phase 0: Context Load (MANDATORY BLOCKING)
 
@@ -127,7 +127,7 @@ For each, propose the smallest fix that prevents the repeat: a validation check 
 2. **Run its client by absolute path, with the repo root as the working directory** — `<skill-dir>/scripts/understanding_client.py`, where `<skill-dir>` is the directory holding the matched `SKILL.md`; use the four locations above when the skill came from your available-skills list. Do not follow Kvasir's own repo-relative path — it does not hold for a global install. The client anchors its dump folder on `git rev-parse --show-toplevel` and falls back to the working directory, so running it after stepping into the skill directory writes the dump outside the repo.
 3. **Capture locally:** run `dump --currentsession --from -` with this run's durable claims on stdin, one per list item. It writes a folder under `.context/mimisbrunnr-understandings/` at the repo root and touches no shared or remote state.
 4. **Propose an `export` of that folder** and say so in the output. The store is written only on an explicit request — a proposal is not authorization.
-5. **If no Kvasir install resolves,** use `ai-understanding --export` instead, and state which route ran.
+5. **If no Kvasir install resolves,** use `ai-understanding --export` when it is available. **If neither is installed,** list the durable claims in this turn's output and report capture as unavailable — that completes the step. State which route ran.
 
 ## Loop Control
 
@@ -191,3 +191,4 @@ Use when: 3+ files, new patterns, cross-cutting concerns, or ambiguous scope.
 | 2026-06-17 | Phase 0: state that AGENTS.md/`*AGENTS.md` are first-class context (read like CLAUDE.md) and layered domain→sub-domain→feature→technology. Pattern notation `*_AGENTS.md`→`*AGENTS.md` (underscore no longer required). |
 | 2026-09-20 | Phase 6: added a **Parallelism** subsection (batch independent tool calls; no concurrent writes to one file; no concurrent `dotnet build`/`dotnet test` over one solution; parallel writers need worktree isolation + merge). Phase 0: `load-context`→`context-load-context` (the former resolves to nothing). Header now states this file is authoritative and the worktask template's copy is a FALLBACK to keep in sync; stale `Updated:` date refreshed. |
 | 2026-10-21 | Phase 0 imports prior Understandings (Kvasir `import` when installed, else `ai-understanding --import`). Phase 1 answers from the code first and every question carries a recommended answer. Phase 2 verifies subagent/document claims. Phase 3 defines validation from the acceptance criteria, in preference order. Phase 6 no longer gives up after 2 attempts — it triages. Phase 7 reviews against the spec and validation, not the diff alone. New **Loop Control** section (local → Phase 6, systemic → Phase 2, new-user-question → Phase 1; 5 loop-backs / 3 per root cause). Phase 8 adds the mandatory **Reflect** sub-step: proposals plus Understanding capture through Kvasir's `dump --currentsession` when the skill resolves at any of four locations, else `ai-understanding --export`. |
+| 2026-10-22 | Phase 8 Reflect step 5: when neither Kvasir nor `ai-understanding` is installed — the skill installer ships neither — list the durable claims in the output and report capture as unavailable, instead of invoking a missing skill. |
