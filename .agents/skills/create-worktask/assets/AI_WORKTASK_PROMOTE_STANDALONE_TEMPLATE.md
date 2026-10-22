@@ -19,6 +19,7 @@
 ### Context Loading (Phase 0 — MANDATORY FIRST)
 - **Load domain/feature context BEFORE asking clarifying questions** — you cannot ask intelligent questions without understanding existing patterns
 - Use the `context-load-context` skill with `[domain]` to find/create functional context, or rely on the `load-agents-context` PostToolUse hook which auto-injects ancestor `*AGENTS.md` on first Read/Edit
+- **Import prior Understandings** next: check `.context/understandings/INDEX.md`; when `mimisbrunnr-kvasir-understanding` is among your available skills, query the store with `import --query WORD` (read-only). Otherwise use `ai-understanding --import` on the local Understanding files. Skip silently when neither exists
 
 ### Git Behavior
 
@@ -46,12 +47,12 @@ Follow in order. **Do not skip phases without outputting the skip reason. Do not
 | 0 | Context Load | 🛑 MANDATORY | Read documents from **Contexts** section above | session |
 | 1 | Odin (Clarify) | 🛑 GATE | Consolidate domain/technical/test clarifications | session (PO → Architect → QA lenses, in sequence) |
 | 2 | Thoth (Analyze) | | Analyze tech stack, determine tech requirements, identify patterns | session (read-only fan-out allowed) |
-| 3 | Forseti (Specify) | | Create technical specification with architectural decisions | session |
+| 3 | Forseti (Specify) | | Create technical specification with architectural decisions + the **Validation** table | session |
 | 4 | Tyr (Plan) | 🛑 GATE | Present implementation plan + module breakdown | session (per-stack lenses, in sequence) |
 | 5 | Frigg (Document) | | Update AGENTS.md with approved plan under `## Requirements` | session |
 | 6 | Thor (Execute) | | 🔨 YOLO MODE — implement on the working branch | session (parallel writers only when worktree-isolated) |
-| 7 | Heimdall (Review) | | Quality gate — review skill + spec/implementation sync check | session + review skill |
-| 8 | Bragi (Record) | 🛑 MANDATORY | Document actual implementation; stop before committing unless the profile allows commits | session |
+| 7 | Heimdall (Review) | | Quality gate — review skill + Validation table + spec/implementation sync check | session + review skill |
+| 8 | Bragi (Record) | 🛑 MANDATORY | Document actual implementation; then **Reflect**; stop before committing unless the profile allows commits | session |
 
 **Lightweight path** (trivial tasks): Phase 0 → 1 → 6 → 7 → 8
 Use when: single file, no architectural decisions, clear requirements.
@@ -71,11 +72,28 @@ Use when: 3+ files, new patterns, cross-cutting concerns, or ambiguous scope.
 
 Where a phase does spawn a subagent, carry an `effort:` hint on the same `low` → `medium` → `high` → `xhigh` → `max` scale as skill frontmatter — never a per-runner model. The subagent runs on the session's model. The *session* effort is not set by this file; it is a human action (the runner's effort setting), recorded in the Execution Profile.
 
+### Loop Control
+
+A failed check or a review finding routes back to the phase that can actually fix it — never to a blind re-run of the whole pipeline.
+
+| Failure | Re-enter at |
+|---|---|
+| Local defect — lint, type error, typo, an obvious mistake confined to one file or unit | Phase 6 |
+| Systemic — wrong approach, a missed requirement, a break that crosses files or concerns | Phase 2 |
+| A genuinely new question only the user can answer | Phase 1, and only then |
+
+- **Re-entry overrides the chosen path.** A lightweight-path run that re-enters Phase 2 is now on the
+  full path; do not skip a phase because it was not originally selected.
+- **Caps: 5 loop-backs in one run, or 3 tracing to the same root cause.** On either cap, stop and escalate with what was tried and why it keeps failing; a fresh diagnosis each time still counts against the total.
+- **Record every loop-back** as one line in the worktask's `## Run Log` when the run has one: cause, re-entry phase, outcome. Phase 8's reflect step reads it.
+
 ---
 
 ## Phase 1: Odin (Clarify)
 
 **No subagents.** One session applies three lenses in sequence over the context loaded in Phase 0, then consolidates them into a single question list. The deliverable is that list — three cold agents plus a merge produces less, later.
+
+**Answer from the code before asking.** For each open question, search the repo and its context files first; surface only what the code cannot answer. Carry a recommended answer with every question so the user can confirm in one word.
 
 ### PO lens
 - Business intent and value proposition
@@ -150,6 +168,8 @@ Reply 'approved' to proceed to Phase 2, or provide corrections.
    - Performance or scalability constraints
    - Security/compliance considerations
 
+4. **Verify, don't trust.** Subagent and document claims about versions, API support, or where a behavior originates are leads, not facts. Confirm cheaply with the real tool — build it, grep for the actual producer, read the vendor's docs — before building on them.
+
 **Optional read-only fan-out.** This is the one phase where a subagent is routinely justified: if locating the relevant patterns means sweeping many directories or naming conventions, dispatch a read-only search agent and take its conclusion. Effort hint at that spawn point:
 
 ```yaml
@@ -188,6 +208,8 @@ effort: medium
 ## Phase 3: Forseti (Specify)
 
 **Prerequisite:** Phase 2 analysis complete (tech stack determined).
+
+**Define validation with the specification — before any code exists.** Every acceptance criterion maps to a check, and each check names the criterion it proves. Prefer, in order: the repo's existing L0/L1/L2 suites; the standard build/lint/type gates; an ad-hoc runtime check; a purpose-built script or tool as a last resort, with a one-line reason the earlier options could not express the behavior. A green check that does not trace to a criterion is not evidence. This table is what Phase 6 executes and Phase 7 reviews against.
 
 **Responsibilities:**
 
@@ -238,6 +260,14 @@ effort: medium
 - Test tiers: [L0 (unit) / L1 (component) / L2 (integration) requirements]
 - Coverage targets: [e.g., >80% for critical paths]
 - Edge cases: [high-risk scenarios identified in Odin]
+
+### Validation
+
+| Acceptance criterion | Check (tier · command) |
+| --- | --- |
+| [criterion from Phase 1] | [L0/L1/L2 · command, or an ad-hoc runtime check with its command] |
+
+[Every criterion appears at least once. A custom script appears only with its one-line justification.]
 
 ### Non-Functional Requirements
 - Performance: [targets or constraints]
@@ -352,7 +382,7 @@ Does this plan look correct? Reply 'approved' to proceed, or provide feedback.
 
 **Prerequisite:** Phase 5 documentation complete (or skipped with a reason).
 
-**Sequential by default.** One writer works through the Phase 4 plan in order. Implement completely — no TODOs, no stubs. Batch independent *reads* freely; keep *writes* sequential. On failure, fix forward; if blocked after 2 attempts, report status with options and wait for user guidance.
+**Sequential by default.** One writer works through the Phase 4 plan in order. Implement completely — no TODOs, no stubs. Batch independent *reads* freely; keep *writes* sequential. On failure, fix forward within the failing change; if 2 attempts have not resolved it, triage by **Loop Control** above instead of continuing to retry.
 
 **Parallel writers are allowed only with worktree isolation plus an explicit merge step:**
 
@@ -389,15 +419,16 @@ effort: medium
 
 **Invoke the runner's existing review skill on the diff** rather than spawning ad-hoc reviewer agents — `/code-review` in Claude Code, the equivalent review skill elsewhere. It already covers code quality, pattern consistency, security and test adequacy, and it reviews what was actually written.
 
-Then apply the two checks a diff review does not cover:
+Then apply the three checks a diff review does not cover:
 
 1. **Specification sync** — does the implementation match the Phase 3 spec (or the task Instructions, if Phase 3 was skipped)? Are the LADR decisions honored? Any design issue introduced during execution?
-2. **Acceptance criteria** — is every criterion from Phase 1 demonstrably met, with tests at the right tier (L0 unit / L1 component / L2 integration)?
+2. **Validation** — run the Phase 3 **Validation** table against the integrated result. A criterion with no passing check is unmet, whatever the code looks like.
+3. **Acceptance criteria** — is every criterion from Phase 1 demonstrably met, with tests at the right tier (L0 unit / L1 component / L2 integration)?
 
 **Consolidation & Decision:**
 
 - If all pass: proceed to Phase 8
-- If issues found: present to user with options:
+- If issues found: triage by **Loop Control** above — local defects re-enter Phase 6, systemic ones Phase 2 — and append each finding to the worktask's `## Run Log`. Where triage does not settle it, present to the user with options:
   - **Option A**: Fix issues in a follow-up execution (re-run Phase 6 with feedback)
   - **Option B**: Accept known issues and document (update AGENTS.md)
   - **Option C**: Block and ask for clarification/requirements change
@@ -414,6 +445,9 @@ Then apply the two checks a diff review does not cover:
 - ✅ Implementation matches Phase 3 spec
 - ✅ Architectural decisions honored
 - Issues (if any): [list with remediation]
+
+### Validation
+- [criterion]: ✅ [check + evidence] | ❌ [what failed, and its loop-control triage]
 
 ### Acceptance Criteria & Test Coverage
 - Acceptance criteria: ✅ covered
@@ -456,6 +490,27 @@ Then apply the two checks a diff review does not cover:
    - **Allowed:** commit by **invoking the `git-commit` skill** so conventional-format validation and logical-unit grouping run. Never compose commit messages inline. One logical unit per commit; include the worktask/ticket reference.
    - **Push: never.**
 
+### Reflect (mandatory, after the recording above)
+
+Turn this run's friction into something that makes the next run lighter. Read the worktask's `## Run Log` when the run has one — otherwise the session's own phase output — and ask:
+
+- Which Phase 1 question could the code or context have answered — would a `*AGENTS.md` line, an acceptance criterion, or a check have removed it?
+- Which Phase 7 finding, or loop-back cause, could an existing gate have caught first?
+
+For each, propose the smallest fix that prevents the repeat: a validation check in the worktask template, an L0/L1/L2 test, a rule entry, or a line in the nearest `*AGENTS.md`. Put the proposals in this turn's output; apply only the ones inside this change's scope.
+
+**Capture what outlives this task.** When the run produced knowledge that no code file, `*AGENTS.md`, or Understanding already holds, capture it — in this order:
+
+1. **Locate the skill.** If `mimisbrunnr-kvasir-understanding` is among your available skills, use it. Otherwise use the first directory that contains `SKILL.md`:
+   - `**/skills/mimisbrunnr-kvasir-understanding/SKILL.md` anywhere in the repo (vendored or installed copy)
+   - `$HOME/.claude/skills/mimisbrunnr-kvasir-understanding/SKILL.md`
+   - `$HOME/.codex/skills/mimisbrunnr-kvasir-understanding/SKILL.md`
+   - `$HOME/.config/opencode/skills/mimisbrunnr-kvasir-understanding/SKILL.md`
+2. **Run its client by absolute path, with the repo root as the working directory** — `<skill-dir>/scripts/understanding_client.py`, where `<skill-dir>` is the directory holding the matched `SKILL.md`; use the four locations above when the skill came from your available-skills list. Do not follow Kvasir's own repo-relative path — it does not hold for a global install. The client anchors its dump folder on `git rev-parse --show-toplevel` and falls back to the working directory, so running it after stepping into the skill directory writes the dump outside the repo.
+3. **Capture locally:** run `dump --currentsession --from -` with this run's durable claims on stdin, one per list item. It writes a folder under `.context/mimisbrunnr-understandings/` at the repo root and touches no shared or remote state.
+4. **Propose an `export` of that folder** and say so in the output. The store is written only on an explicit request — a proposal is not authorization.
+5. **If no Kvasir install resolves,** use `ai-understanding --export` instead, and state which route ran.
+
 **Output format:**
 
 ```markdown
@@ -477,6 +532,11 @@ Then apply the two checks a diff review does not cover:
 - Commits not allowed by this worktask — change set reported above, awaiting the user
 - OR: [conventional message per commit, created via the git-commit skill]
 
+### Reflection
+- Prevention proposals: [each friction → the smallest fix that prevents it]
+- Understanding capture: [route used (Kvasir at <path> | ai-understanding), or "nothing durable"]
+- Proposed store export: [folder + yes/no, or "n/a"]
+
 ### Task Complete ✅
 [Change set ready for review | Commits created on [branch]; push not performed.]
 ```
@@ -492,3 +552,4 @@ Then apply the two checks a diff review does not cover:
 | 2026-05-30 | | Initial version. |
 | 2026-09-20 | Worktask template & hook remediation | Removed the git-policy override and the autonomous-commit instructions — commits are now a per-task Execution Profile field routed through the `git-commit` skill, push never. Added `## Execution Profile`, replacing the 17-row phase/model table and the fabricated cost/quality metric; model hints now bind only at spawn points, in the per-runner `claude:`/`copilot:`/`codex:` form. `Agent Fleet Autonomy` → `Subagents` (default none, three justified shapes; parallelism means batched tool calls). Phases 1/4/7 no longer spawn specialist rosters; Phase 6 is sequential unless worktree-isolated with a merge step; Phase 7 delegates to the runner's review skill. Genericized the frontend/stack specifics. `load-context` → `context-load-context`; test tiers corrected to L0 unit / L1 component / L2 integration. Self-check "Gate"s renamed to "Exit check". Added the FALLBACK banner naming `ai-workflow-rules.instructions.md` authoritative, plus this `## Changelog` heading. |
 | 2026-09-27 | Model → effort | The Execution Profile recommends a session **effort** (`low` → `max`, set via the runner's effort setting) instead of a model, and the Phase 2/6 spawn-point hints are `effort: medium` instead of a per-runner `claude:`/`copilot:`/`codex:` model block. Subagents run on the session's model. |
+| 2026-10-21 | Validation, loop control, reflect | Phase 0 imports prior Understandings. Phase 1 answers from the code first and carries a recommended answer per question. Phase 2 verifies subagent/document claims. Phase 3 defines the **Validation** table (criterion → check, in preference order) before any code. New **Loop Control** section (local → Phase 6, systemic → Phase 2, new-user-question → Phase 1; caps 5 / 3 per root cause; each recorded in `## Run Log`). Phase 6 triages instead of stopping after 2 attempts. Phase 7 runs the Validation table and reviews against the spec, not the diff alone. Phase 8 adds the mandatory **Reflect** sub-step (prevention proposals + Understanding capture via Kvasir's `dump --currentsession` when the skill resolves at any of four locations, else `ai-understanding --export`). |
