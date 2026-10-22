@@ -73,8 +73,9 @@ or describe the work in natural language and follow the workflow.
    `*AGENTS.md` files, similar existing implementations, the rules and ADRs that apply, schema or API
    surfaces the change touches. Then recall what earlier sessions established: check
    `.context/understandings/INDEX.md`, query the Mímisbrunnr store when `mimisbrunnr-kvasir-understanding`
-   is among your available skills, and otherwise run `ai-understanding --import`. Record the exact build,
-   test and lint commands the repo already uses — they seed the Validation table in step 6.
+   is among your available skills, otherwise run `ai-understanding --import` when it is available, and
+   skip the recall when neither is installed. Record the exact build, test and lint commands the repo
+   already uses — they seed the Validation table in step 6.
 
 3. **Scaffold** — run:
    ```bash
@@ -151,7 +152,7 @@ or describe the work in natural language and follow the workflow.
 
 | Date | Change | Ref |
 | :---- | :---- | :---- |
-| 2026-10-21 | Step 2 recalls prior Understandings and records the repo's real build/test commands. New Validation requirement in step 6 (one row per acceptance criterion; tier + command). Output contract and quality bar gain the Validation table and `## Run Log`. | — |
+| 2026-10-21 | Step 2 recalls prior Understandings (skipped when neither Kvasir nor `ai-understanding` is installed) and records the repo's real build/test commands. New Validation requirement in step 6 (one row per acceptance criterion; tier + command). Output contract and quality bar gain the Validation table and `## Run Log`. | — |
 | 2026-10-21 | Bundled the process manual as a WET asset; scaffolder links the installed copy without depending on repo-level templates. | — |
 | 2026-09-20 | Created — replaces the `worktask-create.sh` UserPromptSubmit hook. Carries the hook's remediated contract (Execution Profile; link-don't-copy; commits per-task and default not allowed; L0/L1/L2 tiers; model as a human action) plus a deterministic scaffolder and an asset template. | — |
 | 2026-09-21 | Reworded the `description` and the P2/hidden-instructions Non-Negotiable to address GHAS SkillSpector advisory findings (Direct Prompt Extraction, Excessive Agency) on PR #71 — dropped the no-questions autonomy phrasing (replaced with "self-contained enough to execute end-to-end") and moved the hidden-instructions rationale to `AGENTS.md` (believed at the time to be outside the scan; it is scanned — see the 2026-09-23 row in `AGENTS.md`). No behavior change. | #71 |
