@@ -56,8 +56,9 @@ or describe the work in natural language and follow the workflow.
 ├── Process: link to AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md
 ├── ## Execution Profile   # effort recommendation, path, subagents, commits, push
 ├── ## Contexts            # verified paths only
-├── ## Instructions        # summary, acceptance criteria, requirements, scope,
-│                          # integration points, NFRs, tests, dependencies
+├── ## Instructions        # summary, acceptance criteria, validation table, requirements,
+│                          # scope, integration points, NFRs, tests, dependencies
+├── ## Run Log             # empty at scaffold time; appended during execution
 └── ## Overrides           # omit entirely when there are none
 ```
 
@@ -70,7 +71,11 @@ or describe the work in natural language and follow the workflow.
 
 2. **Investigate before writing.** Batch the independent reads and greps in one message: candidate
    `*AGENTS.md` files, similar existing implementations, the rules and ADRs that apply, schema or API
-   surfaces the change touches. This is what separates a usable worktask from a restated prompt.
+   surfaces the change touches. Then recall what earlier sessions established: check
+   `.context/understandings/INDEX.md`, query the Mímisbrunnr store when `mimisbrunnr-kvasir-understanding`
+   is among your available skills, otherwise run `ai-understanding --import` when it is available, and
+   skip the recall when neither is installed. Record the exact build, test and lint commands the repo
+   already uses — they seed the Validation table in step 6.
 
 3. **Scaffold** — run:
    ```bash
@@ -95,6 +100,12 @@ or describe the work in natural language and follow the workflow.
 
 6. **Fill Instructions** — the phases downstream consume these:
    - **Summary + acceptance criteria + requirements + scope boundaries** (Phase 1 clarifies against these)
+   - **Validation** — one row per acceptance criterion: the criterion, then the check that proves it as
+     tier + command (L0/L1/L2, or an ad-hoc runtime check). Prefer the repo's existing suites, then the
+     standard build/lint/type gates, then an ad-hoc check; a new script or tool only when none of those
+     can express the behaviour, with a one-line reason in the row. Fill this table before confirming
+     the worktask — Phase 3 only refines it on the full path — and Phase 7 runs it against the integrated
+     result; a criterion with no passing check is unmet.
    - **Integration points, performance, security, compliance** (Phase 2 analyses these)
    - **Data model, API contracts, UI structure** where the change implies them (Phase 3 specifies these)
    - **Tests** — required tiers: L0 (unit) / L1 (component) / L2 (integration), and what each must cover
@@ -120,12 +131,14 @@ or describe the work in natural language and follow the workflow.
 - [ ] Would a new AI coder execute this with only the worktask and its linked contexts?
 - [ ] Does every listed context path exist? (Opened, not guessed.)
 - [ ] Is every acceptance criterion testable and measurable?
+- [ ] Does every acceptance criterion appear in the Validation table with a runnable check?
 - [ ] Are scope boundaries explicit — what is OUT as well as what is IN?
 - [ ] Are the required test tiers named (L0/L1/L2) with what each must cover?
 - [ ] Are dependencies and integration points concrete?
 - [ ] Is the Execution Profile filled in — effort, path, subagents, commits, push?
 - [ ] Are all unfilled placeholder brackets gone?
 - [ ] Does the worktask link the process template rather than restating its phases?
+- [ ] Is `## Run Log` present and empty (the executing session appends to it)?
 
 ## Agent-agnostic notes
 
@@ -139,6 +152,7 @@ or describe the work in natural language and follow the workflow.
 
 | Date | Change | Ref |
 | :---- | :---- | :---- |
+| 2026-10-21 | Step 2 recalls prior Understandings (skipped when neither Kvasir nor `ai-understanding` is installed) and records the repo's real build/test commands. New Validation requirement in step 6 (one row per acceptance criterion; tier + command). Output contract and quality bar gain the Validation table and `## Run Log`. | — |
 | 2026-10-21 | Bundled the process manual as a WET asset; scaffolder links the installed copy without depending on repo-level templates. | — |
 | 2026-09-20 | Created — replaces the `worktask-create.sh` UserPromptSubmit hook. Carries the hook's remediated contract (Execution Profile; link-don't-copy; commits per-task and default not allowed; L0/L1/L2 tiers; model as a human action) plus a deterministic scaffolder and an asset template. | — |
 | 2026-09-21 | Reworded the `description` and the P2/hidden-instructions Non-Negotiable to address GHAS SkillSpector advisory findings (Direct Prompt Extraction, Excessive Agency) on PR #71 — dropped the no-questions autonomy phrasing (replaced with "self-contained enough to execute end-to-end") and moved the hidden-instructions rationale to `AGENTS.md` (believed at the time to be outside the scan; it is scanned — see the 2026-09-23 row in `AGENTS.md`). No behavior change. | #71 |

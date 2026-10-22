@@ -23,6 +23,14 @@ Process: [`AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md`](<{{PROCESS_TEMPLATE}}>) 
 ### Acceptance criteria
 - [ ] [specific, measurable condition]
 
+### Validation
+
+| Acceptance criterion | Check (tier · command) |
+| --- | --- |
+| [criterion above] | [L0/L1/L2 · command, or an ad-hoc runtime check with its command] |
+
+[Every criterion appears at least once. Prefer the repo's existing suites, then the standard gates, then an ad-hoc runtime check; a new script or tool only when none of those can express the behaviour, with a one-line reason. Fill this table before confirming the worktask — Phase 3 only refines it on the full path — and Phase 7 runs it against the integrated result.]
+
 ### Requirements
 - [functional requirements, edge cases, constraints]
 
@@ -41,6 +49,10 @@ Process: [`AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md`](<{{PROCESS_TEMPLATE}}>) 
 
 ### Dependencies and references
 - [work that must complete first; tickets/PRs; patterns to follow; known gotchas; migration path]
+
+## Run Log
+
+[Authoring guidance — delete this block at scaffold time so the section is empty. Appended during execution: one line per entry — loop-back cause and re-entry phase, a question only the user could answer, a Phase 7 finding. Phase 8's reflect step reads this.]
 
 ## Overrides
 

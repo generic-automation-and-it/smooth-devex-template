@@ -6,9 +6,11 @@ Read [`SKILL.md`](./SKILL.md) first — the worktask contract, workflow and qual
 
 ## Non-Negotiables
 
-- **Cross-file sync:** Execution Profile changes span `SKILL.md`, `assets/WORKTASK.template.md` and
-  both process manuals (bundled asset + `.agents/templates/`). Workflow changes also track the
-  authoritative workflow rule; the asset renders the shared manual's HTML-comment guidance visibly.
+- **Cross-file sync:** Execution Profile, Validation and `## Run Log` changes span `SKILL.md`,
+  `assets/WORKTASK.template.md` and both process manuals (bundled asset + `.agents/templates/`).
+  **Loop Control and Reflect live in three workflow documents** — both manuals and the authoritative
+  `ai-workflow-rules.instructions.md`; an edit to either must land in all three. The asset renders the
+  shared manual's HTML-comment guidance visibly.
 - **Scanner caveat:** SkillSpector scans this `AGENTS.md` too; moving flagged text here does not hide it.
 - **Rename coupling:** `.agents/hooks/worktask-skill-trigger.sh` hard-codes this skill's `SKILL.md` path;
   update it when renaming or moving the skill.
@@ -17,6 +19,7 @@ Read [`SKILL.md`](./SKILL.md) first — the worktask contract, workflow and qual
 
 | Date | Change | Ref |
 | :---- | :---- | :---- |
+| 2026-10-21 | Validation table + `## Run Log` in contract; Loop Control/Reflect sync spans three docs | — |
 | 2026-10-21 | WET-copy sync coupling; removed SKILL.md restatements | — |
 | 2026-09-20 | Initial; replaces the Claude-only `worktask-create.sh` hook | #74 |
 | 2026-09-21 | P2 hidden-instructions rationale moved here from SKILL.md; `AGENTS.md` is scanned too | #71 |
