@@ -485,19 +485,14 @@ Then apply the three checks a diff review does not cover:
    - Migration instructions (if needed)
    - Reference to this task
 
-4. **Commits — per the Execution Profile's Commits field:**
-   - **Not allowed (default):** report the change set — files touched, what changed, and a suggested commit grouping — then **stop**. The user commits.
-   - **Allowed:** commit by **invoking the `git-commit` skill** so conventional-format validation and logical-unit grouping run. Never compose commit messages inline. One logical unit per commit; include the worktask/ticket reference.
-   - **Push: never.**
-
-### Reflect (mandatory, after the recording above)
+### Reflect (mandatory, after steps 1–3 and before the commit step)
 
 Turn this run's friction into something that makes the next run lighter. Read the worktask's `## Run Log` when the run has one — otherwise the session's own phase output — and ask:
 
 - Which Phase 1 question could the code or context have answered — would a `*AGENTS.md` line, an acceptance criterion, or a check have removed it?
 - Which Phase 7 finding, or loop-back cause, could an existing gate have caught first?
 
-For each, propose the smallest fix that prevents the repeat: a validation check in the worktask template, an L0/L1/L2 test, a rule entry, or a line in the nearest `*AGENTS.md`. Put the proposals in this turn's output; apply only the ones inside this change's scope.
+For each, propose the smallest fix that prevents the repeat: a validation check in the worktask template, an L0/L1/L2 test, a rule entry, or a line in the nearest `*AGENTS.md`. Put the proposals in this turn's output; apply only the ones inside this change's scope. An applied proposal is a new change: run it through the Validation table, and **Loop Control** above on a failure, before the commit step.
 
 **Capture what outlives this task.** When the run produced knowledge that no code file, `*AGENTS.md`, or Understanding already holds, capture it — in this order:
 
@@ -510,6 +505,14 @@ For each, propose the smallest fix that prevents the repeat: a validation check 
 3. **Capture locally:** run `dump --currentsession --from -` with this run's durable claims on stdin, one per list item. It writes a folder under `.context/mimisbrunnr-understandings/` at the repo root and touches no shared or remote state.
 4. **Propose an `export` of that folder** and say so in the output. The store is written only on an explicit request — a proposal is not authorization.
 5. **If no Kvasir install resolves,** use `ai-understanding --export` instead, and state which route ran.
+
+### Commit or stop (last)
+
+Per the Execution Profile's Commits field:
+
+- **Not allowed (default):** report the change set — files touched, what changed, and a suggested commit grouping — then **stop**. The user commits.
+- **Allowed:** commit by **invoking the `git-commit` skill** so conventional-format validation and logical-unit grouping run. Never compose commit messages inline. One logical unit per commit; include the worktask/ticket reference.
+- **Push: never.**
 
 **Output format:**
 
@@ -528,14 +531,14 @@ For each, propose the smallest fix that prevents the repeat: a validation check 
 - [File]: [what changed]
 - Suggested commit grouping: [logical units]
 
-### Commits
-- Commits not allowed by this worktask — change set reported above, awaiting the user
-- OR: [conventional message per commit, created via the git-commit skill]
-
 ### Reflection
 - Prevention proposals: [each friction → the smallest fix that prevents it]
 - Understanding capture: [route used (Kvasir at <path> | ai-understanding), or "nothing durable"]
 - Proposed store export: [folder + yes/no, or "n/a"]
+
+### Commits
+- Commits not allowed by this worktask — change set reported above, awaiting the user
+- OR: [conventional message per commit, created via the git-commit skill]
 
 ### Task Complete ✅
 [Change set ready for review | Commits created on [branch]; push not performed.]
@@ -553,3 +556,4 @@ For each, propose the smallest fix that prevents the repeat: a validation check 
 | 2026-09-20 | Worktask template & hook remediation | Removed the git-policy override and the autonomous-commit instructions — commits are now a per-task Execution Profile field routed through the `git-commit` skill, push never. Added `## Execution Profile`, replacing the 17-row phase/model table and the fabricated cost/quality metric; model hints now bind only at spawn points, in the per-runner `claude:`/`copilot:`/`codex:` form. `Agent Fleet Autonomy` → `Subagents` (default none, three justified shapes; parallelism means batched tool calls). Phases 1/4/7 no longer spawn specialist rosters; Phase 6 is sequential unless worktree-isolated with a merge step; Phase 7 delegates to the runner's review skill. Genericized the frontend/stack specifics. `load-context` → `context-load-context`; test tiers corrected to L0 unit / L1 component / L2 integration. Self-check "Gate"s renamed to "Exit check". Added the FALLBACK banner naming `ai-workflow-rules.instructions.md` authoritative, plus this `## Changelog` heading. |
 | 2026-09-27 | Model → effort | The Execution Profile recommends a session **effort** (`low` → `max`, set via the runner's effort setting) instead of a model, and the Phase 2/6 spawn-point hints are `effort: medium` instead of a per-runner `claude:`/`copilot:`/`codex:` model block. Subagents run on the session's model. |
 | 2026-10-21 | Validation, loop control, reflect | Phase 0 imports prior Understandings. Phase 1 answers from the code first and carries a recommended answer per question. Phase 2 verifies subagent/document claims. Phase 3 defines the **Validation** table (criterion → check, in preference order) before any code. New **Loop Control** section (local → Phase 6, systemic → Phase 2, new-user-question → Phase 1; caps 5 / 3 per root cause; each recorded in `## Run Log`). Phase 6 triages instead of stopping after 2 attempts. Phase 7 runs the Validation table and reviews against the spec, not the diff alone. Phase 8 adds the mandatory **Reflect** sub-step (prevention proposals + Understanding capture via Kvasir's `dump --currentsession` when the skill resolves at any of four locations, else `ai-understanding --export`). |
+| 2026-10-22 | PR 133 review | Phase 8 runs **Reflect** after recording steps 1–3 and before the commit step, which is now the last subsection (*Commit or stop*). Before, Reflect followed the default profile's "then stop" and never ran, or ran after the commit when commits were allowed. An applied proposal goes through the Validation table before committing. The output block lists Reflection before Commits. |
