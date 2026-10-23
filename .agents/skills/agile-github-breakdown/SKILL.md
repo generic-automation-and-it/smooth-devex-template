@@ -97,6 +97,24 @@ Reference graph: `generic-automation-and-it/builder-catalogue` — Project (init
 | `--no-project` | — | Create the issues only; skip adding them to any GitHub Project. |
 | `--apply` | — | Write to GitHub. Default is dry-run preview. |
 
+## Feature requirements table
+
+The Feature's functional requirements table carries priority, then release, after the requirement:
+
+```markdown
+| ID | Requirement | Priority | Release (optional) |
+|----|-------------|----------|--------------------|
+| FR-1 | The system shall publish the allocation to the consumer | High | POC |
+```
+
+> N.B. 1 Feature (epic) should not contain multiple releases, the column is to use for working with the
+> document for scoping and splitting
+
+- **Priority** uses the team's own scale; do not invent one.
+- **Release (optional)** names the release a requirement belongs to, e.g. `POC`, `MVP`, `v1`. Leave it
+  empty when unknown.
+- The non-functional table stays `| ID | Requirement |`.
+
 ## Workflow
 
 1. **Clarify scope** — target Feature (GitHub `#n`, or "new"), project (default `1`, override with
@@ -105,7 +123,9 @@ Reference graph: `generic-automation-and-it/builder-catalogue` — Project (init
 2. **Gather source material** — load the Feature via `gh issue view` and/or the local context
    doc if the user points at one. You now hold the body, so **extract the FR/NFR rows yourself**
    and hand them to `scripts/parse_frnfr.py --prefix FR NFR` as an explicit list, one per
-   line:
+   line. **Copy only the ID and Requirement cells — never Priority or Release.** The script keeps
+   everything after the first `|` as the requirement text, so a whole four-column row parses at exit 0
+   with `| High | POC` inside the requirement and leaks into the acceptance criteria:
 
    ```
    FR-1 | The system must accept a line recipe payload
@@ -222,3 +242,4 @@ guessing that the write succeeded.
 | Date | Change | Ref |
 | :---- | :---- | :---- |
 | 2026-09-13 | Ported from `epic-breakdown` (Jira) onto vanilla GitHub Projects: Feature = epic, Task = story, Project = initiative, untyped sub-issue = subtask. Translation table required on every issue body. | — |
+| 2026-10-23 | Synced from `epic-breakdown`: Feature functional requirements table gains **Priority** then **Release (optional)** columns, with the note that one Feature should not span several releases — the column is a scoping and splitting aid. Step 2 now copies only the ID and Requirement cells into the parser, because extra cells parse at exit 0 as part of the requirement text. | — |

@@ -26,3 +26,4 @@ Read [`SKILL.md`](./SKILL.md) first — workflow, write gates, script contracts 
 | :---- | :---- | :---- |
 | 2026-09-13 | Ported from `epic-breakdown` onto vanilla GitHub Projects (Feature/Task; no Epic type); LADR-001 | — |
 | 2026-10-15 | Cut to HLD shape: SKILL.md pointer + non-SKILL.md traps only | — |
+| 2026-10-23 | FR table gains Priority, Release (optional) (synced from `epic-breakdown`); parser input stays ID + Requirement only — extra cells parse into the text at exit 0 | — |
