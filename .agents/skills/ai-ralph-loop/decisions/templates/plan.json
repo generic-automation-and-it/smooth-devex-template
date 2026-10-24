@@ -1,29 +1,46 @@
 {
-  "state": "Evaluating a design decision in a plan document. The plan proposes an architectural element or design approach. We need to determine: does this design element have value, is it necessary, and does it avoid over-engineering?\n\n## Before (current plan section):\n{{BEFORE}}\n\n## After (proposed change):\n{{AFTER}}\n\n## Section and location:\n{{CONTEXT}}\n\n## Ralph loop category:\n{{CATEGORY}}",
+  "state": "Evaluating a proposed edit to a plan document. The edit may correct, remove, simplify, or add content. Judge the edit itself — not the surrounding plan — using the before/after text and the finding's evidence.\n\n## Before (current plan text):\n{{BEFORE}}\n\n## After (proposed change):\n{{AFTER}}\n\n## Evidence (failure scenario or cited requirement and proposed fix):\n{{EVIDENCE}}\n\n## Section and location:\n{{CONTEXT}}\n\n## Ralph loop category:\n{{CATEGORY}}",
+  "category_groups": {
+    "correction": ["feature-gap", "potential-bug", "architectural-issue"],
+    "reduction": ["yagni", "kiss", "clean-code"]
+  },
   "questions": {
+    "change_assessment": {
+      "type": "choice",
+      "instructions_by_category": {
+        "correction": "Does the after-text resolve the failure, missing requirement, or contradiction described in the evidence, without introducing a new failure or removing required behavior?",
+        "reduction": "Does the after-text simplify or remove content while preserving every required behavior and any cited rule?"
+      },
+      "criteria": {
+        "success": "The edit resolves the stated problem and preserves required behavior",
+        "unresolved": "The edit does not resolve the stated problem, including identical before/after text",
+        "regression": "The edit introduces a new failure, keeps the wrong behavior, or removes required behavior",
+        "insufficient_evidence": "The evidence is too thin to judge whether the edit resolves the problem"
+      }
+    },
     "requirement_coverage": {
       "type": "choice",
-      "instructions": "Does this design element address a cited requirement?",
+      "instructions": "Does the after-text address the requirement or failure quoted in the evidence? If the evidence quotes a requirement, judge only that requirement. If it describes a failure scenario without a citation, judge whether the edit addresses that failure. Do not invent a requirement.",
       "criteria": {
-        "directly_required": "A cited requirement (worktask, HLD, spec) explicitly asks for this",
-        "implicitly_needed": "Not explicitly stated but required for the architecture to work correctly",
-        "nice_to_have": "Improves the design but no requirement depends on it",
-        "not_required": "No requirement asks for this — it is speculative or over-engineered"
+        "directly_required": "The evidence quotes a requirement that explicitly asks for this edit",
+        "implicitly_needed": "No requirement is quoted, but the evidence shows the edit is required for correct behavior",
+        "nice_to_have": "Improves the plan but no quoted requirement or shown failure depends on it",
+        "not_required": "No quoted requirement or shown failure asks for this edit — it is speculative or over-engineered"
       }
     },
     "design_necessity": {
       "type": "choice",
-      "instructions": "Is this design element necessary for the system to function correctly?",
+      "instructions": "Is this edit necessary for the system described by the plan to function correctly?",
       "criteria": {
-        "essential": "System cannot work correctly without this element",
+        "essential": "The system cannot work correctly without this edit",
         "important": "Significantly improves correctness, reliability, or extensibility",
-        "beneficial": "A reasonable design choice but alternatives would also work",
+        "beneficial": "A reasonable edit but alternatives would also work",
         "unnecessary": "Adds complexity without proportional benefit — YAGNI violation"
       }
     },
     "architectural_value": {
       "type": "score",
-      "instructions": "What is the overall architectural value of including this element in the plan?",
+      "instructions": "What is the architectural value of the after-text as it stands in the plan?",
       "criteria": [
         "harmful — introduces coupling, violates boundaries, or creates maintenance burden",
         "neutral — neither helps nor hurts the architecture meaningfully",

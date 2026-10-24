@@ -1,6 +1,23 @@
 {
-  "state": "Evaluating whether a code change in a pull request has developer value. The core question: as a developer, does this change minimize a feature gap or provide concrete value to the product?\n\n## Before (problem):\n{{BEFORE}}\n\n## After (fix):\n{{AFTER}}\n\n## File and location:\n{{CONTEXT}}\n\n## Ralph loop category:\n{{CATEGORY}}",
+  "state": "Evaluating a code change in a pull request. The change may correct, remove, simplify, or add code. Judge the change itself using the before/after text and the finding's evidence.\n\n## Before (problem):\n{{BEFORE}}\n\n## After (fix):\n{{AFTER}}\n\n## Evidence (failure scenario or cited requirement and proposed fix):\n{{EVIDENCE}}\n\n## File and location:\n{{CONTEXT}}\n\n## Ralph loop category:\n{{CATEGORY}}",
+  "category_groups": {
+    "correction": ["feature-gap", "potential-bug", "architectural-issue"],
+    "reduction": ["yagni", "kiss", "clean-code"]
+  },
   "questions": {
+    "change_assessment": {
+      "type": "choice",
+      "instructions_by_category": {
+        "correction": "Does the after-text resolve the failure, missing requirement, or contradiction described in the evidence, without introducing a new failure or removing required behavior?",
+        "reduction": "Does the after-text simplify or remove content while preserving every required behavior and any cited rule?"
+      },
+      "criteria": {
+        "success": "The edit resolves the stated problem and preserves required behavior",
+        "unresolved": "The edit does not resolve the stated problem, including identical before/after text",
+        "regression": "The edit introduces a new failure, keeps the wrong behavior, or removes required behavior",
+        "insufficient_evidence": "The evidence is too thin to judge whether the edit resolves the problem"
+      }
+    },
     "developer_value": {
       "type": "choice",
       "instructions": "As a developer, does this change have value by minimizing a feature gap or solving a real problem?",
