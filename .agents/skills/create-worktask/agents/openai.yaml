@@ -1,4 +1,4 @@
 interface:
-  display_name: "Create Worktask"
-  short_description: "Scaffold and populate a standalone worktask under .context/work-tasks/"
-  default_prompt: "Create a worktask: investigate the relevant contexts, scaffold .context/work-tasks/<slug>.md, then fill the Execution Profile, Contexts and Instructions so it is self-contained enough for a standalone AI coder to execute end-to-end. Link the process template; do not copy it."
+  display_name: "Create Worktask — SDLC Implementation Planning"
+  short_description: "Author an AI-native SDLC implementation worktask"
+  default_prompt: "Use $create-worktask to author an implementation worktask from clarified intent/design, linking the source decision and verified context to acceptance criteria, checks and an execution profile; link the process manual and do not execute the task."

@@ -62,6 +62,14 @@ A Claude Code plugin is also available for the owned skills — install it from 
 
 ## Tech Stack
 
+### AI-native SDLC development workflow
+
+The [workflow rule](.github/instructions/ai-workflow-rules.instructions.md) maps development steps
+to **Plan, Design, Build, Test, Deploy and Maintain**. It covers intent/design, implementation
+planning, verification and learning; deployment and operational monitoring remain separate.
+`create-worktask` authors Build/Test implementation inputs with canonical source/decision links and
+requirement-to-check evidence, without executing the task or authorizing a release.
+
 ### AI Toolchain
 
 | Component | Technology |
