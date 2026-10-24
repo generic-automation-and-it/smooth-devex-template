@@ -31,6 +31,7 @@ File = `<name>.instructions.md` in this folder. Adding, renaming or rescoping a 
 | :---- | :---- | :---- |
 | 2026-10-15 | Created: rule index for Codex; root `AGENTS.md` Rules section points here | — |
 | 2026-10-19 | `code-review-standards` applies only to C# files; Claude review-hook deferral retained | — |
+| 2026-10-24 | Git policy: workflow consent vs runtime approval; Codex prompt/never diagnosis | — |
 
 ## Installed subset (installer-owned-rules-subset)
 
