@@ -68,7 +68,7 @@ Shared fixtures: `tests/Project.TestFramework/`; Aspire dependency host (Postgre
 
 ## Architecture Decisions (NFRs)
 
-Reviewer docs: `docs/wiki/`. Designs, NFRs and LADRs: `docs/hlds/`.
+Reviewer docs: `docs/` (index) + `docs/wiki/`. Designs, NFRs and LADRs: `docs/hlds/` (designs with per-design `nfrs/`), `docs/adr/` (decisions).
 
 ## CI/CD
 

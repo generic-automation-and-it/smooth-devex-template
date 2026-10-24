@@ -119,7 +119,7 @@ Quality gate — spec/implementation sync check.
 
 - Review the relevant context documents loaded in Phase 0; update guidance made untrue by the change and add only newly necessary, non-duplicated constraints
 - Finalize LADRs with actual outcomes
-- Review whether any `docs/adr/` or `docs/nfr/` need updating — if the implementation changes behavior covered by an existing ADR or NFR, update it; if a new architectural decision was made, create a new ADR
+- Review whether any `docs/adr/` or HLD NFRs (`docs/hlds/*/nfrs/`) need updating — if the implementation changes behavior covered by an existing ADR or NFR, update it; if a new architectural decision was made, create a new ADR
 - Update changelog with comprehensive entry
 
 **Context review is mandatory; edits are value-gated.** Follow `meta/knowledge-conventional-contexts-quality.instructions.md`. If no guidance needs changing, record “reviewed — no context changes needed”; reading a file alone is not a reason to edit it.
