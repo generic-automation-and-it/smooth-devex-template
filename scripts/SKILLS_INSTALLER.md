@@ -101,7 +101,7 @@ match byte-for-byte (the harness holds them to each other).
 | `context-load-agents-context` | Loads ancestor `AGENTS.md` context for a file; `ai-ralph-loop` and `manage-rule-system` use it |
 | `context-load-context` | Loads or creates functional `AGENTS.md` context before implementation work |
 | `create-hld` | Design workflow authoring |
-| `create-worktask` | Task authoring workflow |
+| `create-worktask` | AI-native SDLC implementation task authoring; source/decision and validation links |
 | `git-commit` | Conventional-commit workflow; follows the shipped `git/git-policy` rule |
 | `git-commit-push` | Commit and push; follows the shipped `git/git-policy` rule |
 | `git-commit-push-pr` | Commit, push and open or update a PR; follows the shipped `git/git-policy` rule |

@@ -6,17 +6,44 @@
 - **Subagents:** none | Explore (read-only fan-out) | worktree-isolated writers
 - **Commits during execution:** not allowed | allowed via the git-commit skill
 - **Push:** never
+- **Deployment:** not authorized by this implementation worktask
+
+## Source and Decision
+- **Source of truth:** [canonical ticket, HLD, intent/design or approved task request]
+- **Source revision:** [known version/commit, or unrecorded]
+- **Decision:** [draft / approved / unrecorded — actual owner/approver and evidence, when known]
+- **Open concerns:** [concern and owner — omit when none exist]
 
 ## Contexts
 - [ ] list relevant context documents, domain files, or knowledge sources
-- [ ] if no context document exists for this feature, add one here and include "create context document" in Instructions
+- [ ] if needed context is missing, include creation only for lasting guidance that passes the AGENTS quality rule
 
 ## Instructions
-- [ ] list specific requirements and acceptance criteria
+- [ ] link source requirement IDs to acceptance criteria and validation commands; evidence starts as not run
+- [ ] state scope, outcome/success signal and dependencies; include release/observe handoff only when relevant
+
+## SDLC Stages and Scope
+
+The Software Development Lifecycle (SDLC) has six non-linear stages. These development steps support that lifecycle; they do not implement deployment or production maintenance.
+
+| SDLC stage | Development steps / boundary |
+| --- | --- |
+| Plan | Phase 1 clarifies product intent, outcome and constraints |
+| Design | Phases 2–3 analyze constraints and specify requirements/design |
+| Build | Phase 4 plans implementation; Phase 6 implements it |
+| Test | Validation is defined before code, run during Phase 6, and checked against the integrated result in Phase 7 |
+| Deploy | Phase 7 supplies pre-release review evidence; release authorization, deployment, health checks and rollback are separate |
+| Maintain | Phase 8 records development lessons; operational metrics, incident triggers and remediation are separate |
+
+Context loading and artifact/knowledge maintenance are cross-cutting. Keep the phase order within an execution pass; failed checks re-enter by **Loop Control**, not by restarting the lifecycle.
+
+Use the existing ticket, HLD, intent/design record or approved task request as the source of truth. Link its identity/revision and known decision owner/status; do not fabricate approvals or require separate `intent.md`, `spec.md` and `plan.md` files for every task. Trace requirement IDs through acceptance criteria, checks and actual evidence. Keep local worktasks and their Run Log gitignored; put shared accepted decisions in the canonical record.
+
+These gates are workflow instructions, not technical enforcement. Required action/release approvals need the project's actual hooks or external controls; creating or approving an implementation worktask does not itself authorize deployment.
 
 ## Constraints
 
-### Context Loading (Phase 0 — MANDATORY FIRST)
+### Load Context (Phase 0 — MANDATORY FIRST)
 - **Load domain/feature context BEFORE asking clarifying questions** — you cannot ask intelligent questions without understanding existing patterns
 - Use the `context-load-context` skill with `[domain]` to find/create functional context, or rely on the `load-agents-context` PostToolUse hook which auto-injects ancestor `*AGENTS.md` on first Read/Edit
 - **Import prior Understandings** next: check `.context/understandings/INDEX.md`; when `mimisbrunnr-kvasir-understanding` is among your available skills, query the store with `import --query WORD` (read-only). Otherwise use `ai-understanding --import` on the local Understanding files. Skip silently when neither exists
@@ -44,21 +71,29 @@ Follow in order. **Do not skip phases without outputting the skip reason. Do not
 
 | Phase | Name | Gate? | Purpose | Who |
 |-------|------|-------|---------|-----|
-| 0 | Context Load | 🛑 MANDATORY | Read documents from **Contexts** section above | session |
-| 1 | Odin (Clarify) | 🛑 GATE | Consolidate domain/technical/test clarifications | session (PO → Architect → QA lenses, in sequence) |
-| 2 | Thoth (Analyze) | | Analyze tech stack, determine tech requirements, identify patterns | session (read-only fan-out allowed) |
-| 3 | Forseti (Specify) | | Create technical specification with architectural decisions + the **Validation** table | session |
-| 4 | Tyr (Plan) | 🛑 GATE | Present implementation plan + module breakdown | session (per-stack lenses, in sequence) |
-| 5 | Frigg (Document) | | Update AGENTS.md with approved plan under `## Requirements` | session |
-| 6 | Thor (Execute) | | 🔨 YOLO MODE — implement on the working branch | session (parallel writers only when worktree-isolated) |
-| 7 | Heimdall (Review) | | Quality gate — review skill + Validation table + spec/implementation sync check | session + review skill |
-| 8 | Bragi (Record) | 🛑 MANDATORY | Document actual implementation; then **Reflect**; stop before committing unless the profile allows commits | session |
+| 0 | Load Context | 🛑 MANDATORY | Read documents from **Contexts** section above | session |
+| 1 | Clarify Intent (Odin) | 🛑 GATE | Consolidate domain/technical/test clarifications | session (PO → Architect → QA lenses, in sequence) |
+| 2 | Analyze Constraints (Thoth) | | Analyze tech stack, determine tech requirements, identify patterns | session (read-only fan-out allowed) |
+| 3 | Specify Requirements & Design (Forseti) | | Create requirements/design spec with source IDs, owned concerns and the **Validation** table | session |
+| 4 | Plan Implementation (Tyr) | 🛑 GATE | Present implementation plan + module breakdown | session (per-stack lenses, in sequence) |
+| 5 | Baseline Approved Artifacts (Frigg) | | Record the approved plan/decision in its canonical home; link source requirements | session |
+| 6 | Implement & Verify (Thor) | | Bounded autonomous execution + actual check evidence | session (parallel writers only when worktree-isolated) |
+| 7 | Validate & Review (Heimdall) | | Quality gate — review skill + Validation table + spec/implementation sync check | session + review skill |
+| 8 | Record & Learn (Bragi) | 🛑 MANDATORY | Review context, record actual outcomes; then **Reflect**; obey the commit profile | session |
 
-**Lightweight path** (trivial tasks): Phase 0 → 1 → 6 → 7 → 8
-Use when: single file, no architectural decisions, clear requirements.
+### Path Selection
 
-**Full path** (non-trivial tasks): Phase 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
-Use when: 3+ files, new patterns, cross-cutting concerns, or ambiguous scope.
+Choose by risk and complexity first, file count second. This rubric is authoritative for worktask authoring and execution.
+
+**Lightweight path**: Phase 0 → 1 → 6 → 7 → 8
+Use for a clear, contained, low-risk fix or mechanical change following established patterns, with no architectural decision, new feature/pattern, complex logic or cross-cutting concern.
+
+**Full path**: Phase 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
+Use for new features/patterns, architectural decisions, complex logic, cross-cutting concerns or ambiguous scope regardless of file count. Default to full for 3+ files; a purely mechanical change may use lightweight with a stated low-risk rationale. If unsure, choose full.
+
+**Phase 8 is on BOTH paths.** Context review and recording remain mandatory; whether a context edit is warranted is decided by the quality rule, not the path.
+
+**Path selection is NOT a way to avoid Phase 8.** Even a purely mechanical change across many config files must complete Phase 8. The path determines which middle phases (2–5) to run, not whether to document.
 
 ### Subagents
 
@@ -89,7 +124,7 @@ A failed check or a review finding routes back to the phase that can actually fi
 
 ---
 
-## Phase 1: Odin (Clarify)
+## Phase 1: Clarify Intent (Odin)
 
 **No subagents.** One session applies three lenses in sequence over the context loaded in Phase 0, then consolidates them into a single question list. The deliverable is that list — three cold agents plus a merge produces less, later.
 
@@ -119,7 +154,7 @@ A failed check or a review finding routes back to the phase that can actually fi
 ### Consolidation & Gate
 
 ```markdown
-## Phase 1: Odin (Clarify) — Consolidated Findings
+## Phase 1: Clarify Intent (Odin) — Consolidated Findings
 
 ### Business Clarifications
 - [finding and question/recommendation]
@@ -144,7 +179,7 @@ Reply 'approved' to proceed to Phase 2, or provide corrections.
 
 ---
 
-## Phase 2: Thoth (Analyze)
+## Phase 2: Analyze Constraints (Thoth)
 
 **Prerequisite:** Phase 1 clarifications resolved.
 
@@ -179,7 +214,7 @@ effort: medium
 **Output format:**
 
 ```markdown
-## Phase 2: Thoth (Analyze)
+## Phase 2: Analyze Constraints (Thoth)
 
 ### Technology Stack Requirements
 - **Backend**: YES — [justification: DB changes, API endpoints, etc.]
@@ -205,9 +240,11 @@ effort: medium
 
 ---
 
-## Phase 3: Forseti (Specify)
+## Phase 3: Specify Requirements & Design (Forseti)
 
 **Prerequisite:** Phase 2 analysis complete (tech stack determined).
+
+Carry forward unresolved concerns with their owners and show how each source constraint is met.
 
 **Define validation with the specification — before any code exists.** Every acceptance criterion maps to a check, and each check names the criterion it proves. Prefer, in order: the repo's existing L0/L1/L2 suites; the standard build/lint/type gates; an ad-hoc runtime check; a purpose-built script or tool as a last resort, with a one-line reason the earlier options could not express the behavior. A green check that does not trace to a criterion is not evidence. This table is what Phase 6 executes and Phase 7 reviews against.
 
@@ -240,7 +277,7 @@ effort: medium
 **Output format:**
 
 ```markdown
-## Phase 3: Forseti (Specify)
+## Phase 3: Specify Requirements & Design (Forseti)
 
 ### Technical Specification
 
@@ -263,9 +300,9 @@ effort: medium
 
 ### Validation
 
-| Acceptance criterion | Check (tier · command) |
-| --- | --- |
-| [criterion from Phase 1] | [L0/L1/L2 · command, or an ad-hoc runtime check with its command] |
+| Requirement | Acceptance criterion | Check (tier · command) | Evidence |
+| --- | --- | --- | --- |
+| [source requirement ID / R1] | [AC1 from Phase 1] | [L0/L1/L2 · command, or an ad-hoc runtime check with its command] | not run |
 
 [Every criterion appears at least once. A custom script appears only with its one-line justification.]
 
@@ -281,7 +318,7 @@ effort: medium
 
 ---
 
-## Phase 4: Tyr (Plan) — 🛑 GATE
+## Phase 4: Plan Implementation (Tyr) — 🛑 GATE
 
 **Prerequisite:** Phase 3 specification complete.
 
@@ -306,7 +343,7 @@ effort: medium
 **Output format:**
 
 ```markdown
-## Phase 4: Tyr (Plan)
+## Phase 4: Plan Implementation (Tyr)
 
 ### Overall Implementation Strategy
 - Step 1: [implementation step] (File: X)
@@ -334,55 +371,42 @@ Does this plan look correct? Reply 'approved' to proceed, or provide feedback.
 
 ---
 
-## Phase 5: Frigg (Document)
+## Phase 5: Baseline Approved Artifacts (Frigg)
 
 **Prerequisite:** Phase 4 plan approved by user.
 
 **Responsibilities:**
 
-1. **Update domain AGENTS.md** (or create if missing):
-   - Add to `## Requirements` section: accepted plan from Phase 4
-   - Document architectural decisions (from Phase 3 LADRs)
-   - Record tech stack requirements and integration points
-   - Add test references (L0/L1/L2 tier, test sub-folder paths)
-
-2. **Update or create project ADRs** (`docs/adr/`):
-   - For each Phase 3 LADR: create corresponding ADR file if it's a foundational architectural decision
-   - Update existing ADRs if implementation changes behavior they document
-
-3. **Update root AGENTS.md** if needed:
-   - Cross-reference new feature/domain context document
-   - Note significant architectural changes
-
-4. **Update changelog** in context documents:
-   - Record what was changed and why (for future reference)
+1. Record the approved plan, decision owner/status and source requirement references in the existing plan artifact or canonical tracker. Link that record from the worktask; do not duplicate it in `*AGENTS.md`.
+2. Carry forward unresolved concerns with their owners; do not invent an approval or mark a draft accepted.
+3. Keep architectural decisions in their existing HLD/LADR/ADR home. Update or create a decision record only when the design needs it.
+4. Put only lasting, non-duplicated local constraints in `*AGENTS.md` under `meta/knowledge-conventional-contexts-quality.instructions.md`; temporary plans and adjacent design summaries do not belong there.
 
 **Output format:**
 
 ```markdown
-## Phase 5: Frigg (Document)
+## Phase 5: Baseline Approved Artifacts (Frigg)
 
-### Context Documentation Updated
-- [Domain]_AGENTS.md: [sections updated]
-- Root AGENTS.md: [sections updated]
+### Approved Artifacts
+- Plan: [canonical location/revision and known approval]
+- Source requirements: [IDs and design/intent reference]
+- Open concerns: [owner and disposition, or none]
 
-### Architectural Decisions Recorded
-- LADR-XXX: [ADR file created or updated]
-- LADR-YYY: [ADR file created or updated]
-
-### Changelog Entries
-- [Date] | [Change] | [Reference to this task]
+### Lasting Context Changes
+- [Context file and changed guidance, or reviewed — no context changes needed]
 
 **Ready for Phase 6.**
 ```
 
 ---
 
-## Phase 6: Thor (Execute)
+## Phase 6: Implement & Verify (Thor)
 
 **Prerequisite:** Phase 5 documentation complete (or skipped with a reason).
 
-**Sequential by default.** One writer works through the Phase 4 plan in order. Implement completely — no TODOs, no stubs. Batch independent *reads* freely; keep *writes* sequential. On failure, fix forward within the failing change; if 2 attempts have not resolved it, triage by **Loop Control** above instead of continuing to retry.
+**Bounded autonomous execution; sequential by default.** One writer works within the approved scope and action limits. Implement completely — no TODOs, no stubs. Batch independent *reads* freely; keep *writes* sequential. A new requirement or action outside those limits re-enters the appropriate gate. On failure, fix forward within the failing change; if 2 attempts have not resolved it, triage by **Loop Control** above instead of continuing to retry.
+
+Run targeted checks as affected units become runnable, then run the applicable Validation table against the integrated result. Record criterion ID, command, result and evidence reference in the worktask's `## Run Log` (or phase output when no worktask exists); never turn an unrun check into a passing claim. Update each check's Validation table Evidence cell with its latest observed result and a Run Log/evidence reference; keep earlier attempts in the Run Log and unrun checks marked `not run`. For bug fixes, reproduce the failure before fixing when a regression test or runtime check can express it. UI changes need visual evidence when appearance is an acceptance criterion. Do not weaken a valid check to pass; justify any legitimate test correction against the requirement.
 
 **Parallel writers are allowed only with worktree isolation plus an explicit merge step:**
 
@@ -399,12 +423,12 @@ effort: medium
 **Output format:**
 
 ```markdown
-## Phase 6: Thor (Execute)
+## Phase 6: Implement & Verify (Thor)
 
 ### Implementation Complete
 - [File 1]: [what was implemented]
 - [File 2]: [what was implemented]
-- Tests: [all passing, coverage X%]
+- Validation: [criterion ID · command · observed result · evidence reference]
 
 **Ready for Phase 7 (Review).**
 ```
@@ -413,7 +437,7 @@ effort: medium
 
 ---
 
-## Phase 7: Heimdall (Review)
+## Phase 7: Validate & Review (Heimdall)
 
 **Prerequisite:** Phase 6 execution complete.
 
@@ -430,13 +454,13 @@ Then apply the three checks a diff review does not cover:
 - If all pass: proceed to Phase 8
 - If issues found: triage by **Loop Control** above — local defects re-enter Phase 6, systemic ones Phase 2 — and append each finding to the worktask's `## Run Log`. Where triage does not settle it, present to the user with options:
   - **Option A**: Fix issues in a follow-up execution (re-run Phase 6 with feedback)
-  - **Option B**: Accept known issues and document (update AGENTS.md)
+  - **Option B**: Accept known issues in the canonical decision record; update context only when guidance changes
   - **Option C**: Block and ask for clarification/requirements change
 
 **Output format:**
 
 ```markdown
-## Phase 7: Heimdall (Review)
+## Phase 7: Validate & Review (Heimdall)
 
 ### Review Skill Findings
 - [finding + remediation, or "none"]
@@ -462,28 +486,26 @@ Then apply the three checks a diff review does not cover:
 
 ---
 
-## Phase 8: Bragi (Record) — 🛑 MANDATORY
+## Phase 8: Record & Learn (Bragi) — 🛑 MANDATORY
 
 **Prerequisite:** Phase 7 passed (or user approved known issues).
 
-**Mandatory to perform — and it stops before committing.** Recording is never skipped; committing happens only if the Execution Profile allows it.
+**Mandatory to perform — and it stops before committing.** Context review and recording are never skipped; committing happens only if the Execution Profile allows it.
 
-1. **Update AGENTS.md context document**:
-   - Record actual implementation details (not just planned)
-   - Update Tech Stack section with what was actually used
-   - Update Key Behaviors if implementation differs from spec
-   - Add Changelog entry: date, change, reference
+1. **Review relevant context documents loaded in Phase 0**:
+   - Update guidance made untrue by the change and add only newly necessary, non-duplicated constraints.
+   - Follow `meta/knowledge-conventional-contexts-quality.instructions.md`; reading a file alone is not a reason to edit it.
+   - If no guidance needs changing, record “reviewed — no context changes needed.”
+   - If needed context did not exist, create it from `TEMPLATE_AGENTS.md` only when lasting local guidance passes the quality rule, and link it from the nearest governing context.
 
-2. **Update or create ADRs**:
-   - If Phase 3 LADRs are still accurate: mark as finalized
-   - If implementation changed decisions: update ADR with actual outcome
-   - Add implementation status and rationale
+2. **Finalize decision records and artifact links**:
+   - Confirm that LADRs/ADRs/NFRs reflect actual outcomes; update decisions changed by implementation in their existing home.
+   - Record approved plan deviations, source revisions and validation evidence in the canonical record where applicable; do not fabricate an approval.
 
-3. **Finalize changelog**:
-   - Comprehensive entry describing what was implemented
-   - Breaking changes (if any)
-   - Migration instructions (if needed)
-   - Reference to this task
+3. **Record actual implementation outcomes**:
+   - Update the project's changelog with the implemented change, breaking changes or migration guidance when applicable.
+   - Context-document changelog rows describe changes in guidance, not a duplicate implementation summary.
+   - Report requirement/criterion coverage, commands and observed evidence from the worktask's Validation table and Run Log.
 
 ### Reflect (mandatory, after steps 1–3 and before the commit step)
 
@@ -517,12 +539,12 @@ Per the Execution Profile's Commits field:
 **Output format:**
 
 ```markdown
-## Phase 8: Bragi (Record)
+## Phase 8: Record & Learn (Bragi)
 
-### Documentation Updated
-- [Domain]_AGENTS.md: [sections changed]
-- ADR files: [updated with actual implementation details]
-- Root AGENTS.md: [if applicable]
+### Context and Decisions Reviewed
+- Context: [changed guidance, or reviewed — no context changes needed]
+- Decision records: [actual outcomes and approved deviations, when applicable]
+- Validation evidence: [criterion coverage and Run Log references]
 
 ### Changelog Entry
 [Comprehensive entry for release notes]
@@ -552,6 +574,7 @@ Per the Execution Profile's Commits field:
 
 | Date | Task | Changes |
 |------|------|---------|
+| 2026-10-24 | SDLC development alignment | Descriptive phase labels; lifecycle boundaries and current Evidence cells; shared risk-based paths with mechanical exception; plans outside AGENTS; bounded execution and value-gated context edits. |
 | 2026-05-30 | | Initial version. |
 | 2026-09-20 | Worktask template & hook remediation | Removed the git-policy override and the autonomous-commit instructions — commits are now a per-task Execution Profile field routed through the `git-commit` skill, push never. Added `## Execution Profile`, replacing the 17-row phase/model table and the fabricated cost/quality metric; model hints now bind only at spawn points, in the per-runner `claude:`/`copilot:`/`codex:` form. `Agent Fleet Autonomy` → `Subagents` (default none, three justified shapes; parallelism means batched tool calls). Phases 1/4/7 no longer spawn specialist rosters; Phase 6 is sequential unless worktree-isolated with a merge step; Phase 7 delegates to the runner's review skill. Genericized the frontend/stack specifics. `load-context` → `context-load-context`; test tiers corrected to L0 unit / L1 component / L2 integration. Self-check "Gate"s renamed to "Exit check". Added the FALLBACK banner naming `ai-workflow-rules.instructions.md` authoritative, plus this `## Changelog` heading. |
 | 2026-09-27 | Model → effort | The Execution Profile recommends a session **effort** (`low` → `max`, set via the runner's effort setting) instead of a model, and the Phase 2/6 spawn-point hints are `effort: medium` instead of a per-runner `claude:`/`copilot:`/`codex:` model block. Subagents run on the session's model. |

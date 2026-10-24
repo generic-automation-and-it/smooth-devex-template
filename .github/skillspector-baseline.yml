@@ -231,3 +231,21 @@ accepted:
       "Context Window Stuffing" on the workflow step name "Fill Contexts", which fills the
       worktask's "## Contexts" section with verified file paths. It lists paths for a later
       reader; nothing is bulk-loaded into the model's context.
+  - id: SC2
+    file: ai-ralph-loop/AGENTS.md
+    reason: >-
+      Quoted "curl | bash" text in the maintainer changelog explaining installer prompt
+      behavior. This is historical first-party documentation, not executable fetching
+      or an instruction to run an unknown remote script.
+  - id: SC2
+    file: ai-ralph-loop/decisions/README.md
+    reason: >-
+      Operator-invoked installation examples use this repository's first-party installer
+      to opt into decision validation. Both detections describe the same documented
+      installation route, not an automatic remote script fetch by the skill.
+  - id: RA2
+    file: ai-ralph-loop/decisions/README.md
+    reason: >-
+      Documented, explicit opt-in shell-profile configuration for the local decision
+      client. The enable and disable procedures are visible to the operator; the
+      skill does not silently establish persistence. Existing pattern confirmed by scan.
