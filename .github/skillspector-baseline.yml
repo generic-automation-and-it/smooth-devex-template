@@ -231,3 +231,35 @@ accepted:
       "Context Window Stuffing" on the workflow step name "Fill Contexts", which fills the
       worktask's "## Contexts" section with verified file paths. It lists paths for a later
       reader; nothing is bulk-loaded into the model's context.
+
+  # --- ai-ralph-loop: contract-test harness and installer documentation (#138) ---
+  - id: OH1
+    file: ai-ralph-loop/decisions/tests/test_decision_evaluate.py
+    reason: >-
+      "Unvalidated Output Injection" on subprocess.run calls that drive the production Bash
+      evaluator. Arguments are a list (shell=False), paths are temp files created by the test,
+      and payloads go through stdin — no shell or injection sink. Running the real CLI is the
+      test's entire purpose.
+  - id: AST4
+    file: ai-ralph-loop/decisions/tests/test_decision_evaluate.py
+    reason: >-
+      "subprocess module call" on the same bounded test harness. It launches
+      decision-evaluate.sh with shell=False to assert CLI/request/response/audit contracts;
+      the invocation is inherent to L1 coverage of a Bash entry point.
+  - id: SC2
+    file: ai-ralph-loop/decisions/README.md
+    reason: >-
+      "External Script Fetching" on the documented `curl | bash` installer command and the
+      piped-install `/dev/tty` note. This is the repository's existing first-party install
+      path, documented so a user can opt in; the README instructs, it does not execute.
+  - id: SC2
+    file: ai-ralph-loop/AGENTS.md
+    reason: >-
+      "External Script Fetching" on a historical changelog row quoting the installer's
+      `curl | bash` / `/dev/tty` behavior. Documentation history only; nothing is fetched.
+  - id: RA2
+    file: ai-ralph-loop/decisions/README.md
+    reason: >-
+      "Session Persistence" on the documented `~/.zshrc` / `~/.bashrc` export block that
+      enables the optional decision layer. That is user shell configuration the README tells
+      the user to edit; the skill persists no runtime session state.
