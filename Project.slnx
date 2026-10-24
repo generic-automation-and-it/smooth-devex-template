@@ -206,5 +206,8 @@
     <File Path=".dockerignore" />
   </Folder>
   <File Path="AGENTS.md" />
+  <Folder Name="/scripts/">
+    <File Path="scripts/test-worktask-routing.py" />
+  </Folder>
   <File Path="opencode.json" />
 </Solution>

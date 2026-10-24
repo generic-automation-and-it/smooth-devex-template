@@ -12,7 +12,7 @@ prompt=$(jq -r '.prompt // empty' 2>/dev/null) || exit 0
 first_line=$(printf '%s\n' "$prompt" | sed -n '/[^[:space:]]/{p;q;}')
 
 if printf '%s\n' "$first_line" | grep -Eiq \
-    '^[[:space:]]*(please[[:space:]]+)?(create|make)[[:space:]]+(a[[:space:]]+)?work([[:space:]]|-)?task([^[:alnum:]_-]|$)'; then
+    '^[[:space:]]*(please[[:space:]]+)?((create|make)[[:space:]]+|promote[[:space:]]+this[[:space:]]+to[[:space:]]+)((a|an)[[:space:]]+)?(sdlc[[:space:]]+)?work([[:space:]]|-)?task([^[:alnum:]_-]|$)'; then
     cat <<'EOF'
 The user requested a worktask. Invoke the create-worktask skill for this turn: load .agents/skills/create-worktask/SKILL.md and follow its current workflow. This hook only routes the request; do not execute the resulting worktask in the same turn.
 EOF

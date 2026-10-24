@@ -126,6 +126,9 @@ writer recomputes from disk each run — never read it as a control, and never a
 
 ## Test References
 
+`python3 scripts/test-worktask-routing.py` verifies the worktask prompt router's positive/negative
+behavior (requires Bash and jq). It runs in the PR gate for hook/skill and script changes.
+
 The harness is wired into `.github/workflows/pr-gate.yml` (`Test skills installer`). It deliberately
 exercises the manifest reconciliation, the agent-root search, and the shared-payload refresh; the clone/copy path is exercised against the
 checkout itself (`SKILLS_REPO` pointed at this repo, `SKILLS_BRANCH` at the current branch), so no
@@ -143,6 +146,7 @@ Two known gaps:
 
 | Date | Change | Ref |
 | :---- | :---- | :---- |
+| 2026-10-24 | Worktask routing regressions wired into PR gate | — |
 | 2026-10-15 | Initial: `install-skills.{sh,ps1}` + harness + docs | — |
 | 2026-10-16 | Agent-root layout: manifest + cross-cutting payload at `<agent-root>/_smooth-devex-shared/` (ships `setup/scripts/`, `templates/`), canonical symlinks, legacy-manifest fresh start; harness covers refresh/sweep/links/legacy | — |
 | 2026-10-16 | Category switches `-r -s -h` (default all-on): `OWNED_RULES` (4 files) + rules topology link, `OWNED_HOOKS` (2 files, exec bit); harness covers categories, unowned, real-dir, bad flag; README one-liners spell the default | — |

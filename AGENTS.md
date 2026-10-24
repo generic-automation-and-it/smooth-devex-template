@@ -18,7 +18,7 @@ Project is an AI-spec-driven, AI-agnostic development project. _(Placeholder des
 
 Before changing code, read every `AGENTS.md` / `*AGENTS.md` in scope — they carry the "why" source code cannot convey. Specific overrides general; the nearest file is most authoritative.
 
-- Every PR creates or updates at least one `*AGENTS.md`. Update the closest context file to the code you change; prefer local context over adding to this root file.
+- Every PR reviews the affected `*AGENTS.md` guidance and updates what the change makes untrue or adds only newly necessary constraints. Prefer the closest context; do not make cosmetic edits just because a file was read.
 - Quality bar and value gate for all `*AGENTS.md` edits: `.agents/rules/meta/knowledge-conventional-contexts-quality.instructions.md`.
 
 ## Understandings
@@ -74,3 +74,9 @@ Reviewer docs: `docs/` (index) + `docs/wiki/`. Designs, NFRs and LADRs: `docs/hl
 
 - PR gate (`.github/workflows/pr-gate.yml`): restore → build (Release) → Aspire-backed test with coverage. Details: `docs/wiki/ci.md`.
 - Skill gate (`.github/workflows/skill-scan.yml`): only relevant when touching `.agents/skills/**`. Baseline-aware — new non-baselined findings fail; details live in the workflow and `.agents/skills/AGENTS.md` (LADR-001).
+
+## Changelog
+
+| Date | Change | Ref |
+| :---- | :---- | :---- |
+| 2026-10-24 | Mandatory context review; value-gated edits | — |
