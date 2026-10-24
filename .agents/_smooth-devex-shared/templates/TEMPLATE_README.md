@@ -20,8 +20,6 @@ This guide explains how to create and maintain `*AGENTS.md` context files for AI
 │
 ├── docs/
 │   ├── adr/                                 # Architecture Decision Records
-│   ├── nfr/                                 # Non-Functional Requirements
-│   │   └── {CONCERN}_AGENTS.md              # Security, performance, etc.
 │   ├── TEMPLATE_AGENTS.md                   # Template for new AGENTS.md
 │   └── TEMPLATE_README.md                   # This file
 │
@@ -41,8 +39,9 @@ Each pull request must either:
 
 This ensures AI context stays synchronized with code changes.
 
-### Rule 2: Non-Functional Concerns → `docs/nfr/`
-Place infrastructure and cross-cutting concerns in `docs/nfr/{CONCERN}_AGENTS.md`:
+### Rule 2: Non-Functional Concerns → HLD `nfrs/` or colocated `*AGENTS.md`
+Place design-phase quality bars in `docs/hlds/NNN-<slug>/nfrs/` (via `create-hld`); place
+infrastructure and cross-cutting concerns in colocated `{CONCERN}_AGENTS.md` next to the code:
 - Security configurations
 - Performance requirements
 - Logging/monitoring setup

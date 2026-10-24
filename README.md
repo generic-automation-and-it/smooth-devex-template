@@ -108,7 +108,7 @@ Full setup, container run, and troubleshooting: [`docs/wiki/local-dev.md`](docs/
 | `.agents/` | All AI tooling — skills, rules, hooks, prompts, roles, setup |
 | `src/` | .NET reference implementation (`Domain` / `Application` / `Infrastructure` / `Host`) |
 | `tests/` | L0 unit · L1 component · L2 integration + shared fixtures |
-| `docs/` | Wiki, examples, ADRs, NFRs, HLDs |
+| `docs/` | Reviewer docs ([index](docs/)): wiki, examples, ADRs, HLDs (NFRs live per-design under `docs/hlds/*/nfrs/`) |
 | `scripts/` | Skills installer + test harness |
 
 ---
@@ -125,7 +125,7 @@ Full setup, container run, and troubleshooting: [`docs/wiki/local-dev.md`](docs/
 | Testing strategy | [`docs/wiki/testing.md`](docs/wiki/testing.md) |
 | CI/CD pipeline | [`docs/wiki/ci.md`](docs/wiki/ci.md) |
 | AI asset sync (skills/rules) | [`docs/wiki/ai-asset-sync.md`](docs/wiki/ai-asset-sync.md) |
-| Architecture decisions & NFRs | [`docs/adr/`](docs/adr/) · [`docs/nfr/`](docs/nfr/) |
+| Architecture decisions | [`docs/adr/`](docs/adr/) |
 
 ---
 
