@@ -231,6 +231,20 @@ accepted:
       "Context Window Stuffing" on the workflow step name "Fill Contexts", which fills the
       worktask's "## Contexts" section with verified file paths. It lists paths for a later
       reader; nothing is bulk-loaded into the model's context.
+  # --- ai-ralph-loop: contract-test harness (#138) and installer documentation ---
+  - id: OH1
+    file: ai-ralph-loop/decisions/tests/test_decision_evaluate.py
+    reason: >-
+      "Unvalidated Output Injection" on subprocess.run calls that drive the production Bash
+      evaluator. Arguments are a list (shell=False), paths are temp files created by the test,
+      and payloads go through stdin — no shell or injection sink. Running the real CLI is the
+      test's entire purpose.
+  - id: AST4
+    file: ai-ralph-loop/decisions/tests/test_decision_evaluate.py
+    reason: >-
+      "subprocess module call" on the same bounded test harness. It launches
+      decision-evaluate.sh with shell=False to assert CLI/request/response/audit contracts;
+      the invocation is inherent to L1 coverage of a Bash entry point.
   - id: SC2
     file: ai-ralph-loop/AGENTS.md
     reason: >-

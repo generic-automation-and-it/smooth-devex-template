@@ -61,6 +61,10 @@ result is surfaced in the `Decision` column of the [output](#output). It never g
 `keep=false` is reported, not undone, and a service that stays unreachable after `MAX_ATTEMPTS` falls
 back to running as if decisions were disabled.
 
+Every enabled call supplies `--evidence` and `--audit-file`. A missing flag, unreadable input or
+template failure is a usage/template error, not a verdict: record `Decision` as `n/a` and continue.
+Never fabricate a `keep`/`reject` from an invocation failure.
+
 With `--nodecisions`, skip that evaluation even when the env var is set; the `Decision` column reads
 `n/a` for every row. Decision validation is off by default (`SMOOTH_DEVEX_DECISIONS_ENABLED` unset),
 in which case the column is `n/a` too. This composes with `--scope`, `--loops`, `--spawn`, `--notests`
@@ -83,7 +87,8 @@ excludes nothing.
 When decision validation is active, each accepted plan edit is evaluated like a code fix but with the
 **plan template**: set `SMOOTH_DEVEX_DECISIONS_TEMPLATE` to this skill's `decisions/templates/plan.json`
 before the call — the code-mode default (`templates/build.json`) asks code-mode questions that a plan
-cannot answer.
+cannot answer. The before/after text is the whole affected plan section(s), verbatim; include every
+related section a contradiction or dependency spans. Pass the finding's evidence and audit path too.
 
 ### Target
 
@@ -230,10 +235,12 @@ across tiers.
 
 ### Ledger
 
-`.context/ralph-loop/<yyyyMMdd-HHmm>/ledger.md` (UTC stamp, one folder per run). Header: scope list,
-active switches (including `--notests`), context pack paths, baseline verify result. For code scope,
-keep the test inventory current in a separate table — [Test focus](#test-focus) does not apply in
-plan mode, so that table is omitted there:
+`.context/ralph-loop/<yyyyMMdd-HHmm>/ledger.md` (UTC stamp, one folder per run; create the folder
+exclusively and append `-2`, `-3`, … on a same-minute collision). Evaluations write
+`<run-dir>/decisions/<finding-ID>.json`. Header: scope list, active switches (including `--notests`),
+context pack paths, baseline verify result, audit directory. For code scope, keep the test inventory
+current in a separate table — [Test focus](#test-focus) does not apply in plan mode, so that table is
+omitted there:
 
 ```markdown
 | Feature | Requirement/scenario | Tier | Test name and file / searched locations | Coverage/quality gap or N/A reason | Verify command and pass/fail/skip/blocked result |
@@ -274,13 +281,24 @@ test at the tier required by Test focus unless `--notests` is set; then fix the 
    defer any missing regression coverage separately. Existing test placement is not authoritative.
    A fix that would leave the permitted scope is `deferred`. In plan mode the edit lands on the plan
    document and **nowhere else** — never on code.
-   When decision validation is active (not `--nodecisions` and `SMOOTH_DEVEX_DECISIONS_ENABLED=true`),
-   capture the before/after of the accepted fix and run this skill's
-   `decisions/scripts/decision-evaluate.sh --category <cat> --before <before-file>
-   --after <after-file> --context <file:line>` (resolve the script relative to the directory holding
-   this `SKILL.md` — `.agents/skills/ai-ralph-loop/` in a repo, or the loaded skill directory for a
-   global install); record the outcome as the finding's `Decision`. Non-blocking: a `keep=false` or a
-   `fallback=true` result is reported, never undone.
+   When decision validation is active (not `--nodecisions` and `SMOOTH_DEVEX_DECISIONS_ENABLED=true`):
+   1. Allocate the finding's ID before evaluation.
+   2. Capture verbatim in run-local files:
+      - code mode — the changed hunk with surrounding lines;
+      - plan mode — the whole affected section(s), plus every related section a contradiction or
+        dependency spans;
+      - evidence — the accepted reviewer/triage Evidence and Fix text. A cited rule or spec needs its
+        relevant excerpt, not just a path; a failure scenario is valid evidence without a citation.
+   3. Run this skill's
+      `decisions/scripts/decision-evaluate.sh --category <cat> --before <before-file>
+      --after <after-file> --evidence <evidence-file> --context <file:line|section:paragraph>
+      --audit-file <run-dir>/decisions/<finding-ID>.json` (resolve the script relative to the
+      directory holding this `SKILL.md` — `.agents/skills/ai-ralph-loop/` in a repo, or the loaded
+      skill directory for a global install).
+   4. Record the outcome as the finding's `Decision`.
+   Non-blocking: `keep=false` is reported, never undone. A usage error, template failure, invalid
+   response or audit failure is unavailable feedback — record `Decision` as `n/a` and continue. A
+   `fallback=true` result is likewise reported, never undone.
 4. **Verify.** Build touched projects and run relevant L0/L1/L2 suites for affected behaviour, including
    required feature tests in otherwise untouched test projects. Update the inventory with commands and
    pass/fail/skip/blocked results; unrun or blocked suites never count as passing. A new failure → fix
@@ -339,8 +357,11 @@ The final message is this table — `fixed` rows only, IDs from the ledger:
 ```
 
 `Decision` is the decision-validation outcome for that fix — `keep` / `reject` (`pct` appended when
-useful) — or `n/a` when the layer is off (no `SMOOTH_DEVEX_DECISIONS_ENABLED=true`, or `--nodecisions`,
-or a `fallback=true`). It never gates a fix; a `reject` is reported, not undone.
+useful) — or `n/a` when the layer is off (no `SMOOTH_DEVEX_DECISIONS_ENABLED=true`, `--nodecisions`,
+a `fallback=true`, or an invocation/template/audit failure). For plan mode, append the basis
+(`coverage_override`, `value_threshold`, `value_below_threshold`, `change_rejected`,
+`insufficient_evidence`) and coverage when useful. It never gates a fix; a `reject` is reported, not
+undone.
 
 Then four lines:
 
