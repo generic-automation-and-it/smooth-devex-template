@@ -118,14 +118,27 @@ fi
 read_input() {
   local file="$1"
   local label="$2"
-  if [ "$file" != "-" ] && [ ! -f "$file" ]; then
-    echo "decision-evaluate: $label file not found: $file" >&2
-    exit 1
+  REPLY=""
+  if [ "$file" != "-" ]; then
+    if [ ! -f "$file" ]; then
+      echo "decision-evaluate: $label file not found: $file" >&2
+      exit 1
+    fi
+    if [ ! -r "$file" ]; then
+      echo "decision-evaluate: $label file not readable: $file" >&2
+      exit 1
+    fi
   fi
   if [ "$file" = "-" ]; then
     IFS= read -r -d '' REPLY || true
   else
-    IFS= read -r -d '' REPLY < "$file" || true
+    local sentinel=$'\001'
+    local output
+    output="$(cat "$file"; rc=$?; printf '%s' "$sentinel"; exit $rc)" || {
+      echo "decision-evaluate: $label file cannot be opened: $file" >&2
+      exit 1
+    }
+    REPLY="${output%$sentinel}"
   fi
 }
 

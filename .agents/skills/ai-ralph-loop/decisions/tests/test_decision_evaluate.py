@@ -1055,6 +1055,46 @@ class CompatibilityContract(EvaluatorContract):
         self.assertIn("before file not found", process.stderr)
         self.assertEqual(server.httpd.requests, [])
 
+    def test_unreadable_input_file_is_an_argument_error_without_stale_input(self):
+        if os.name == "nt":
+            self.skipTest("mode-based readability is POSIX-specific")
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            self.skipTest("root can read mode-000 files")
+        server = self.serve([plan_response()])
+        before = self.write("readable-before.txt", "before text")
+        after = self.write("unreadable-after.txt", "after text")
+        evidence = self.write("readable-evidence.txt", "evidence text")
+        os.chmod(after, 0)
+        try:
+            arguments = [
+                "bash",
+                str(SCRIPT),
+                "--category",
+                "potential-bug",
+                "--before",
+                before,
+                "--after",
+                after,
+                "--evidence",
+                evidence,
+                "--context",
+                "file.txt:1",
+                "--audit-file",
+                str(self.directory / "unreadable-audit.json"),
+            ]
+            process = subprocess.run(
+                arguments,
+                capture_output=True,
+                text=True,
+                env=self.base_environment(server, template=PLAN_TEMPLATE),
+                timeout=30,
+            )
+        finally:
+            os.chmod(after, 0o600)
+        self.assertEqual(process.returncode, 1)
+        self.assertIn("after file not readable", process.stderr)
+        self.assertEqual(server.httpd.requests, [])
+
     def test_unknown_category_is_an_argument_error_before_network(self):
         process, requests = self.run_eval([plan_response()], category="not-a-category")
         self.assertEqual(process.returncode, 1)
