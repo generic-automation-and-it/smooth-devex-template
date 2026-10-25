@@ -8,7 +8,7 @@ alwaysApply: true
 ---
 # Git Operations Policy
 
-**NEVER commit or push unless the user EXPLICITLY asks.** Updated: 2026-05-30
+**NEVER commit or push unless the user EXPLICITLY asks.** Updated: 2026-10-24
 
 ## Absolute Rule
 
@@ -17,6 +17,22 @@ alwaysApply: true
 | User says "commit", "push", or asks for git workflow skill execution | Proceed with git operation |
 | Task complete, changes "look ready", user "probably" wants it | **DO NOTHING** - wait for explicit instruction |
 | User asks "can we do X?" | Answer the question. **DO NOT** do X and commit |
+
+## User Authorization vs Tool Approval
+
+- An explicit request or invocation of a Git workflow skill is authorization for that workflow's stated operations. `/git-commit` authorizes committing only; `/git-commit-push` authorizes committing and pushing; `/git-commit-push-pr` also authorizes creating or updating the PR. Do not ask for the same authorization again unless the scope changes.
+- This rule governs the agent's decision to act. **Do not translate "unless the user explicitly asks" into an unconditional Codex `prefix_rule(decision = "prompt")` for `git commit` or `git push`.** Command-prefix rules cannot inspect conversation consent; their `justification` is explanatory text, not a condition.
+- User authorization does not override runtime execution policy. Once authorized, use the normal execution tool within the session's existing permissions; do not request escalation when approval mode is `never`.
+
+### Codex: `approval required by policy, but AskForApproval is set to Never`
+
+When this rejection occurs after the user has authorized the operation, diagnose a **runtime-policy conflict, not missing user consent**. Repeating the request or retrying the same command does not resolve it.
+
+1. Inspect the matching Codex `.rules` files. This repository's `scripts/install-skills.sh` (`install_global_codex_rules`) and `scripts/install-skills.ps1` (`Install-GlobalCodexRules`) generate `~/.codex/rules/smooth-devex.rules`; unconditional commit/push `prompt` blocks in that file are the known cause. A read-only `codex execpolicy check --rules <file> -- git commit -m <message>` can confirm the decision without executing a commit.
+2. Explain that the user's authorization is sufficient but the tool requires a separate approval that `never` cannot display. Do not tell the user to authorize the same Git workflow again.
+3. The durable repair is to remove the ordinary commit/push `prompt` blocks from **both installer generators** and regenerate the installed file, while preserving unrelated restrictions and operator-owned rules. Adding an `allow` rule does not override a matching `prompt` or `forbidden` rule; the most restrictive decision wins.
+4. Start a new Codex session after changing the installed rules. Enabling approval prompts is an interactive workaround, not the underlying fix. Editing this instruction file alone cannot change the runtime rules already loaded by a session.
+5. Apply configuration repairs only within the user's authorized scope. Do not bypass the rejection using `git -C`, command wrappers, alternate executables, or other spellings intended to evade policy. Report what was actually changed and which Git operations did or did not complete.
 
 ## After Making Code Changes
 
@@ -159,3 +175,4 @@ User owns their git history. They may want to: review before committing, split i
 |:-----|:-------|
 | 2026-05-30 | Initial version. |
 | 2026-05-30 | Align branch types with Conventional Commits (`feat`/`fix`/… not `feature`/`bugfix`/…). |
+| 2026-10-24 | Separate workflow authorization from runtime approval; diagnose Codex prompt/never conflicts and identify the installer repair. |

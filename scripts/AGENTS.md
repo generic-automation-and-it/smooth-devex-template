@@ -118,6 +118,10 @@ not instructions: the installer owns only `~/.codex/rules/smooth-devex.rules` (f
 must never touch `default.rules`, where Codex appends the operator's approvals. A file we created whose
 only other content is the RTK header is removed outright when codex goes off, not left empty.
 
+The ownership header also gates upgrades: replace legacy generated commit/push prompt rules on a
+global rerun, but preserve foreign files. Do not make this migration depend on the operator's current
+approval mode; the installed policy must also work in future `never` sessions.
+
 `harnesses{}` (`claude-code`, `codex`, `opencode`; missing = `true`) is the same switch for a whole tool,
 and `false` **removes** as well as skips: store symlinks, the `~/.codex/AGENTS.md` rules block, `smooth-devex.rules`, `hooks.json`
 commands and `opencode.json` entries are found on disk by where they point, not from `links[]`.
@@ -125,6 +129,9 @@ commands and `opencode.json` entries are found on disk by where they point, not 
 writer recomputes from disk each run — never read it as a control, and never add it to the config-edit records.
 
 ## Test References
+
+`python3 scripts/test-worktask-routing.py` verifies the worktask prompt router's positive/negative
+behavior (requires Bash and jq). It runs in the PR gate for hook/skill and script changes.
 
 The harness is wired into `.github/workflows/pr-gate.yml` (`Test skills installer`). It deliberately
 exercises the manifest reconciliation, the agent-root search, and the shared-payload refresh; the clone/copy path is exercised against the
@@ -143,6 +150,7 @@ Two known gaps:
 
 | Date | Change | Ref |
 | :---- | :---- | :---- |
+| 2026-10-24 | Worktask routing regressions wired into PR gate | — |
 | 2026-10-15 | Initial: `install-skills.{sh,ps1}` + harness + docs | — |
 | 2026-10-16 | Agent-root layout: manifest + cross-cutting payload at `<agent-root>/_smooth-devex-shared/` (ships `setup/scripts/`, `templates/`), canonical symlinks, legacy-manifest fresh start; harness covers refresh/sweep/links/legacy | — |
 | 2026-10-16 | Category switches `-r -s -h` (default all-on): `OWNED_RULES` (4 files) + rules topology link, `OWNED_HOOKS` (2 files, exec bit); harness covers categories, unowned, real-dir, bad flag; README one-liners spell the default | — |
@@ -169,3 +177,4 @@ Two known gaps:
 | 2026-10-19 | Owned skills 7→15 (+`agile-github-*`, `context-load-*`, `git-commit*`, `git-sync`); `load-agents-context.sh` stays local: PostToolUse, `-g` registers `UserPromptSubmit` only; harness unowned probe is `ai-brain-dump` | #126 |
 | 2026-10-19 | Codex pitfall: no `@path` imports, 32 KiB cap — `~/.codex/AGENTS.md` gets a rule index block (replaced in place, legacy `@` block migrated), not `@` lines; `~/.codex/rules/smooth-devex.rules` (git-policy → prompt/forbidden), never `default.rules`; ps1 shared `Test-InstallSnapshot`; harness 10a–10g | #126 |
 | 2026-10-21 | Reapplied #111/#113 payload contract; pwsh 7.2 floor; root-link guards/shared-root preflight; canonical links follow pruned payload; tests pin agent-home overrides | #110, #112, #130 |
+| 2026-10-24 | Codex: migrate legacy commit/push prompts; preserve leading force-push restriction and operator-owned files | — |

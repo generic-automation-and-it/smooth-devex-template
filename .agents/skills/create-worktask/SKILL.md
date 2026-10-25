@@ -1,6 +1,6 @@
 ---
 name: create-worktask
-description: 'Invoke to scaffold and fully populate a worktask under `.context/work-tasks/` so it is self-contained enough for a standalone AI coder to execute end-to-end. Trigger keywords: "create worktask", "create a work task", "make a work-task", "promote this to a worktask". Also triggers on /create-worktask (Claude Code) or $create-worktask (Codex). Does NOT trigger on questions about how worktasks work.'
+description: 'Author an execution-ready implementation worktask for the AI-native Software Development Lifecycle (SDLC), translating clarified intent and design into scope, measurable acceptance criteria, validation checks, dependencies, and an execution profile under `.context/work-tasks/`. Trigger on "create worktask", "create a work task", "make a work-task", "promote this to a worktask", or "create an SDLC worktask"; also /create-worktask (Claude Code) or $create-worktask (Codex). Does not execute the worktask or trigger on questions about worktasks or SDLC.'
 allowed-tools:
   - Bash(.agents/skills/create-worktask/scripts/scaffold-worktask.sh:*)
   - Read
@@ -11,16 +11,17 @@ allowed-tools:
 effort: xhigh  # investigation + requirement authoring the whole 9-phase workflow runs on
 ---
 
-# Create Worktask — standalone task authoring
+# Create Worktask — SDLC Implementation Planning
 
 ## TL;DR
 
-Produce `.context/work-tasks/<slug>.md` carrying **Title, Execution Profile, Contexts, Instructions**
+Produce `.context/work-tasks/<slug>.md` carrying **Title, Execution Profile, Source and Decision, Contexts, Instructions**
 and (only when needed) **Overrides**. The worktask *links* the bundled process manual,
 [`assets/AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md`](assets/AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md) — it never copies it.
 
-The worktask is the input the entire Odin→Bragi workflow runs on. Everything downstream inherits its
-gaps, so populate it from **real investigation**, not placeholders.
+The worktask prepares the **Build and Test** work in the AI-native SDLC development workflow
+(Odin→Bragi). It links clarified intent/design from the existing ticket, HLD or task request rather
+than replacing them. Everything downstream inherits its gaps, so populate it from **real investigation**, not placeholders.
 
 The process manual is a bundled **WET asset** so installing this skill does not depend on repo-level
 templates. Generated worktasks still link it rather than embedding the manual.
@@ -32,6 +33,11 @@ templates. Generated worktasks still link it rather than embedding the manual.
 - **Contexts must be real, verified paths.** Open each one before listing it. A listed file that does
   not exist is worse than an omitted one — the executing session will hunt for it.
 - **Acceptance criteria are testable and measurable.** "Works correctly" is not a criterion.
+- **One source of truth per artifact.** Link canonical intent/design/plan records and known revisions,
+  owners and decisions. Do not invent approvals or require three new documents for a small task.
+- **Deployment is separate.** Creating or approving an implementation worktask does not authorize
+  release actions. The Execution Profile records that boundary; release authorization belongs in its
+  separate canonical record.
 - **Commit permission is per-task and defaults to not allowed.** The Execution Profile's
   `Commits during execution` field is the only thing that grants it; `Push` is always `never`. Nothing
   in a worktask overrides `git-policy.instructions.md`.
@@ -54,7 +60,8 @@ or describe the work in natural language and follow the workflow.
 .context/work-tasks/<kebab-slug>.md
 ├── # Task: <one-liner>
 ├── Process: link to AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md
-├── ## Execution Profile   # effort recommendation, path, subagents, commits, push
+├── ## Execution Profile   # effort, path, subagents, commits, push, deployment boundary
+├── ## Source and Decision # canonical source/revision, known decision/owner, open concerns
 ├── ## Contexts            # verified paths only
 ├── ## Instructions        # summary, acceptance criteria, validation table, requirements,
 │                          # scope, integration points, NFRs, tests, dependencies
@@ -89,6 +96,13 @@ or describe the work in natural language and follow the workflow.
    - **Subagents** — `none` unless the task genuinely needs read-only fan-out or worktree-isolated writers
    - **Commits during execution** — `not allowed` unless the user explicitly grants it for this task
    - **Push** — `never`
+   - **Deployment** — `not authorized by this implementation worktask`; link separate release
+     authorization if it already exists, without granting it through this field
+
+   Fill **Source and Decision** with the originating ticket/HLD/intent or approved task request, its
+   canonical location and known revision, and the actual decision/owner/status. If no shared record
+   exists, name the user request as the source and say revision/approval evidence is unrecorded rather
+   than inventing it. Carry open concerns with their owners, deleting the field when none exist.
 
 5. **Fill Contexts** — every resource a standalone coder needs, each one verified in step 2:
    - Domain/feature `*AGENTS.md` files governing the code being touched
@@ -96,28 +110,38 @@ or describe the work in natural language and follow the workflow.
    - Rule files that apply (logging conventions, git policy, workflow rules)
    - Root `AGENTS.md` for system context; existing similar features to follow
    - Schema / API surfaces where the change touches them
-   - If no feature `*AGENTS.md` exists, say so and add "create `[domain]_AGENTS.md`" to Instructions
+   - If no feature `*AGENTS.md` exists, say so; add creation to Instructions only when lasting local
+     guidance is needed and passes the AGENTS quality rule
 
 6. **Fill Instructions** — the phases downstream consume these:
-   - **Summary + acceptance criteria + requirements + scope boundaries** (Phase 1 clarifies against these)
-   - **Validation** — one row per acceptance criterion: the criterion, then the check that proves it as
+   - **Summary + outcome/success signal + acceptance criteria + requirements + scope boundaries**
+     (Phase 1 clarifies against these). Preserve source requirement IDs, or assign local IDs when the
+     source has none; link them to criterion IDs instead of losing traceability.
+   - **Validation** — one row per acceptance criterion: source requirement ID, criterion ID, then the check that proves it as
      tier + command (L0/L1/L2, or an ad-hoc runtime check). Prefer the repo's existing suites, then the
      standard build/lint/type gates, then an ad-hoc check; a new script or tool only when none of those
      can express the behaviour, with a one-line reason in the row. Fill this table before confirming
-     the worktask — Phase 3 only refines it on the full path — and Phase 7 runs it against the integrated
-     result; a criterion with no passing check is unmet.
+     the worktask — Phase 3 only refines it on the full path. Evidence starts as `not run`; Phase 6 runs
+     targeted checks during implementation and records actual command/result/evidence in the Run Log.
+     Update each check's Evidence cell with its latest result and a Run Log/evidence reference; keep
+     earlier attempts in the Run Log and unrun checks marked `not run`. Phase 7 reviews the integrated
+     result. A criterion with no passing check is unmet.
    - **Integration points, performance, security, compliance** (Phase 2 analyses these)
    - **Data model, API contracts, UI structure** where the change implies them (Phase 3 specifies these)
    - **Tests** — required tiers: L0 (unit) / L1 (component) / L2 (integration), and what each must cover
    - **Dependencies and references** — prior work, tickets/PRs, patterns to follow, known gotchas,
      migration path for breaking changes
+   - **Release and observe** — only when the change has deployment/operator implications: health or
+     smoke checks, a rollback reference, operational owner, and post-release success/failure signal.
+     This plans the handoff; it does not authorize deployment. Omit the section when irrelevant.
 
 7. **Recommend the session effort and path** — a human action, reported to the user and recorded in the
    Execution Profile:
-   - **Lightweight path (0→1→6→7→8)** at `low`/`medium` effort — config changes, single-file fixes,
-     straightforward CRUD, <5 files, clear patterns
-   - **Full path (0→1→2→3→4→5→6→7→8)** at `high`/`xhigh`/`max` effort — cross-cutting concerns,
-     architectural decisions, ambiguous requirements, 5+ files, new patterns, complex integrations
+   - Choose the path using **Path Selection** in the loaded `ai-workflow-rules.instructions.md`
+     (authoritative), or the linked bundled manual when the rule is unavailable. Do not maintain a
+     second file-count threshold in this skill.
+   - **Lightweight path (0→1→6→7→8)** — recommend `low`/`medium` effort.
+   - **Full path (0→1→2→3→4→5→6→7→8)** — recommend `high`/`xhigh`/`max` effort.
    - One-line rationale. Remind the user to set the runner's effort level before starting execution.
 
 8. **Delete what does not apply** — remove unused placeholder bullets and drop `## Overrides` entirely
@@ -132,10 +156,12 @@ or describe the work in natural language and follow the workflow.
 - [ ] Does every listed context path exist? (Opened, not guessed.)
 - [ ] Is every acceptance criterion testable and measurable?
 - [ ] Does every acceptance criterion appear in the Validation table with a runnable check?
+- [ ] Are source requirement IDs linked to criteria, with evidence honestly marked `not run`?
+- [ ] Is the source of truth identified, with known revision/decision/owner and no invented approval?
 - [ ] Are scope boundaries explicit — what is OUT as well as what is IN?
 - [ ] Are the required test tiers named (L0/L1/L2) with what each must cover?
 - [ ] Are dependencies and integration points concrete?
-- [ ] Is the Execution Profile filled in — effort, path, subagents, commits, push?
+- [ ] Is the Execution Profile filled in — effort, path, subagents, commits, push, deployment boundary?
 - [ ] Are all unfilled placeholder brackets gone?
 - [ ] Does the worktask link the process template rather than restating its phases?
 - [ ] Is `## Run Log` present and empty (the executing session appends to it)?
@@ -152,6 +178,7 @@ or describe the work in natural language and follow the workflow.
 
 | Date | Change | Ref |
 | :---- | :---- | :---- |
+| 2026-10-24 | AI-native SDLC implementation planning; source/decision and requirement/evidence links with current results; shared path rubric; explicit deployment boundary and conditional release handoff. | — |
 | 2026-10-21 | Step 2 recalls prior Understandings (skipped when neither Kvasir nor `ai-understanding` is installed) and records the repo's real build/test commands. New Validation requirement in step 6 (one row per acceptance criterion; tier + command). Output contract and quality bar gain the Validation table and `## Run Log`. | — |
 | 2026-10-21 | Bundled the process manual as a WET asset; scaffolder links the installed copy without depending on repo-level templates. | — |
 | 2026-09-20 | Created — replaces the `worktask-create.sh` UserPromptSubmit hook. Carries the hook's remediated contract (Execution Profile; link-don't-copy; commits per-task and default not allowed; L0/L1/L2 tiers; model as a human action) plus a deterministic scaffolder and an asset template. | — |

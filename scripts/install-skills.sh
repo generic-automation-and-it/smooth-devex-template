@@ -1510,26 +1510,10 @@ install_global_codex_rules() {
   local content
   content="$(cat <<RULESEOF
 $CODEX_RULES_HEADER
-# Command-approval policy derived from the git/git-policy rule; Codex reads it at startup.
-# Prefix matching only: "git -C <dir> commit" is not matched, and "git push origin x --force"
-# is prompted by the push rule rather than forbidden. Keep your own rules in another file;
-# default.rules belongs to Codex.
-
-prefix_rule(
-    pattern = ["git", "commit"],
-    decision = "prompt",
-    justification = "git-policy: never commit unless the user explicitly asks",
-    match = [["git", "commit", "-m", "message"]],
-    not_match = [["git", "status"]],
-)
-
-prefix_rule(
-    pattern = ["git", "push"],
-    decision = "prompt",
-    justification = "git-policy: never push unless the user explicitly asks",
-    match = [["git", "push", "origin", "main"]],
-    not_match = [["git", "pull"]],
-)
+# Workflow authorization stays in the git/git-policy instructions, not tool-approval prompts.
+# Ordinary commits and pushes are unmatched; unconditional prompts block approval_policy=never.
+# Prefix matching only: "git push origin x --force" is not caught by the restriction below.
+# Keep your own rules in another file; default.rules belongs to Codex.
 
 prefix_rule(
     pattern = ["git", "push", ["--force", "-f", "--force-with-lease"]],

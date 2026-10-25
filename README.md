@@ -62,6 +62,14 @@ A Claude Code plugin is also available for the owned skills — install it from 
 
 ## Tech Stack
 
+### AI-native SDLC development workflow
+
+The [workflow rule](.github/instructions/ai-workflow-rules.instructions.md) maps development steps
+to **Plan, Design, Build, Test, Deploy and Maintain**. It covers intent/design, implementation
+planning, verification and learning; deployment and operational monitoring remain separate.
+`create-worktask` authors Build/Test implementation inputs with canonical source/decision links and
+requirement-to-check evidence, without executing the task or authorizing a release.
+
 ### AI Toolchain
 
 | Component | Technology |
@@ -108,7 +116,7 @@ Full setup, container run, and troubleshooting: [`docs/wiki/local-dev.md`](docs/
 | `.agents/` | All AI tooling — skills, rules, hooks, prompts, roles, setup |
 | `src/` | .NET reference implementation (`Domain` / `Application` / `Infrastructure` / `Host`) |
 | `tests/` | L0 unit · L1 component · L2 integration + shared fixtures |
-| `docs/` | Wiki, examples, ADRs, NFRs, HLDs |
+| `docs/` | Reviewer docs ([index](docs/)): wiki, examples, ADRs, HLDs (NFRs live per-design under `docs/hlds/*/nfrs/`) |
 | `scripts/` | Skills installer + test harness |
 
 ---
@@ -125,7 +133,7 @@ Full setup, container run, and troubleshooting: [`docs/wiki/local-dev.md`](docs/
 | Testing strategy | [`docs/wiki/testing.md`](docs/wiki/testing.md) |
 | CI/CD pipeline | [`docs/wiki/ci.md`](docs/wiki/ci.md) |
 | AI asset sync (skills/rules) | [`docs/wiki/ai-asset-sync.md`](docs/wiki/ai-asset-sync.md) |
-| Architecture decisions & NFRs | [`docs/adr/`](docs/adr/) · [`docs/nfr/`](docs/nfr/) |
+| Architecture decisions | [`docs/adr/`](docs/adr/) |
 
 ---
 

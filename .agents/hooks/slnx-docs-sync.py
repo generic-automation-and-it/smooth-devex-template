@@ -2,7 +2,7 @@
 Claude Code PostToolUse hook – slnx-docs-sync
 Mirrors the OpenCode plugin at .opencode/plugins/slnx-docs-sync.ts.
 
-Keeps *.slnx in sync when NFR or ADR documents are created
+Keeps *.slnx in sync when ADR documents are created
 or edited by a Write/Edit/NotebookEdit tool call.
 
 Receives a JSON payload on stdin from Claude Code:
@@ -43,8 +43,6 @@ def main() -> None:
     # Map path prefix to the matching .slnx solution folder.
     if rel.startswith("docs/adr/"):
         folder_name = "/docs/adr/"
-    elif rel.startswith("docs/nfr/"):
-        folder_name = "/docs/nfr/"
     else:
         sys.exit(0)
 

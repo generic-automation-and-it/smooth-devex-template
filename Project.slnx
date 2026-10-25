@@ -180,7 +180,7 @@
     <File Path=".agents/templates/TEMPLATE_README.md" />
   </Folder>
   <Folder Name="/docs/">
-    <File Path="README.md" />
+    <File Path="docs/README.md" />
   </Folder>
   <Folder Name="/docs/wiki/">
     <File Path="docs/wiki/ai-asset-sync.md" />
@@ -191,13 +191,23 @@
     <File Path="docs/wiki/reuse.md" />
     <File Path="docs/wiki/testing.md" />
   </Folder>
-  <Folder Name="/docs/adr/" />
-  <Folder Name="/docs/nfr/" />
+  <Folder Name="/docs/examples/">
+    <File Path="docs/examples/ai-asset-sync-caller.yml" />
+  </Folder>
+  <Folder Name="/docs/adr/">
+    <File Path="docs/adr/README.md" />
+  </Folder>
+  <Folder Name="/docs/hlds/">
+    <File Path="docs/hlds/README.md" />
+  </Folder>
   <Folder Name="/docker/">
     <File Path="Dockerfile" />
     <File Path="docker-compose.yml" />
     <File Path=".dockerignore" />
   </Folder>
   <File Path="AGENTS.md" />
+  <Folder Name="/scripts/">
+    <File Path="scripts/test-worktask-routing.py" />
+  </Folder>
   <File Path="opencode.json" />
 </Solution>

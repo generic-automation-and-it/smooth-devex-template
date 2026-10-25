@@ -101,7 +101,7 @@ match byte-for-byte (the harness holds them to each other).
 | `context-load-agents-context` | Loads ancestor `AGENTS.md` context for a file; `ai-ralph-loop` and `manage-rule-system` use it |
 | `context-load-context` | Loads or creates functional `AGENTS.md` context before implementation work |
 | `create-hld` | Design workflow authoring |
-| `create-worktask` | Task authoring workflow |
+| `create-worktask` | AI-native SDLC implementation task authoring; source/decision and validation links |
 | `git-commit` | Conventional-commit workflow; follows the shipped `git/git-policy` rule |
 | `git-commit-push` | Commit and push; follows the shipped `git/git-policy` rule |
 | `git-commit-push-pr` | Commit, push and open or update a PR; follows the shipped `git/git-policy` rule |
@@ -290,13 +290,18 @@ Codex has two things called "rules", and neither is an `@`-import:
   index; it is not enforced.
 - **Codex `.rules` files** (`~/.codex/rules/*.rules`) are a Starlark command-approval policy
   (`prefix_rule()` with `allow` / `prompt` / `forbidden`), not instructions. The installer writes one,
-  `~/.codex/rules/smooth-devex.rules`, from the `git/git-policy` rule: `git commit` and `git push` prompt,
-  and a push whose first flag is `--force`, `-f` or `--force-with-lease` is forbidden. It is a separate
+  `~/.codex/rules/smooth-devex.rules`, while `git/git-policy` is enabled: ordinary `git commit` and
+  `git push` commands are unmatched, and a push whose first flag is `--force`, `-f` or
+  `--force-with-lease` is forbidden. Explicit-user-request authorization stays in the Git policy
+  instructions; command rules cannot inspect conversation consent. Unconditional `prompt` rules
+  would block even authorized operations with `approval_policy = "never"`. It is a separate
   file because Codex appends your permanent approvals to `default.rules`, which the installer never
-  touches. Matching is by command prefix only, so `git -C <dir> commit` is not caught and
-  `git push origin x --force` is prompted rather than forbidden — a guard rail, not enforcement. The
+  touches. Matching is by command prefix only, so `git push origin x --force` is not caught — a guard
+  rail, not complete enforcement. Re-running the fixed global installer replaces legacy commit/push
+  prompt blocks in its own generated file; files without its ownership header are left untouched. The
   file exists only while `codex` is on and `git/git-policy` is `installed: true`, is removed otherwise
-  (only if it still carries its header), and Codex reads it at startup, so restart Codex after a change.
+  (only if it still carries its header), and Codex reads it at startup, so start a new Codex session
+  after a change. Updating repository instructions alone does not repair an already-installed policy.
 
 ### Switching a whole harness off
 

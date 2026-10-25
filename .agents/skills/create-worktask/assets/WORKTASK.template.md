@@ -8,6 +8,13 @@ Process: [`AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md`](<{{PROCESS_TEMPLATE}}>) 
 - **Subagents:** none
 - **Commits during execution:** not allowed
 - **Push:** never
+- **Deployment:** not authorized by this implementation worktask
+
+## Source and Decision
+- **Source of truth:** [canonical ticket, HLD, intent/design or approved task request]
+- **Source revision:** [known version/commit, or unrecorded]
+- **Decision:** [draft / approved / unrecorded — actual owner/approver and evidence, when known]
+- **Open concerns:** [concern and owner — omit this field when none exist]
 
 ## Contexts
 - [ ] [domain/feature AGENTS.md files that govern the code being touched]
@@ -20,19 +27,22 @@ Process: [`AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md`](<{{PROCESS_TEMPLATE}}>) 
 ### Summary
 [what is being built or fixed, and why]
 
+### Outcome and success signal
+[observable improvement this task delivers; preserve the source's success measure when one exists]
+
 ### Acceptance criteria
-- [ ] [specific, measurable condition]
+- [ ] **AC1 (R1):** [specific, measurable condition linked to its source requirement]
 
 ### Validation
 
-| Acceptance criterion | Check (tier · command) |
-| --- | --- |
-| [criterion above] | [L0/L1/L2 · command, or an ad-hoc runtime check with its command] |
+| Requirement | Acceptance criterion | Check (tier · command) | Evidence |
+| --- | --- | --- | --- |
+| [R1 / source requirement ID] | [AC1] | [L0/L1/L2 · command, or an ad-hoc runtime check with its command] | not run |
 
-[Every criterion appears at least once. Prefer the repo's existing suites, then the standard gates, then an ad-hoc runtime check; a new script or tool only when none of those can express the behaviour, with a one-line reason. Fill this table before confirming the worktask — Phase 3 only refines it on the full path — and Phase 7 runs it against the integrated result.]
+[Every criterion appears at least once. Prefer the repo's existing suites, then the standard gates, then an ad-hoc runtime check; a new script or tool only when none of those can express the behaviour, with a one-line reason. Fill before confirming; evidence remains not run until execution. Phase 6 records criterion ID, command, result and evidence reference in the Run Log and updates each check's Evidence cell with its latest result and a Run Log/evidence reference; earlier attempts stay in the Run Log. Phase 7 checks the integrated result.]
 
 ### Requirements
-- [functional requirements, edge cases, constraints]
+- **R1:** [functional requirement, edge cases, constraints — retain source IDs when available]
 
 ### Scope boundaries
 - **In:** [what is included]
@@ -50,9 +60,12 @@ Process: [`AI_WORKTASK_PROMOTE_STANDALONE_TEMPLATE.md`](<{{PROCESS_TEMPLATE}}>) 
 ### Dependencies and references
 - [work that must complete first; tickets/PRs; patterns to follow; known gotchas; migration path]
 
+### Release and observe
+[Only when deployment/operator implications exist: health/smoke checks, rollback reference, operational owner, post-release success/failure signal. This is a handoff plan, not release authorization. Delete the section when irrelevant.]
+
 ## Run Log
 
-[Authoring guidance — delete this block at scaffold time so the section is empty. Appended during execution: one line per entry — loop-back cause and re-entry phase, a question only the user could answer, a Phase 7 finding. Phase 8's reflect step reads this.]
+[Authoring guidance — delete this block when populating the scaffold so the section is empty. Execution appends criterion ID/command/result/evidence, loop-back cause/re-entry/outcome, user-only questions, approved deviations and Phase 7 findings. Phase 8's reflect step reads this.]
 
 ## Overrides
 
