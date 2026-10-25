@@ -115,28 +115,26 @@ if [ "$stdin_sources" -gt 1 ]; then
   exit 1
 fi
 
-STDIN_TEXT=""
-if [ "$stdin_sources" -eq 1 ]; then
-  STDIN_TEXT="$(cat)"
-fi
-
 read_input() {
   local file="$1"
   local label="$2"
-  if [ "$file" = "-" ]; then
-    printf '%s' "$STDIN_TEXT"
-    return 0
-  fi
-  if [ ! -f "$file" ]; then
+  if [ "$file" != "-" ] && [ ! -f "$file" ]; then
     echo "decision-evaluate: $label file not found: $file" >&2
     exit 1
   fi
-  cat "$file"
+  if [ "$file" = "-" ]; then
+    IFS= read -r -d '' REPLY || true
+  else
+    IFS= read -r -d '' REPLY < "$file" || true
+  fi
 }
 
-BEFORE_CODE="$(read_input "$BEFORE_FILE" "before")"
-AFTER_CODE="$(read_input "$AFTER_FILE" "after")"
-EVIDENCE_TEXT="$(read_input "$EVIDENCE_FILE" "evidence")"
+read_input "$BEFORE_FILE" "before"
+BEFORE_CODE="$REPLY"
+read_input "$AFTER_FILE" "after"
+AFTER_CODE="$REPLY"
+read_input "$EVIDENCE_FILE" "evidence"
+EVIDENCE_TEXT="$REPLY"
 
 BASE_URL="${SMOOTH_DEVEX_DECISIONS_BASE_URL:-http://127.0.0.1:1234}"
 API_PATH="${SMOOTH_DEVEX_DECISIONS_PATH:-/v1/systemone}"
@@ -158,6 +156,7 @@ import os
 import re
 import sys
 import tempfile
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -186,6 +185,7 @@ MODE_REQUIRED_QUESTIONS = {
 }
 REQUIRED_COVERAGE = {"directly_required", "implicitly_needed"}
 CHANGE_OUTCOMES = {"success", "unresolved", "regression", "insufficient_evidence"}
+PROBABILITY_TOTAL_TOLERANCE = 1e-6
 
 mode = None
 template_sha = None
@@ -236,24 +236,23 @@ def validate_answer(answer, question):
     if not isinstance(probabilities, dict):
         return None
 
+    for value in probabilities.values():
+        if not is_number(value) or not 0.0 <= float(value) <= 1.0:
+            return None
+    total = sum(float(value) for value in probabilities.values())
+    if abs(total - 1.0) > PROBABILITY_TOTAL_TOLERANCE:
+        return None
+
     if question_type == "choice":
         criteria_keys = list(question["criteria"].keys())
         if set(probabilities.keys()) != set(criteria_keys):
             return None
-        for key in criteria_keys:
-            value = probabilities.get(key)
-            if not is_number(value) or not 0.0 <= float(value) <= 1.0:
-                return None
         if answer.get("choice") not in criteria_keys:
             return None
     else:
         criteria_keys = [str(index) for index in range(len(question["criteria"]))]
         if set(probabilities.keys()) != set(criteria_keys):
             return None
-        for key in criteria_keys:
-            value = probabilities.get(key)
-            if not is_number(value) or not 0.0 <= float(value) <= 1.0:
-                return None
         score = answer.get("score")
         if not is_number(score):
             return None
@@ -605,6 +604,17 @@ def main():
             attempt["status"] = "invalid_response"
             attempt["reason"] = reason
             last_reason = reason
+        except urllib.error.HTTPError as error:
+            body = ""
+            try:
+                body = error.read().decode("utf-8", errors="replace")
+            except Exception:
+                body = ""
+            attempt["status"] = "http_error"
+            attempt["http_status"] = error.code
+            attempt["response"] = body
+            attempt["error"] = "HTTP %s: %s" % (error.code, error.reason)
+            last_reason = attempt["error"]
         except Exception as error:
             attempt["status"] = "transport_error"
             attempt["error"] = "%s: %s" % (type(error).__name__, error)

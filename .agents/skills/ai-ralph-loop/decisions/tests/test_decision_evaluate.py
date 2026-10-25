@@ -32,7 +32,11 @@ def template_questions(path):
 
 
 def choice_answer(choice, criteria, confidence=0.5):
-    probabilities = {key: (0.7 if key == choice else 0.1) for key in criteria}
+    if len(criteria) == 1:
+        probabilities = {choice: 1.0}
+    else:
+        others = (1.0 - 0.7) / (len(criteria) - 1)
+        probabilities = {key: (0.7 if key == choice else others) for key in criteria}
     return {
         "type": "choice",
         "choice": choice,
@@ -96,11 +100,22 @@ def code_response(
     confidence=0.5,
 ):
     questions = template_questions(BUILD_TEMPLATE)
-    developer_answer = choice_answer(
-        developer, questions["developer_value"]["criteria"], confidence=confidence
-    )
-    developer_answer["probabilities"]["closes_gap"] = closes
-    developer_answer["probabilities"]["improves_quality"] = improves
+    developer_criteria = questions["developer_value"]["criteria"]
+    other_keys = [
+        key for key in developer_criteria if key not in ("closes_gap", "improves_quality")
+    ]
+    remaining = max(0.0, 1.0 - closes - improves)
+    share = remaining / len(other_keys) if other_keys else 0.0
+    developer_answer = {
+        "type": "choice",
+        "choice": developer,
+        "probabilities": {
+            "closes_gap": closes,
+            "improves_quality": improves,
+            **{key: share for key in other_keys},
+        },
+        "confidence": confidence,
+    }
     return {
         "model": MODEL,
         "answers": {
@@ -541,6 +556,50 @@ class EvidencePayloadContract(EvaluatorContract):
         state = requests[0]["json"]["state"]
         self.assertIn("## After (proposed change):\n\n\n## Evidence", state)
 
+    def test_trailing_newlines_are_preserved_in_files(self):
+        before = "before line\n"
+        after = "after line\n\n"
+        evidence = "evidence line\n\n"
+        _, requests = self.run_eval(
+            [plan_response()],
+            template=PLAN_TEMPLATE,
+            before=before,
+            after=after,
+            evidence=evidence,
+        )
+        state = requests[0]["json"]["state"]
+        self.assertIn(
+            "## Before (current plan text):\n" + before + "\n\n## After (proposed change):",
+            state,
+        )
+        self.assertIn(
+            "## After (proposed change):\n"
+            + after
+            + "\n\n## Evidence (failure scenario or cited requirement and proposed fix):",
+            state,
+        )
+        self.assertIn(
+            "## Evidence (failure scenario or cited requirement and proposed fix):\n"
+            + evidence
+            + "\n\n## Section and location:",
+            state,
+        )
+        audit = self.read_audit()
+        self.assertEqual(audit["evaluation"]["state"], state)
+
+    def test_stdin_preserves_trailing_newlines_for_each_source(self):
+        for source in ("before", "after", "evidence"):
+            with self.subTest(source=source):
+                payload = "stdin line\n\n"
+                _, requests = self.run_eval(
+                    [plan_response()],
+                    template=PLAN_TEMPLATE,
+                    stdin=payload,
+                    **{source: "-"},
+                )
+                state = requests[0]["json"]["state"]
+                self.assertIn(payload + "\n\n##", state)
+
 
 class ResponseValidationContract(EvaluatorContract):
     def expect_invalid(self, invalid_response):
@@ -600,6 +659,38 @@ class ResponseValidationContract(EvaluatorContract):
         response = plan_response()
         del response["answers"]["architectural_value"]["probabilities"]["2"]
         self.expect_invalid(response)
+
+    def test_probability_total_must_be_one(self):
+        response = plan_response()
+        response["answers"]["architectural_value"]["probabilities"] = {
+            "0": 0.0,
+            "1": 0.0,
+            "2": 1.0,
+            "3": 1.0,
+        }
+        self.expect_invalid(response)
+
+        response = plan_response()
+        response["answers"]["architectural_value"]["probabilities"] = {
+            "0": 0.0,
+            "1": 0.0,
+            "2": 0.0,
+            "3": 0.0,
+        }
+        self.expect_invalid(response)
+
+        response = plan_response()
+        for key in response["answers"]["requirement_coverage"]["probabilities"]:
+            response["answers"]["requirement_coverage"]["probabilities"][key] = 0.0
+        self.expect_invalid(response)
+
+    def test_probability_total_within_tolerance_is_accepted(self):
+        response = plan_response(positive=0.3, high=0.3)
+        response["answers"]["architectural_value"]["probabilities"]["2"] = 0.3 + 5e-7
+        process, _ = self.run_eval([response], template=PLAN_TEMPLATE)
+        self.assertEqual(process.returncode, 0, process.stderr)
+        fields = self.fields(process.stdout)
+        self.assertEqual(fields["fallback"], "false")
 
     def test_invalid_choice_is_invalid(self):
         response = plan_response()
@@ -734,6 +825,43 @@ class AuditContract(EvaluatorContract):
         )
         self.assertEqual(audit["attempts"][0]["response"], json.dumps(invalid))
         self.assertIn("missing", audit["attempts"][0]["reason"])
+
+    def test_http_error_body_is_preserved_and_retry_recovers(self):
+        error_body = json.dumps({"error": "model loading, please retry", "id": "review-probe"})
+        process, requests = self.run_eval(
+            [(503, error_body), plan_response()],
+            template=PLAN_TEMPLATE,
+        )
+        self.assertEqual(process.returncode, 0, process.stderr)
+        fields = self.fields(process.stdout)
+        self.assertEqual(fields["fallback"], "false")
+        self.assertEqual(len(requests), 2)
+        audit = self.read_audit()
+        first = audit["attempts"][0]
+        self.assertEqual(first["status"], "http_error")
+        self.assertEqual(first["http_status"], 503)
+        self.assertEqual(first["response"], error_body)
+        self.assertNotIn("headers", first)
+        self.assertEqual(audit["attempts"][1]["status"], "valid")
+
+    def test_exhausted_http_errors_preserve_status_and_body(self):
+        error_body = json.dumps({"error": "model loading, please retry"})
+        process, requests = self.run_eval(
+            [(503, error_body), (503, error_body)],
+            template=PLAN_TEMPLATE,
+            environment={"SMOOTH_DEVEX_DECISIONS_MAX_ATTEMPTS": "2"},
+        )
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(len(requests), 2)
+        fields = self.fields(process.stdout)
+        self.assertEqual(fields["fallback"], "true")
+        audit = self.read_audit()
+        for attempt in audit["attempts"]:
+            self.assertEqual(attempt["status"], "http_error")
+            self.assertEqual(attempt["http_status"], 503)
+            self.assertEqual(attempt["response"], error_body)
+            self.assertNotIn("headers", attempt)
+        self.assertIn("HTTP 503", audit["result"]["fallback_reason"])
 
     def test_exhausted_retries_audit_records_fallback_reason(self):
         invalid = plan_response()

@@ -28,12 +28,14 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
   OR from #138 reopens the defective-correction bug.
 - **The expected question contract comes from the outgoing template, never from response keys.** A
   response is valid only when it answers exactly the requested questions with the requested types,
-  valid choices and in-range probabilities. Missing probabilities are invalid, not zero; inferring the
-  mode from the response accepts a code-mode answer to a plan request.
+  valid choices and probabilities that are in range and total 1. Missing probabilities are invalid,
+  not zero; malformed totals are invalid; inferring the mode from the response accepts a code-mode
+  answer to a plan request.
 - **Audit paths are caller-supplied.** The evaluator writes `<run-dir>/decisions/<finding-ID>.json` and
   never guesses a path from cwd or writes into the installed skill. Concurrent writers take the next
-  free suffix rather than failing a lost link race. An audit-write failure is reported separately; it
-  must not become a model rejection or crash the loop.
+  free suffix rather than failing a lost link race. HTTP error attempts retain their status and raw
+  body in the audit. An audit-write failure is reported separately; it must not become a model
+  rejection or crash the loop.
 - **Plan mode's ledger is keyed by section, not by file.** In the `File(s)` column the cell holds the plan
   section heading. An agent matching ledger rows by literal file path finds no duplicate, re-raises a
   settled section, and the run churns to the cap instead of converging.
@@ -74,3 +76,4 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
 | 2026-10-24 | LADR-001: plan `keep` requires success; coverage bypasses only the value threshold. Evidence and caller-supplied audit required when enabled | #138 |
 | 2026-10-24 | Question contract and response validation derive from the outgoing template; category-grouped wording; exact answer-set validation | #138 |
 | 2026-10-24 | Audit writes retry the next free suffix under concurrent writers; a lost link race is not an audit failure | #138 |
+| 2026-10-25 | Probability totals validated; HTTP error bodies retained in audits; input reads preserve trailing newlines | #138 |

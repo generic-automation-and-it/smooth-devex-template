@@ -82,10 +82,11 @@ and records `Decision = n/a`.
    and POSTs `{model, state, questions}` to OpenJEV.
 4. Responses are validated against the **outgoing** questions. A response is valid only when it
    answers exactly the requested questions, with the requested types, an allowed choice, numeric
-   `confidence`, a probability for every criterion in `[0, 1]`, and a finite score within the score
-   question's criteria index range. Missing probabilities are invalid, not zero; code-mode answers to
-   a plan request are invalid.
-5. Invalid or transport-failed attempts retry within `MAX_ATTEMPTS`, then produce one fallback line.
+   `confidence`, a probability for every criterion in `[0, 1]` totaling `1.0` within `1e-6`, and a
+   finite score within the score question's criteria index range. Missing probabilities are invalid,
+   not zero; malformed totals are invalid; code-mode answers to a plan request are invalid.
+5. Invalid, HTTP-error, or transport-failed attempts retry within `MAX_ATTEMPTS`, then produce one
+   fallback line.
 6. A valid response is scored, one pipe-delimited line is printed, and a JSON audit is written.
 
 ### Question contract
@@ -187,8 +188,8 @@ evaluator never guesses it from cwd and never writes into the installed skill. T
 - `evaluation` — category, mode, model, threshold, template path/sha256/mode, rendered state, and the
   exact questions sent.
 - `attempts` — one entry per attempt: `valid`, `invalid_response` (with raw response and validation
-  reason), or `transport_error` (with error type/message). Unsuccessful attempts and exhausted retries
-  are preserved.
+  reason), `http_error` (with HTTP status and raw error body), or `transport_error` (with error
+  type/message). Unsuccessful attempts and exhausted retries are preserved.
 - `result` — verdict fields, or `fallback_reason`.
 
 Writes are atomic (temp file + hard link). An existing audit path is not overwritten: the next free
@@ -206,7 +207,7 @@ directory. They never include environment dumps or authentication headers.
 | Missing/invalid argument or unreadable input file | 1 | nothing | Records `Decision = n/a`, continues |
 | Base URL embeds credentials | 1 | nothing | Records `n/a`, continues; use an unauthenticated endpoint |
 | Template missing, malformed or obsolete | 0 | fallback line + stderr | Records `n/a`, continues |
-| Transport failure or invalid response after all attempts | 0 | one fallback line + stderr | Records `n/a` (`fallback=true`), continues |
+| Transport failure, HTTP 4xx/5xx, or invalid response after all attempts | 0 | one fallback line + stderr | Records `n/a` (`fallback=true`), continues; HTTP status/body retained in the audit |
 | Valid answer that rejects the fix | 0 | verdict line | Records `reject`; the fix is **not** undone |
 | Audit-write failure | 0 | verdict line with `audit=failed` + stderr | Records the verdict; reports the audit failure separately |
 
