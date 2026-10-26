@@ -57,7 +57,7 @@
     },
     {
       "action": "shell",
-      "resource": ".agents/skills/create-worktask/scripts/scaffold-worktask.sh *",
+      "resource": ".agents/skills/*/scripts/*.sh *",
       "effect": "allow"
     },
     {
