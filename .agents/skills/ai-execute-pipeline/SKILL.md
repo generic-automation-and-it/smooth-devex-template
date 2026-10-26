@@ -55,7 +55,7 @@ draft, review poll every 30 s for up to 20 min, at most 5 review-fix rounds.
 | 6 | Stack: one `gh stack submit`, base verified (stack mode only) | `stack.sh submit` | base mismatch |
 | 7 | Implement the worktask | worktask's own phases | a gate needs a human |
 | 8 | Commit | `git-commit --autonomous` | — |
-| 9 | Ralph loop | `ai-ralph-loop --loops <n>` | — |
+| 9 | Ralph loop | `ai-ralph-loop --loops <n>` | not converged, or a suite fails |
 | 10 | Commit + push | `git-commit-push --autonomous` | — |
 | 11 | PR description refreshed, marked **ready** | `git-commit-push-pr --ready`, `pr.sh ready` | PR still draft |
 | 12 | Understanding export (if enabled) | `export-understanding.sh` | never — reported only |
@@ -183,7 +183,10 @@ the next run.
 ### 8–10. Commit, Ralph, commit + push
 
 1. `git-commit --autonomous`.
-2. `ai-ralph-loop --loops <n>` (it never commits).
+2. `ai-ralph-loop --loops <n>` (it never commits). Continue only when its **Result** is
+   `converged at loop k` and its **Verify** line has no failing suite. On `cap reached`,
+   `stopped: verify red`, or a failing suite, stop and report — the PR stays draft and nothing more is
+   pushed, so unresolved or failing work is never published as ready.
 3. `git-commit-push --autonomous`.
 
 ### 11. Mark ready
