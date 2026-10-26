@@ -39,8 +39,8 @@ STUB_GH = textwrap.dedent(r"""
 """).lstrip()
 
 
-def git(cwd, *args):
-    return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
+def git(cwd, env, *args):
+    return subprocess.run(["git", *args], cwd=cwd, env=env, check=True, capture_output=True, text=True).stdout.strip()
 
 
 class ScriptTestCase(unittest.TestCase):
@@ -54,34 +54,31 @@ class ScriptTestCase(unittest.TestCase):
         gh = bin_dir / "gh"
         gh.write_text(STUB_GH)
         gh.chmod(0o755)
-
-        origin = self.tmp / "origin.git"
-        subprocess.run(["git", "init", "--quiet", "--bare", "-b", "main", str(origin)], check=True)
-        seed = self.tmp / "seed"
-        subprocess.run(["git", "init", "--quiet", "-b", "main", str(seed)], check=True)
-        self.identity(seed)
-        (seed / "README.md").write_text("seed\n")
-        git(seed, "add", ".")
-        git(seed, "commit", "--quiet", "-m", "chore: seed")
-        git(seed, "push", "--quiet", str(origin), "main")
-        self.repo = self.tmp / "work"
-        subprocess.run(["git", "clone", "--quiet", str(origin), str(self.repo)], check=True)
-        self.identity(self.repo)
-        self.worktask = self.tmp / "worktask.md"
-        self.worktask.write_text("# Task: add paging\n")
-
+        gitconfig = self.tmp / "gitconfig"
+        gitconfig.write_text("[user]\n\temail = t@example.com\n\tname = t\n[commit]\n\tgpgsign = false\n")
         self.env = {
             "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
             "HOME": str(self.tmp / "home"),
             "STUB": str(self.stub),
-            "GIT_CONFIG_GLOBAL": str(self.tmp / "gitconfig"),
+            "GIT_CONFIG_GLOBAL": str(gitconfig),
             "GIT_CONFIG_NOSYSTEM": "1",
         }
 
-    @staticmethod
-    def identity(repo):
-        git(repo, "config", "user.email", "t@example.com")
-        git(repo, "config", "user.name", "t")
+        origin = self.tmp / "origin.git"
+        self.git(self.tmp, "init", "--quiet", "--bare", "-b", "main", str(origin))
+        seed = self.tmp / "seed"
+        self.git(self.tmp, "init", "--quiet", "-b", "main", str(seed))
+        (seed / "README.md").write_text("seed\n")
+        self.git(seed, "add", ".")
+        self.git(seed, "commit", "--quiet", "-m", "chore: seed")
+        self.git(seed, "push", "--quiet", str(origin), "main")
+        self.repo = self.tmp / "work"
+        self.git(self.tmp, "clone", "--quiet", str(origin), str(self.repo))
+        self.worktask = self.tmp / "worktask.md"
+        self.worktask.write_text("# Task: add paging\n")
+
+    def git(self, cwd, *args):
+        return git(cwd, self.env, *args)
 
     def run_script(self, name, *args, **env):
         result = subprocess.run(
@@ -181,14 +178,14 @@ class PreflightTests(ScriptTestCase):
 
     def test_stack_top_adds_a_layer_on_top(self):
         self.stub_file("stack_installed", "")
-        git(self.repo, "switch", "--quiet", "-c", "feat/185-b")
+        self.git(self.repo, "switch", "--quiet", "-c", "feat/185-b")
         self.stack_view("feat/185-b", "feat/184-a", "feat/185-b")
         state = json.loads(self.preflight()[1])
         self.assertEqual((state["mode"], state["expected_base"]), ("stack-add", "feat/185-b"))
 
     def test_stack_member_that_is_not_the_top_fails(self):
         self.stub_file("stack_installed", "")
-        git(self.repo, "switch", "--quiet", "-c", "feat/184-a")
+        self.git(self.repo, "switch", "--quiet", "-c", "feat/184-a")
         self.stack_view("feat/184-a", "feat/184-a", "feat/185-b")
         code, _, err = self.preflight()
         self.assertEqual(code, 1)
@@ -204,9 +201,9 @@ class BranchTests(ScriptTestCase):
         code, out, err = self.branch("plain")
         self.assertEqual(code, 0, err)
         self.assertEqual(json.loads(out), {"branch": "feat/184-add-paging", "empty_commit": True})
-        self.assertEqual(git(self.repo, "rev-parse", "--abbrev-ref", "HEAD"), "feat/184-add-paging")
-        self.assertEqual(git(self.repo, "log", "-1", "--format=%s"), "chore: start 184")
-        self.assertEqual(git(self.repo, "diff", "--stat", "origin/main..HEAD"), "")
+        self.assertEqual(self.git(self.repo, "rev-parse", "--abbrev-ref", "HEAD"), "feat/184-add-paging")
+        self.assertEqual(self.git(self.repo, "log", "-1", "--format=%s"), "chore: start 184")
+        self.assertEqual(self.git(self.repo, "diff", "--stat", "origin/main..HEAD"), "")
 
     def test_stack_init_uses_gh_stack_init_with_the_branch(self):
         state = json.loads(self.branch("stack-init")[1])
@@ -214,23 +211,23 @@ class BranchTests(ScriptTestCase):
         self.assertIn("stack init feat/184-add-paging", self.calls())
 
     def test_stack_init_works_when_trunk_is_checked_out_in_another_worktree(self):
-        git(self.repo, "switch", "--quiet", "-c", "previous-work")
-        git(self.repo, "worktree", "add", "--quiet", str(self.tmp / "main-checkout"), "main")
+        self.git(self.repo, "switch", "--quiet", "-c", "previous-work")
+        self.git(self.repo, "worktree", "add", "--quiet", str(self.tmp / "main-checkout"), "main")
         code, out, err = self.branch("stack-init")
         self.assertEqual(code, 0, err)
         self.assertEqual(json.loads(out)["branch"], "feat/184-add-paging")
-        self.assertEqual(git(self.repo, "merge-base", "HEAD", "origin/main"), git(self.repo, "rev-parse", "origin/main"))
+        self.assertEqual(self.git(self.repo, "merge-base", "HEAD", "origin/main"), self.git(self.repo, "rev-parse", "origin/main"))
 
     def test_stack_add_on_a_layer_with_commits_needs_no_empty_commit(self):
-        git(self.repo, "switch", "--quiet", "-c", "feat/183-layer-one")
+        self.git(self.repo, "switch", "--quiet", "-c", "feat/183-layer-one")
         (self.repo / "one.txt").write_text("1\n")
-        git(self.repo, "add", ".")
-        git(self.repo, "commit", "--quiet", "-m", "feat: layer one")
-        head_before = git(self.repo, "rev-parse", "HEAD")
+        self.git(self.repo, "add", ".")
+        self.git(self.repo, "commit", "--quiet", "-m", "feat: layer one")
+        head_before = self.git(self.repo, "rev-parse", "HEAD")
         state = json.loads(self.branch("stack-add")[1])
         self.assertEqual(state, {"branch": "feat/184-add-paging", "empty_commit": False})
         self.assertIn("stack add feat/184-add-paging", self.calls())
-        self.assertEqual(git(self.repo, "rev-parse", "HEAD"), head_before)
+        self.assertEqual(self.git(self.repo, "rev-parse", "HEAD"), head_before)
 
     def test_jira_style_ticket_is_accepted(self):
         self.assertEqual(json.loads(self.branch("plain", AEP_TICKET="ABC-12")[1])["branch"], "feat/ABC-12-add-paging")
@@ -241,7 +238,7 @@ class BranchTests(ScriptTestCase):
         self.assertEqual((code, json.loads(out)["empty_commit"]), (0, False))
 
     def test_existing_branch_elsewhere_fails(self):
-        git(self.repo, "branch", "feat/184-add-paging")
+        self.git(self.repo, "branch", "feat/184-add-paging")
         self.assertEqual(self.branch("plain")[0], 1)
 
     def test_invalid_inputs_are_rejected(self):
