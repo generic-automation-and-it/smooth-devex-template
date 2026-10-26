@@ -21,7 +21,8 @@ valid_ref "$ref" || { echo "pr: AEP_PR must be a PR number or branch name" >&2; 
 case "${1:-}" in
   view) view ;;
   ready)
-    if [[ "$(view | jq -r '.draft')" == "true" ]]; then
+    state="$(view)"
+    if [[ "$(jq -r '.draft' <<<"$state")" == "true" ]]; then
       gh pr ready "$ref" >&2
     fi
     view

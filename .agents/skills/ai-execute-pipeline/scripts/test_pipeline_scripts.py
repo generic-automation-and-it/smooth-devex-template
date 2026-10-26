@@ -30,7 +30,9 @@ STUB_GH = textwrap.dedent(r"""
       "stack init") git switch --quiet "$3" 2>/dev/null || git switch --quiet -c "$3" ;;
       "stack add") git switch --quiet -c "$3" ;;
       "stack submit") exit 0 ;;
-      "pr view") cat "$STUB/pr_view.json" ;;
+      "pr view")
+        if [[ -f "$STUB/pr_view_fail_once" ]]; then rm "$STUB/pr_view_fail_once"; exit 1; fi
+        cat "$STUB/pr_view.json" ;;
       "pr ready") exit 0 ;;
       "api "*) [[ -f "$STUB/reviews.json" ]] && cat "$STUB/reviews.json" || exit 1 ;;
       "repo view") echo '{"nameWithOwner":"o/r"}' ;;
@@ -303,6 +305,13 @@ class PrTests(ScriptTestCase):
     def test_ready_is_a_noop_when_already_ready(self):
         self.pr_view(False)
         self.run_script("pr.sh", "ready", AEP_PR="7")
+        self.assertNotIn("pr ready 7", self.calls())
+
+    def test_ready_fails_when_the_first_lookup_fails(self):
+        self.pr_view(True)
+        self.stub_file("pr_view_fail_once", "")
+        code, _, _ = self.run_script("pr.sh", "ready", AEP_PR="7")
+        self.assertNotEqual(code, 0)
         self.assertNotIn("pr ready 7", self.calls())
 
     def test_rejects_a_non_ref(self):
