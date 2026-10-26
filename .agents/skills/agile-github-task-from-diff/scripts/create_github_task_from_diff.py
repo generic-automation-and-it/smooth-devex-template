@@ -13,6 +13,7 @@ import shlex
 import subprocess
 import sys
 import urllib.parse
+from pathlib import Path
 
 
 def run(cmd, check=True, capture=True):
@@ -194,6 +195,17 @@ def build_task_body(branch_name, base_ref, base_sha, paths, status_counts, diff_
     return body.strip()
 
 
+def read_body_file(path):
+    """Split a task file into (title, body): the first '# ' heading is the title, the rest the body."""
+    lines = Path(path).read_text(encoding="utf-8").splitlines()
+    for index, line in enumerate(lines):
+        if line.startswith("# "):
+            return line[2:].strip(), "\n".join(lines[index + 1:]).strip()
+        if line.strip():
+            break
+    return None, "\n".join(lines).strip()
+
+
 LAYER_TO_TYPE = {
     "documentation": "docs",
     "tests": "test",
@@ -310,6 +322,14 @@ def build_parser():
     )
     parser.add_argument("--title", help="Override task title.")
     parser.add_argument(
+        "--body-file",
+        help=(
+            "Markdown file holding the task: its first '# ' heading is the title (unless --title "
+            "is given) and the rest is the body. The diff is not read, so this works on a branch "
+            "with no changes yet."
+        ),
+    )
+    parser.add_argument(
         "--repo",
         help="GitHub repo as owner/repo. Auto-detected from git remote when omitted.",
     )
@@ -359,14 +379,26 @@ def parse_args(argv=None):
     return args
 
 
+def compose_from_diff(args, feature_issue):
+    """Build (title, body, layers) from the branch diff, or None when the diff is empty."""
+    base_sha, base_ref = get_base_ref(args.base_ref)
+    branch_name = git(["rev-parse", "--abbrev-ref", "HEAD"])
+    paths, status_counts = parse_name_status(git(["diff", "--name-status", f"{base_sha}..HEAD"]))
+    if not paths:
+        return None
+    areas = summarize_areas(paths)
+    layers = classify_horizontal_slice(paths)
+    diff_stat = truncate_lines(git(["diff", "--stat", f"{base_sha}..HEAD"]))
+    title = args.title or build_title(areas, layers, branch_name)
+    body = build_task_body(branch_name, base_ref, base_sha, paths, status_counts, diff_stat, layers, feature_issue)
+    return title, body, layers
+
+
 def main():
     args = parse_args()
 
     ensure_tool("git")
     ensure_tool("gh")
-
-    base_sha, base_ref = get_base_ref(args.base_ref)
-    branch_name = git(["rev-parse", "--abbrev-ref", "HEAD"])
 
     if args.repo:
         owner, repo = args.repo.split("/", 1)
@@ -376,21 +408,20 @@ def main():
     # Default the project org to the repo owner when not explicitly provided.
     org = args.org or owner
 
-    name_status = git(["diff", "--name-status", f"{base_sha}..HEAD"])
-    paths, status_counts = parse_name_status(name_status)
-
-    if not paths:
-        print("No changes detected against base ref. Nothing to create.", file=sys.stderr)
-        return 0
-
-    areas = summarize_areas(paths)
-    layers = classify_horizontal_slice(paths)
-
-    diff_stat = truncate_lines(git(["diff", "--stat", f"{base_sha}..HEAD"]))
-
     feature_issue = parse_feature_issue(args.feature_issue)
-    title = args.title or build_title(areas, layers, branch_name)
-    body = build_task_body(branch_name, base_ref, base_sha, paths, status_counts, diff_stat, layers, feature_issue)
+    if args.body_file:
+        file_title, body = read_body_file(args.body_file)
+        title = args.title or file_title
+        if not title or not body:
+            print(f"{args.body_file} needs a '# ' title heading (or --title) and a body.", file=sys.stderr)
+            return 1
+        layers = None
+    else:
+        composed = compose_from_diff(args, feature_issue)
+        if composed is None:
+            print("No changes detected against base ref. Nothing to create.", file=sys.stderr)
+            return 0
+        title, body, layers = composed
 
     label_state, label_detail = check_label(owner, repo, args.label) if args.label else (None, "")
 
@@ -432,10 +463,11 @@ def main():
     issue_url = run(build_create_cmd(owner, repo, title, body, label))
     issue_number = int(issue_url.rstrip("/").split("/")[-1])
     print(f"Created task issue #{issue_number}: {issue_url}")
-    print(
-        f"Suggested branch rename (git-policy convention): "
-        f"git branch -m {suggest_branch_name(layers, title, issue_number)}"
-    )
+    if layers:
+        print(
+            f"Suggested branch rename (git-policy convention): "
+            f"git branch -m {suggest_branch_name(layers, title, issue_number)}"
+        )
 
     # Add to GitHub Project (unless suppressed)
     if args.noparentid:

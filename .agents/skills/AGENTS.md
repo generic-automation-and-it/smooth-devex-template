@@ -44,3 +44,4 @@ Read [`README.md`](./README.md) first — skill index, switches, effort levels a
 | 2026-10-16 | `ai-ralph-loop` added; local only (not in the installer's owned set) | — |
 | 2026-10-16 | `ai-ralph-loop` shipped by the installer (added to the owned set) | #104 |
 | 2026-10-16 | `SKILL.md`-is-code: skill `AGENTS.md` files carry traps only, never restatements | — |
+| 2026-10-26 | `ai-execute-pipeline` added; owned (installer set) | — |

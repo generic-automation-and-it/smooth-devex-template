@@ -14,7 +14,7 @@
 
 ## Install skills, rules and hooks into a brownfield repository
 
-Reuse in another repo. One command — ships owned set only (15 skills, all owned rules, 2 hooks). Details and owned-set table: [`docs/wiki/reuse.md`](docs/wiki/reuse.md).
+Reuse in another repo. One command — ships owned set only (16 skills, all owned rules, 2 hooks). Details and owned-set table: [`docs/wiki/reuse.md`](docs/wiki/reuse.md).
 
 Missing category folders are created beneath an existing agent root. Installed skills omit tests and
 owner `AGENTS.md` files; in-template symlinks are materialized. Per-repo rules land in `<agent-root>/rules/`;

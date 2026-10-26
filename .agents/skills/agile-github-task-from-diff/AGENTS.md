@@ -21,3 +21,4 @@ Read [`SKILL.md`](./SKILL.md) first — flags, workflow, branch rename and gotch
 | 2026-09-23 | Sub-issue link by database `id`; missing label soft-fails; L0 tests | #81 |
 | 2026-09-27 | `--noparentid`; `build_parser()`/`parse_args(argv)`; `effort` replaces `models` | #83 |
 | 2026-10-15 | Cut to HLD shape: SKILL.md pointer + non-SKILL.md traps only | — |
+| 2026-10-26 | `--body-file`: file-sourced task, diff not read | — |

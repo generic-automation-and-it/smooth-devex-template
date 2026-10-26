@@ -49,8 +49,8 @@ directories are created only for the categories that run. A rules-only or hooks-
 In this repository `.claude` and `.codex` are symlinks to `.agents`, so all paths resolve to the
 same tree and the first match is the real one.
 
-**2. Reconcile the manifest — for the owned skills only.** The installer manages exactly fifteen skills:
-`agile-github-breakdown`, `agile-github-task-from-diff`, `ai-asset-sync`, `ai-ralph-loop`, `ai-template-sync`,
+**2. Reconcile the manifest — for the owned skills only.** The installer manages exactly sixteen skills:
+`agile-github-breakdown`, `agile-github-task-from-diff`, `ai-asset-sync`, `ai-execute-pipeline`, `ai-ralph-loop`, `ai-template-sync`,
 `ai-terse`, `context-load-agents-context`, `context-load-context`, `create-hld`, `create-worktask`,
 `git-commit`, `git-commit-push`, `git-commit-push-pr`, `git-sync`, `manage-rule-system`.
 The catalogue is the **owned union** of what the clone source offers and what is already on disk.
@@ -95,6 +95,7 @@ match byte-for-byte (the harness holds them to each other).
 | `agile-github-breakdown` | Turns a braindump or Feature into GitHub Feature + Task issues; generally useful across consumer projects |
 | `agile-github-task-from-diff` | Creates a GitHub Task from the branch diff; generally useful across consumer projects |
 | `ai-asset-sync` | Syncs AI assets across projects; core template mechanism |
+| `ai-execute-pipeline` | Zero-touch delivery of one worktask — ticket, branch, draft PR, implement, Ralph loop, ready, review fixes; optional `gh stack` layering |
 | `ai-template-sync` | Syncs this template into consumer repos; literal purpose of the template |
 | `ai-ralph-loop` | Review → fix → verify loop over a branch diff, or over a plan with `--plan`; generally useful across consumer projects |
 | `ai-terse` | Token compression; generally useful across consumer projects |
@@ -407,6 +408,7 @@ the owned set still need a manual copy of those files alongside the install.
 | Skill | Needs (manual copy) |
 |---|---|
 | `ai-ralph-loop` | Optional — `context-load-agents-context` script (falls back to an ancestor walk), `.agents/rules/AGENTS.md` index, an `ai-understanding` store under `.context/understandings/` |
+| `ai-execute-pipeline` | `git`, `gh` (authenticated) and `jq`; the owned `git-commit*`, `ai-ralph-loop` and default ticket skill `agile-github-task-from-diff`; `ai-review` (owned by another repository; installed separately); the `gh stack` extension for stack mode; `mimisbrunnr-kvasir-understanding` for `--understanding-export` |
 | `create-hld` | `.agents/rules/meta/` rules used by `hld-agents-rules.sh` |
 | `manage-rule-system` | the rules themselves if you want to manage them via this skill |
 | `context-load-context` / `context-load-agents-context` | `.agents/rules/` for the context files to reference |

@@ -10,6 +10,7 @@ Skills live **flat**, one directory per skill directly under `.agents/skills/`. 
 |-------|---------|-------|
 | **agile-github-breakdown** | Turn a braindump or existing Feature into GitHub Feature + Task issues | `/agile-github-breakdown` |
 | **agile-github-task-from-diff** | Create a GitHub Task (sub-issue) from the current git diff vs main | `/agile-github-task-from-diff [--feature-issue <n> \| --noparentid]` |
+| **ai-execute-pipeline** | Deliver one worktask end to end: worktask-sourced ticket, draft PR, implement, Ralph loop, ready, AI-review fix loop | `/ai-execute-pipeline --worktask <path> --parent <id> [--initialize] [--hld <path>] [--ticket-skill <name\|path>] [--loops <n>] [--understanding-export …]` |
 | **ai-brain-dump** | Listen-first capture session; synthesize on request | `/ai-brain-dump [--oktoask] [--thinking] [--oktoreaddocs] [--oktowebsearch] [--all]` |
 | **ai-ralph-loop** | Review → fix → verify code and L0/L1/L2 test coverage — or a plan via `--plan` — until clean; ends with a fix table | `/ai-ralph-loop [--loops <n>] [--scope <path\|glob>] [--plan [path]] [--notests]` |
 | **ai-terse** | Reformat this turn's reply into terse, high-density output with a TL;DR | `/ai-terse` |
@@ -42,6 +43,15 @@ Opt-in switches relax that, at different token costs (see `ai-brain-dump/README.
 
 The tool switches (`--oktoreaddocs`, `--oktowebsearch`) re-enable the file/web payload bloat the
 listen-first default avoids — use deliberately.
+
+### ai-execute-pipeline switches
+
+One worktask per invocation; runs are sequential. The switch table and pipeline order live under the
+`SKILL.md` TL;DR — the authoritative copy. In brief: `--worktask` and `--parent` are required.
+`--initialize` starts a `gh stack`, and later runs detect it and add a layer. `--ticket-skill` swaps the
+ticket creator, which receives a worktask-derived ticket file, never the diff. `--understanding-export`
+(+ `--product-name`/`--initiative`/`--epic-ticket`/`--understanding-skill`) exports to Mímisbrunnr after
+the PR is marked ready. `--autonomous` on the git skills and `--fix` on `ai-review` are always on.
 
 ### ai-ralph-loop switches
 
@@ -140,6 +150,7 @@ A harness that honours skill `effort` applies it on invocation; a harness with a
 | **ai-template-sync** | medium | `sync.sh` does the copy/compare; the agent only picks flags, runs the rules-layout pre-flight and builds the conflict table |
 | **ai-brain-dump** | medium | Listen-first capture — `high` would be re-paid on every turn of a long session. Deep reasoning happens downstream, in the skills its output feeds (`ai-understanding`, `agile-github-breakdown`, `create-hld`, `create-worktask`) |
 | **ai-asset-sync** | high | AI-merge of local vs upstream skills/rules + chore PR |
+| **ai-execute-pipeline** | high | Implements a worktask, then triages Ralph and AI-review findings; plumbing is script-driven |
 | **ai-ralph-loop** | high | Each loop triages reviewer findings against code and context, then fixes and verifies — judgment repeated up to the loop cap |
 | **ai-understanding** | high | Judging what qualifies as transferable knowledge + merge/promotion decisions |
 | **agile-github-breakdown** | xhigh | Multi-turn FR/NFR → Task graph + GitHub writes |

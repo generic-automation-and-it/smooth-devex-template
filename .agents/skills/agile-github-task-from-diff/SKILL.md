@@ -37,6 +37,10 @@ python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_fr
 # Repo-only task: no GitHub Project, no parent Feature
 python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py --noparentid
 
+# Task from a prepared file (e.g. a worktask analysis), not the diff
+python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py \
+  --feature-issue 42 --body-file .context/ai-execute-pipeline/<slug>/ticket.md
+
 # Combine flags from the Inputs table as needed, e.g.:
 python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py \
   --feature-issue 42 --base-ref main --title "Add persistence layer tests" --open
@@ -48,6 +52,7 @@ python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_fr
 |------|---------|-------------|
 | `--feature-issue` | _(none)_ | Parent Feature issue — accepts an issue **number** (`42`) or a full GitHub issue **URL** (`https://github.com/.../issues/42`). When set, the task is linked as a sub-issue. |
 | `--title` | _(generated)_ | Override the auto-generated task title. |
+| `--body-file` | _(none)_ | Take the task from a markdown file instead of the diff: its first `# ` heading is the title (unless `--title` is given), the rest is the body. The diff is not read, so it works on a branch with no changes — the source path for tickets created from a worktask before implementation (`ai-execute-pipeline`). |
 | `--repo` | _(from remote)_ | GitHub repo as `owner/repo`. Auto-detected when omitted. |
 | `--project` | `1` | GitHub project number under the org. |
 | `--no-project` | — | Create the issue only; skip adding it to any GitHub Project. A `--feature-issue` parent is still linked. |
@@ -60,6 +65,7 @@ python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_fr
 
 ## Behavior
 
+- With `--body-file`, skips every diff step below (no layers, no generated title/criteria, no branch-rename suggestion) and uses the file's title and body.
 - Computes the diff from merge-base between `HEAD` and the base ref.
 - Classifies the diff into **horizontal layers**: `backend`, `tests`, `documentation`, `ai-tooling`, `config`, `general`.
 - Builds a title from the detected layers and affected top-level areas.
