@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Block until the AI review report for the PR's CURRENT head commit is posted, then classify it.
+# Only reports posted by the review workflow's own identity count, matched to the head by GitHub's
+# commit_id — body text is untrusted, since anyone can paste the marker, a SHA and zero counts.
 # A report for an older commit is ignored, so a re-review is never confused with the last one.
 #   AEP_PR             required  PR number
 #   AEP_POLL_INTERVAL  optional  seconds between polls (default 30)
@@ -13,16 +15,15 @@ pr="${AEP_PR:-}"
 interval="${AEP_POLL_INTERVAL:-30}"
 timeout="${AEP_POLL_TIMEOUT:-1200}"
 marker="OpenCode CLI Code Review"
+reviewer="github-actions[bot]"
 
 [[ "$pr" =~ ^[1-9][0-9]*$ ]] || { echo "wait-for-review: AEP_PR must be a PR number" >&2; exit 64; }
 [[ "$interval" =~ ^[0-9]+$ && "$timeout" =~ ^[0-9]+$ ]] || { echo "wait-for-review: interval/timeout must be whole seconds" >&2; exit 64; }
 
 report_for_head() {
-  jq -c --arg marker "$marker" --arg head "$1" '
+  jq -c --arg marker "$marker" --arg reviewer "$reviewer" --arg head "$1" '
     [ .[]
-      | select((.body // "") | contains($marker))
-      | . + {sha: ([.body | match("Commit: `([0-9a-f]{7,40})`").captures[0].string] | first // "")}
-      | select(.sha as $sha | $sha != "" and ($head | startswith($sha))) ]
+      | select(.user.login == $reviewer and .commit_id == $head and ((.body // "") | contains($marker))) ]
     | sort_by(.submitted_at) | last // empty'
 }
 

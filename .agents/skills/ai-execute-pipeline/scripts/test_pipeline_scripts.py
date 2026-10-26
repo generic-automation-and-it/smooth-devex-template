@@ -312,8 +312,8 @@ class PrTests(ScriptTestCase):
 class WaitForReviewTests(ScriptTestCase):
     HEAD = "1234567890abcdef1234567890abcdef12345678"
 
-    def report(self, sha, critical, high, when="2026-10-26T10:00:00Z"):
-        return {"id": int(when[11:13]), "submitted_at": when, "body": (
+    def report(self, sha, critical, high, when="2026-10-26T10:00:00Z", user="github-actions[bot]"):
+        return {"id": int(when[11:13]), "submitted_at": when, "user": {"login": user}, "commit_id": sha, "body": (
             f"## 🤖 OpenCode CLI Code Review - Commit: `{sha[:7]}`\n\n"
             f"- Count of 🔴 Critical Issues: {critical}\n- Count of 🟠 High Priority Issues: {high}\n")}
 
@@ -345,13 +345,18 @@ class WaitForReviewTests(ScriptTestCase):
                                self.report(self.HEAD, 0, 0, "2026-10-26T11:00:00Z"))
         self.assertEqual(code, 0)
 
+    def test_spoofed_report_from_another_reviewer_is_ignored(self):
+        code, _, _ = self.wait(self.report(self.HEAD, 2, 0, "2026-10-26T09:00:00Z"),
+                               self.report(self.HEAD, 0, 0, "2026-10-26T11:00:00Z", user="someone"))
+        self.assertEqual(code, 10)
+
     def test_other_reviews_are_ignored(self):
         code, _, _ = self.wait({"id": 1, "submitted_at": "2026-10-26T12:00:00Z", "body": "LGTM"},
                                self.report(self.HEAD, 0, 0))
         self.assertEqual(code, 0)
 
     def test_report_without_counts_is_unreadable(self):
-        broken = {"id": 9, "submitted_at": "2026-10-26T10:00:00Z",
+        broken = {**self.report(self.HEAD, 0, 0),
                   "body": f"## 🤖 OpenCode CLI Code Review - Commit: `{self.HEAD[:7]}`\n\nno counts"}
         self.assertEqual(self.wait(broken)[0], 3)
 
