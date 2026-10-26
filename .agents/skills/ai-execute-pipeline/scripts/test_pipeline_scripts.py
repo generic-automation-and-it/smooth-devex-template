@@ -265,12 +265,26 @@ class StackTests(ScriptTestCase):
         self.assertEqual(self.run_script("stack.sh", "detect")[0], 3)
 
     def test_submit_verifies_the_rewired_base(self):
+        self.stack_view("feat/185-b", "feat/184-a", "feat/185-b")
         self.stub_file("pr_view.json", {"number": 7, "url": "u", "baseRefName": "feat/184-a", "isDraft": True})
         state = self.json_of("stack.sh", "submit", AEP_BRANCH="feat/185-b", AEP_EXPECTED_BASE="feat/184-a")
         self.assertEqual(state, {"pr": 7, "url": "u", "base": "feat/184-a", "draft": True})
         self.assertEqual([c for c in self.calls() if c.startswith("stack submit")], ["stack submit --auto"])
 
+    def test_submit_refuses_when_a_layer_has_remote_only_commits(self):
+        self.git(self.repo, "switch", "--quiet", "-c", "feat/184-a")
+        self.git(self.repo, "commit", "--quiet", "--allow-empty", "-m", "feat: a")
+        self.git(self.repo, "commit", "--quiet", "--allow-empty", "-m", "fix: collaborator")
+        self.git(self.repo, "push", "--quiet", "origin", "feat/184-a")
+        self.git(self.repo, "reset", "--quiet", "--hard", "HEAD~1")
+        self.stack_view("feat/184-a", "feat/184-a")
+        code, _, err = self.run_script("stack.sh", "submit", AEP_BRANCH="feat/184-a", AEP_EXPECTED_BASE="main")
+        self.assertEqual(code, 5)
+        self.assertIn("origin/feat/184-a has 1 commit(s)", err)
+        self.assertNotIn("stack submit --auto", self.calls())
+
     def test_submit_fails_loudly_on_a_wrong_base(self):
+        self.stack_view("feat/185-b", "feat/184-a", "feat/185-b")
         self.stub_file("pr_view.json", {"number": 7, "url": "u", "baseRefName": "main", "isDraft": True})
         code, _, err = self.run_script("stack.sh", "submit", AEP_BRANCH="feat/185-b", AEP_EXPECTED_BASE="feat/184-a")
         self.assertEqual(code, 4)

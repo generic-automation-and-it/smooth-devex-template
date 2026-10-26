@@ -7,8 +7,11 @@
 #                     empty input, so membership is decided by exit code AND `jq -e`. `branches` is
 #                     ordered bottom to top and each `base` is a commit SHA, not a branch name.
 #   stack.sh submit   AEP_BRANCH, AEP_EXPECTED_BASE required. Runs `gh stack submit --auto` (pushes,
-#                     reuses the open PR, rewires bases), then verifies the PR's base branch.
-# Exit: 0 ok · 3 gh-stack error or empty stack · 4 base mismatch after submit · 64 bad input
+#                     reuses the open PR, rewires bases), then verifies the PR's base branch. gh stack
+#                     pushes every layer with --force-with-lease against a freshly fetched lease, so it
+#                     first refuses when any layer has remote commits the local branch lacks.
+# Exit: 0 ok · 3 gh-stack error or empty stack · 4 base mismatch after submit
+#       · 5 a layer has remote-only commits · 64 bad input
 set -euo pipefail
 
 valid_branch() {
@@ -39,6 +42,17 @@ submit() {
     echo "AEP_BRANCH and AEP_EXPECTED_BASE must be valid branch names" >&2
     exit 64
   fi
+  local layers layer behind
+  layers="$(gh stack view --json 2>/dev/null | jq -r '.branches[].name')" || { echo "could not list the stack's branches" >&2; exit 3; }
+  git fetch --quiet origin
+  for layer in $layers; do
+    git show-ref --verify --quiet "refs/remotes/origin/$layer" || continue
+    behind="$(git rev-list --count "$layer..origin/$layer")"
+    if [[ "$behind" -gt 0 ]]; then
+      echo "origin/$layer has $behind commit(s) not in local $layer; gh stack submit would overwrite them — pull them in first" >&2
+      exit 5
+    fi
+  done
   if ! gh stack submit --auto >&2; then
     echo "gh stack submit failed" >&2
     exit 3
