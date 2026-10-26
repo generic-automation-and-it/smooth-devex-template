@@ -4,10 +4,11 @@
 #
 #   stack.sh detect   Print {"in_stack":bool,"trunk","current","top"} for the current branch.
 #                     gh stack view --json exits 2 with EMPTY stdout off-stack; plain `jq .` accepts
-#                     empty input, so membership is decided by exit code AND `jq -e`.
+#                     empty input, so membership is decided by exit code AND `jq -e`. `branches` is
+#                     ordered bottom to top and each `base` is a commit SHA, not a branch name.
 #   stack.sh submit   AEP_BRANCH, AEP_EXPECTED_BASE required. Runs `gh stack submit --auto` (pushes,
 #                     reuses the open PR, rewires bases), then verifies the PR's base branch.
-# Exit: 0 ok · 3 gh-stack error or non-linear stack · 4 base mismatch after submit · 64 bad input
+# Exit: 0 ok · 3 gh-stack error or empty stack · 4 base mismatch after submit · 64 bad input
 set -euo pipefail
 
 valid_branch() {
@@ -23,19 +24,13 @@ detect() {
     jq -n '{in_stack:false}'
     return 0
   fi
-  if [[ $rc -ne 0 ]] || ! jq -e '.branches | type == "array"' >/dev/null 2>&1 <<<"$out"; then
+  if [[ $rc -ne 0 ]] || ! jq -e '.branches | type == "array" and length > 0' >/dev/null 2>&1 <<<"$out"; then
     echo "gh stack view failed (exit $rc): $(head -c 400 "$err")" >&2
     rm -f "$err"
     exit 3
   fi
   rm -f "$err"
-  local tops
-  tops="$(jq -c '[.branches[].base] as $bases | [.branches[].name | select(. as $n | $bases | index($n) | not)]' <<<"$out")"
-  if [[ "$(jq 'length' <<<"$tops")" -ne 1 ]]; then
-    echo "stack is not a single linear chain (tops: $tops); fix it with gh stack view before continuing" >&2
-    exit 3
-  fi
-  jq -c --argjson tops "$tops" '{in_stack:true, trunk:.trunk, current:.currentBranch, top:$tops[0]}' <<<"$out"
+  jq -c '{in_stack:true, trunk:.trunk, current:.currentBranch, top:.branches[-1].name}' <<<"$out"
 }
 
 submit() {

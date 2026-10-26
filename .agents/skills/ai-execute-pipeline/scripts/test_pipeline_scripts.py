@@ -100,10 +100,8 @@ class ScriptTestCase(unittest.TestCase):
         return log.read_text().splitlines() if log.exists() else []
 
     def stack_view(self, current, *chain):
-        branches, base = [], "main"
-        for name in chain:
-            branches.append({"name": name, "base": base, "isCurrent": name == current})
-            base = name
+        branches = [{"name": name, "base": f"{index:040x}", "isCurrent": name == current}
+                    for index, name in enumerate(chain, start=1)]
         self.stub_file("stack_view.json", {"trunk": "main", "currentBranch": current, "branches": branches})
 
 
@@ -258,9 +256,12 @@ class StackTests(ScriptTestCase):
         state = self.json_of("stack.sh", "detect")
         self.assertEqual((state["in_stack"], state["top"], state["current"]), (True, "feat/185-b", "feat/184-a"))
 
-    def test_detect_rejects_a_branching_stack(self):
-        self.stub_file("stack_view.json", {"trunk": "main", "currentBranch": "a", "branches": [
-            {"name": "a", "base": "main"}, {"name": "b", "base": "a"}, {"name": "c", "base": "a"}]})
+    def test_detect_top_of_three_layers_with_sha_bases(self):
+        self.stack_view("feat/185-b", "feat/184-a", "feat/185-b", "feat/186-c")
+        self.assertEqual(self.json_of("stack.sh", "detect")["top"], "feat/186-c")
+
+    def test_detect_rejects_an_empty_stack(self):
+        self.stub_file("stack_view.json", {"trunk": "main", "currentBranch": "a", "branches": []})
         self.assertEqual(self.run_script("stack.sh", "detect")[0], 3)
 
     def test_submit_verifies_the_rewired_base(self):
