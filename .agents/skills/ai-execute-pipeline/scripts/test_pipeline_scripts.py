@@ -355,6 +355,10 @@ class WaitForReviewTests(ScriptTestCase):
                                self.report(self.HEAD, 0, 0))
         self.assertEqual(code, 0)
 
+    def test_changes_requested_without_critical_or_high_is_not_clean(self):
+        code, out, _ = self.wait({**self.report(self.HEAD, 0, 0), "state": "CHANGES_REQUESTED"})
+        self.assertEqual((code, json.loads(out)["status"]), (3, "blocked"))
+
     def test_report_without_counts_is_unreadable(self):
         broken = {**self.report(self.HEAD, 0, 0),
                   "body": f"## 🤖 OpenCode CLI Code Review - Commit: `{self.HEAD[:7]}`\n\nno counts"}

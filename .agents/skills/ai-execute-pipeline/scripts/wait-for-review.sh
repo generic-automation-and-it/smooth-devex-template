@@ -7,8 +7,8 @@
 #   AEP_POLL_INTERVAL  optional  seconds between polls (default 30)
 #   AEP_POLL_TIMEOUT   optional  seconds before giving up (default 1200)
 # Prints {"status","critical","high","review","head"}
-# Exit: 0 clean (no Critical/High) · 10 Critical or High present · 2 timeout · 3 unreadable report or
-#       persistent API error · 64 bad input
+# Exit: 0 clean (no Critical/High) · 10 Critical or High present · 2 timeout · 3 unreadable report,
+#       CHANGES_REQUESTED without Critical/High counts, or persistent API error · 64 bad input
 set -euo pipefail
 
 pr="${AEP_PR:-}"
@@ -45,6 +45,11 @@ while :; do
       if [[ -z "$critical" || -z "$high" ]]; then
         jq -c --arg head "$head" '{status:"unreadable", review:.id, head:$head}' <<<"$report"
         echo "wait-for-review: report for $head has no 'Count of … Critical/High Priority Issues' lines" >&2
+        exit 3
+      fi
+      if [[ "$critical" -eq 0 && "$high" -eq 0 ]] && jq -e '.state == "CHANGES_REQUESTED"' >/dev/null <<<"$report"; then
+        jq -c --arg head "$head" '{status:"blocked", review:.id, head:$head}' <<<"$report"
+        echo "wait-for-review: report requests changes with no Critical/High counts; investigate or re-run the review" >&2
         exit 3
       fi
       status=clean
