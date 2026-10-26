@@ -49,7 +49,7 @@ draft, review poll every 30 s for up to 20 min, at most 5 review-fix rounds.
 |---|---|---|---|
 | 1 | Preflight and skill resolution | `preflight.sh`, `resolve-skill.sh` | any check fails — before anything is created |
 | 2 | Load worktask, HLD, governing `*AGENTS.md` | read | — |
-| 3 | Ticket draft from the worktask → sub-ticket under `--parent` | ticket skill | no ticket id comes back |
+| 3 | Ticket draft from the worktask → sub-ticket under `--parent` | ticket skill | no ticket id, or the parent link is not confirmed |
 | 4 | Branch `<type>/<ticket>-<slug>` (`gh stack init`/`add` in stack mode) | `branch.sh` | non-zero exit |
 | 5 | Push + **draft** PR that closes the ticket | `git-commit-push-pr --draft` | no PR |
 | 6 | Stack: one `gh stack submit`, base verified (stack mode only) | `stack.sh submit` | base mismatch |
@@ -133,8 +133,11 @@ instruction, filled in:
 
 With the default skill this is
 `python3 <ticket-skill-dir>/scripts/create_github_task_from_diff.py --feature-issue <parent> --body-file <ticket-file>`.
-It prints `Created task issue #<n>: <url>`. A different ticket skill follows its own `SKILL.md`. Record
-its ticket id and URL, and how it links a PR to the ticket.
+It prints `Created task issue #<n>: <url>`, then `Linked as sub-issue of Feature #<parent>`. The script
+still exits 0 when the parent link fails, so the step succeeds only when **both** lines are present.
+Without the link line, stop and report the orphan issue: the run never branches without its required
+parent. A different ticket skill follows its own `SKILL.md`, and must likewise confirm the parent
+link. Record its ticket id and URL, and how it links a PR to the ticket.
 
 ### 4. Branch
 
