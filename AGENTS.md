@@ -22,6 +22,7 @@ Applies to every agent reply in a discussion (not to files the agent writes).
 2. Prefix every question with `Q` and a sequence number: `Q1.`, `Q2.` … — never ask an unnumbered question.
 3. Both counters run for the whole chat session: never restart at 1 for a new reply, section or phase; continue from the last number used (after context compaction, from the last number still visible).
 4. No bullets (`-`, `*`, `•`) in discussion; use the numbered statements and `Q` questions instead.
+5. These conventions override any skill or rule output format that calls for bullets or restarts numbering (e.g. `ai-terse`); keep that format's content and structure, renumbered to fit.
 
 ## AI Context Files
 
@@ -89,4 +90,4 @@ Reviewer docs: `docs/` (index) + `docs/wiki/`. Designs, NFRs and LADRs: `docs/hl
 | Date | Change | Ref |
 | :---- | :---- | :---- |
 | 2026-10-24 | Mandatory context review; value-gated edits | — |
-| 2026-10-26 | Chat Conventions: session-wide numbered statements and `Q`-numbered questions, no bullets | — |
+| 2026-10-26 | Chat Conventions: session-wide numbered statements and `Q`-numbered questions, no bullets; overrides skill output formats | — |
