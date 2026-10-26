@@ -14,6 +14,15 @@ Project is an AI-spec-driven, AI-agnostic development project. _(Placeholder des
 
 **Tech stack:** .NET 10 · ASP.NET Core · Clean Architecture (Domain / Application / Infrastructure / Host) · EF Core + PostgreSQL · Mediator (source-gen CQRS) · xunit.v3
 
+## Chat Conventions
+
+Applies to every agent reply in a discussion (not to files the agent writes).
+
+1. Number every statement sequentially: `1.`, `2.`, `3.` …
+2. Prefix every question with `Q` and a sequence number: `Q1.`, `Q2.` … — never ask an unnumbered question.
+3. Both counters run for the whole chat session: never restart at 1 for a new reply, section or phase; continue from the last number used (after context compaction, from the last number still visible).
+4. No bullets (`-`, `*`, `•`) in discussion; use the numbered statements and `Q` questions instead.
+
 ## AI Context Files
 
 Before changing code, read every `AGENTS.md` / `*AGENTS.md` in scope — they carry the "why" source code cannot convey. Specific overrides general; the nearest file is most authoritative.
@@ -80,3 +89,4 @@ Reviewer docs: `docs/` (index) + `docs/wiki/`. Designs, NFRs and LADRs: `docs/hl
 | Date | Change | Ref |
 | :---- | :---- | :---- |
 | 2026-10-24 | Mandatory context review; value-gated edits | — |
+| 2026-10-26 | Chat Conventions: session-wide numbered statements and `Q`-numbered questions, no bullets | — |
