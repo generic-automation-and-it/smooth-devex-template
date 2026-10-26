@@ -67,8 +67,8 @@ Installer tests must pin every agent-home override, including `CLAUDE_HOME`: cha
 does not sandbox a run when the invoking shell supplies a different tool configuration directory.
 
 A small hardcoded **owned set** (`OWNED_LIST` in `install-skills.sh`, `$script:OwnedList` in
-`install-skills.ps1`) scopes the installer to fifteen skills: `agile-github-breakdown`,
-`agile-github-task-from-diff`, `ai-asset-sync`, `ai-ralph-loop`, `ai-template-sync`, `ai-terse`,
+`install-skills.ps1`) scopes the installer to sixteen skills: `agile-github-breakdown`,
+`agile-github-task-from-diff`, `ai-asset-sync`, `ai-execute-pipeline`, `ai-ralph-loop`, `ai-template-sync`, `ai-terse`,
 `context-load-agents-context`, `context-load-context`, `create-hld`, `create-worktask`, `git-commit`,
 `git-commit-push`, `git-commit-push-pr`, `git-sync`, `manage-rule-system`. Everything
 else in `.agents/skills/` is treated as local and never enters a consumer's manifest, even when a
@@ -178,3 +178,4 @@ Two known gaps:
 | 2026-10-19 | Codex pitfall: no `@path` imports, 32 KiB cap — `~/.codex/AGENTS.md` gets a rule index block (replaced in place, legacy `@` block migrated), not `@` lines; `~/.codex/rules/smooth-devex.rules` (git-policy → prompt/forbidden), never `default.rules`; ps1 shared `Test-InstallSnapshot`; harness 10a–10g | #126 |
 | 2026-10-21 | Reapplied #111/#113 payload contract; pwsh 7.2 floor; root-link guards/shared-root preflight; canonical links follow pruned payload; tests pin agent-home overrides | #110, #112, #130 |
 | 2026-10-24 | Codex: migrate legacy commit/push prompts; preserve leading force-push restriction and operator-owned files | — |
+| 2026-10-26 | `ai-execute-pipeline` added to the owned set (sixteen skills) | — |

@@ -75,6 +75,7 @@ OWNED_LIST=(
   agile-github-breakdown
   agile-github-task-from-diff
   ai-asset-sync
+  ai-execute-pipeline
   ai-ralph-loop
   ai-template-sync
   ai-terse

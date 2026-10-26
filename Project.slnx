@@ -104,6 +104,19 @@
     <File Path=".agents/skills/ai-brain-dump/README.md" />
     <File Path=".agents/skills/ai-brain-dump/agents/openai.yaml" />
   </Folder>
+  <Folder Name="/.agents/skills/ai-execute-pipeline/">
+    <File Path=".agents/skills/ai-execute-pipeline/SKILL.md" />
+    <File Path=".agents/skills/ai-execute-pipeline/AGENTS.md" />
+    <File Path=".agents/skills/ai-execute-pipeline/agents/openai.yaml" />
+    <File Path=".agents/skills/ai-execute-pipeline/scripts/preflight.sh" />
+    <File Path=".agents/skills/ai-execute-pipeline/scripts/resolve-skill.sh" />
+    <File Path=".agents/skills/ai-execute-pipeline/scripts/branch.sh" />
+    <File Path=".agents/skills/ai-execute-pipeline/scripts/stack.sh" />
+    <File Path=".agents/skills/ai-execute-pipeline/scripts/pr.sh" />
+    <File Path=".agents/skills/ai-execute-pipeline/scripts/wait-for-review.sh" />
+    <File Path=".agents/skills/ai-execute-pipeline/scripts/export-understanding.sh" />
+    <File Path=".agents/skills/ai-execute-pipeline/scripts/test_pipeline_scripts.py" />
+  </Folder>
   <Folder Name="/.agents/skills/ai-ralph-loop/">
     <File Path=".agents/skills/ai-ralph-loop/SKILL.md" />
     <File Path=".agents/skills/ai-ralph-loop/AGENTS.md" />

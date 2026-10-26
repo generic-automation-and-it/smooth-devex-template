@@ -33,6 +33,7 @@ This is a unified AI development experience folder that centralizes skills, prom
 | `.agents/skills/agile-github-breakdown/` | Turn a braindump or existing Feature into GitHub Feature + Task issues |
 | `.agents/skills/agile-github-task-from-diff/` | Create a GitHub Task (sub-issue) from the current git diff vs main |
 | `.agents/skills/ai-brain-dump/` | Listen-first capture session; synthesize on request |
+| `.agents/skills/ai-execute-pipeline/` | Deliver one worktask end to end — worktask-sourced ticket, draft PR, implement, Ralph loop, ready, AI-review fix loop; optional `gh stack` layering |
 | `.agents/skills/ai-ralph-loop/` | Review → fix → verify the branch diff (or a plan, via `--plan`) in fresh-eyes loops until clean; ends with a fix table |
 | `.agents/skills/ai-terse/` | Reformat this turn's reply into terse, high-density output with a TL;DR |
 | `.agents/skills/ai-template-sync/` | UPSERT the smooth-devex-template agentic scaffold into an existing repo |
@@ -151,4 +152,4 @@ ls -la | grep -E '(\.claude|\.codex|\.cursor|opencode\.json)'
 | 2026-10-07 | `agentmd-create-update.sh`, `knowledge-rule-enforce.sh` print the AGENTS.md quality rule; no embedded copy. "create agents.md" (no article) now triggers | |
 | 2026-10-15 | OpenCode v2 config `.agents/opencode.json` via root `opencode.json` symlink: `instructions` (all rules), permissions, `experimental.policies` deny list — ported from smooth-ai-product-context-memory#236; root `opencode.jsonc` gitignored | — |
 | 2026-10-15 | Root `CLAUDE.md` symlink removed — Claude Code reads `AGENTS.md` natively; setup and `ai-template-sync` no longer create it | — |
-| 2026-10-26 | One skill-script wildcard permission in `settings.json` and `opencode.json`; skills keep their own `allowed-tools` | — |
+| 2026-10-26 | `ai-execute-pipeline` skill row; one skill-script wildcard permission in `settings.json` and `opencode.json`; skills keep their own `allowed-tools` | — |

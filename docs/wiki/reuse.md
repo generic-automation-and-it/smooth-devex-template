@@ -33,7 +33,7 @@ documentation: [`scripts/SKILLS_INSTALLER.md`](../../scripts/SKILLS_INSTALLER.md
 
 ## Owned set
 
-Ships **exactly fifteen** skills. Anything else in this template's `.agents/skills/` — `ai-brain-dump`
+Ships **exactly sixteen** skills. Anything else in this template's `.agents/skills/` — `ai-brain-dump`
 and `ai-understanding` — is **local** and never enters a consumer's manifest. Skills owned by other
 repositories (the `mimisbrunnr-*` set plus `ai-review`, `git-commit-review-push`, etc., owned by
 `smooth-ai-product-context-memory`) install via that repository's own installer.
@@ -41,6 +41,7 @@ repositories (the `mimisbrunnr-*` set plus `ai-review`, `git-commit-review-push`
 | ID | Type | Does | Why important / unique |
 |---|---|---|---|
 | `ai-asset-sync` | skill | Dependabot-style sync of AI assets from `owner/repo@ref:path`; AI-merges, opens chore PR on diff | Only auto-update path for consumer repos |
+| `ai-execute-pipeline` | skill | Delivers one worktask end to end: worktask-sourced sub-ticket, draft PR first, implement, Ralph loop, ready, SHA-matched AI-review fix loop; `--initialize` stacks later runs with `gh stack` | Only zero-touch worktask → reviewed-PR path |
 | `ai-ralph-loop` | skill | Review → fix → verify loop until clean (cap 10) over the branch diff, or over a plan via `--plan`; never commits | Only multi-pass quality gate; fresh-eyes each pass |
 | `ai-template-sync` | skill | UPSERTs this template scaffold into existing repo | Literal purpose of template; only onboarding path |
 | `ai-terse` | skill | Reformats reply: answer first, bullets/tables, TL;DR | Only token-compression / signal-only output |

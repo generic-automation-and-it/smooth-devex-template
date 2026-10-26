@@ -263,3 +263,30 @@ accepted:
       Documented, explicit opt-in shell-profile configuration for the local decision
       client. The enable and disable procedures are visible to the operator; the
       skill does not silently establish persistence. Existing pattern confirmed by scan.
+  # --- ai-execute-pipeline: gh/git plumbing scripts and their script-test harness ---
+  - id: TM1
+    file: ai-execute-pipeline/scripts/branch.sh
+    reason: >-
+      "Tool Parameter Abuse" on the git/gh-stack branch-creation sequence (fetch, switch,
+      ff-only merge, gh stack init/add, one empty commit). Creating the ticket branch is the
+      script's function. Every value is validated against strict regexes and
+      git check-ref-format before use, and all expansions are quoted — no shell interpolation of
+      ticket or worktask text.
+  - id: OH1
+    file: ai-execute-pipeline/scripts/test_pipeline_scripts.py
+    reason: >-
+      "Unvalidated Output Injection" on subprocess.run calls that drive the skill's Bash scripts
+      and git in a throwaway temp repo. Arguments are lists (shell=False) and inputs are test
+      fixtures; running the real scripts against a stub gh is the test's entire purpose.
+  - id: AST4
+    file: ai-execute-pipeline/scripts/test_pipeline_scripts.py
+    reason: >-
+      "subprocess module call" on the same bounded harness: git init/clone of a temp repo with a
+      local bare origin, and the skill's scripts invoked with shell=False and a stub gh first
+      on PATH. No network, no real GitHub.
+  - id: PE3
+    file: ai-execute-pipeline/scripts/test_pipeline_scripts.py
+    reason: >-
+      "Credential Access" on the test environment overrides (HOME, GIT_CONFIG_GLOBAL) that point
+      at temp directories. They sandbox each test away from the developer's real git and
+      gh configuration; nothing reads, prints or forwards a credential.
