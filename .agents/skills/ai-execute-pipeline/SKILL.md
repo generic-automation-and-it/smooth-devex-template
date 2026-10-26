@@ -225,9 +225,13 @@ commits are ignored.
 | Exit | Meaning | Next |
 |---|---|---|
 | `0` | No Critical or High | done |
-| `10` | Critical or High present | `git pull`, invoke `ai-review <pr> --fix`, then wait again (its commits carry the `/ai-review` trigger) |
+| `10` | Critical or High present | `git pull`, invoke `ai-review <pr-url>#pullrequestreview-<review> --fix --source=other`, then wait again (its commits carry the `/ai-review` trigger) |
 | `2` | No head-commit review within 20 min | stop; report the PR as awaiting review |
 | `3` | Report unreadable or GitHub unreachable | stop; report |
+
+`<review>` is the `review` id the script printed. Pin both it and `--source=other`: auto-detection
+picks the Copilot flow whenever a Copilot review exists on the PR, and would then fix and resolve the
+wrong findings while the OpenCode Critical/High stay open.
 
 After 5 fix rounds, stop and report what is still open.
 
