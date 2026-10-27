@@ -14,6 +14,12 @@ No fixture fixes an expected ordering; the observed verdicts are the result.
 
 ```bash
 export SMOOTH_DEVEX_DECISIONS_ENABLED=true
+export SMOOTH_DEVEX_DECISIONS_BASE_URL=http://127.0.0.1:11434
+export SMOOTH_DEVEX_DECISIONS_PATH=/v1/systemone
+export SMOOTH_DEVEX_DECISIONS_MODEL=nimble
+export SMOOTH_DEVEX_DECISIONS_MIN_PROBABILITY=0.60
+export SMOOTH_DEVEX_DECISIONS_MAX_ATTEMPTS=3
+export SMOOTH_DEVEX_DECISIONS_TIMEOUT=120
 export SMOOTH_DEVEX_DECISIONS_TEMPLATE=.agents/skills/ai-ralph-loop/decisions/templates/plan.json
 D=.agents/skills/ai-ralph-loop/decisions
 C=$D/tests/calibration
