@@ -33,6 +33,7 @@ STUB_GH = textwrap.dedent(r"""
       "stack submit") exit 0 ;;
       "pr view")
         if [[ -f "$STUB/pr_view_fail_once" ]]; then rm "$STUB/pr_view_fail_once"; exit 1; fi
+        if [[ -f "$STUB/rollup_fails" && "$*" == *statusCheckRollup* ]]; then exit 1; fi
         if [[ -f "$STUB/pr_$3.json" ]]; then cat "$STUB/pr_$3.json"; else cat "$STUB/pr_view.json"; fi ;;
       "pr ready") exit "$(cat "$STUB/pr_ready_rc" 2>/dev/null || echo 0)" ;;
       "api "*) [[ -f "$STUB/reviews.json" ]] && cat "$STUB/reviews.json" || exit 1 ;;
@@ -574,6 +575,13 @@ class WaitForReviewTests(ScriptTestCase):
     def test_head_report_needs_no_started_check(self):
         code, out, _ = self.wait(self.report(self.HEAD, 0, 0), AEP_START_GRACE="0")
         self.assertEqual((code, json.loads(out)["retriggered"]), (0, False))
+        self.assertEqual(self.toggles(), [])
+
+    def test_persistent_checks_lookup_failure_is_an_error_not_a_timeout(self):
+        self.stub_file("rollup_fails", "")
+        code, out, err = self.wait(self.report("fedcba9876543210", 0, 0), AEP_START_GRACE="0")
+        self.assertEqual((code, json.loads(out)["status"]), (3, "error"))
+        self.assertIn("could not read the checks of PR #7", err)
         self.assertEqual(self.toggles(), [])
 
     def test_failed_retrigger_exits_three(self):

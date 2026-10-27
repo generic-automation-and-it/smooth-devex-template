@@ -100,15 +100,19 @@ while :; do
       [[ "$status" == clean ]] && exit 0
       exit 10
     fi
-    if ! $start_checked && (( SECONDS - started >= grace )) &&
-       checks="$(gh pr view "$pr" --json statusCheckRollup 2>/dev/null)"; then
-      start_checked=true
-      if ! review_started <<<"$checks"; then
-        if ! retrigger_review "$head"; then
-          jq -n -c --arg head "$head" '{status:"error", head:$head}' | emit
-          exit 3
+    if ! $start_checked && (( SECONDS - started >= grace )); then
+      if checks="$(gh pr view "$pr" --json statusCheckRollup 2>/dev/null)"; then
+        start_checked=true
+        if ! review_started <<<"$checks"; then
+          if ! retrigger_review "$head"; then
+            jq -n -c --arg head "$head" '{status:"error", head:$head}' | emit
+            exit 3
+          fi
+          retriggered=true
         fi
-        retriggered=true
+      else
+        last_error="could not read the checks of PR #$pr to see whether its review started"
+        echo "wait-for-review: $last_error; retrying" >&2
       fi
     fi
   else
