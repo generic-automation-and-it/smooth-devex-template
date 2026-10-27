@@ -22,10 +22,20 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
 - **Decision validation is opt-in and non-blocking.** When `SMOOTH_DEVEX_DECISIONS_ENABLED` is not
   `true`, the decision script is never called. When the service is unreachable (after retries), the
   loop falls back to existing behaviour — never blocks on decision availability. `--nodecisions`
-  bypasses it even when enabled.
+  bypasses it even when enabled. `decision-evaluate.sh` reads
+  `SMOOTH_DEVEX_DECISIONS_{ENABLED,BASE_URL,PATH,MODEL,MIN_PROBABILITY,MAX_ATTEMPTS,TIMEOUT,TEMPLATE}`
+  (names only, none is a secret; the loop itself only checks `ENABLED` and sets `TEMPLATE`); the
+  endpoint is unauthenticated and a base URL with credentials is refused. Values and defaults:
+  `decisions/README.md`.
 - **Plan `keep`'s coverage override never bypasses the correction check** (LADR-001). An unresolved or
   regressive edit stays rejected even when a cited requirement demands it; the original unconditional
   OR from #138 reopens the defective-correction bug.
+- **No per-mode plan threshold without new evidence** (#138 item 7, deferred). Plan and code mode share
+  `MIN_PROBABILITY`. Do not add `SMOOTH_DEVEX_DECISIONS_MIN_PROBABILITY_PLAN` or retune the shared value
+  from `pct`: in the recorded `nimble` calibration `pct` is flat and inverted, and no verdict was decided
+  by the value threshold. Reopen only when plan verdicts start resting on `value_threshold` or
+  `value_below_threshold`, a model's plan `pct` separates good from trivial or defective edits at a
+  cut-off other than 0.60, or `pct` clusters near 0.60 — each with its audit files.
 - **The expected question contract comes from the outgoing template, never from response keys.** A
   response is valid only when it answers exactly the requested questions with the requested types,
   valid choices and probabilities that are in range and total 1. Missing probabilities are invalid,
@@ -48,13 +58,16 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
 - **Context:** Issue #138 proposed `keep = required coverage OR P(architectural_value >= positive) >=
   MIN_PROBABILITY`. That OR lets a defective correction pass whenever the evidence calls it required —
   the exact case the correction check exists to catch.
-- **Decision:** `keep = success AND (coverage in {directly_required, implicitly_needed} OR pct >=
-  MIN_PROBABILITY)`. Required coverage bypasses only the value threshold. A valid
+- **Decision:** `keep = success AND (coverage in {directly_required, implicitly_needed} OR
+  value_probability >= MIN_PROBABILITY)`, where `value_probability` is the unrounded 0-1 sum behind `pct`.
+  Required coverage bypasses only the value threshold. A valid
   `insufficient_evidence` answer is an advisory rejection, not a fallback.
 - **Consequences:** Required corrections with low architectural value are kept. Unresolved or
-  regressive corrections are rejected even when required. Calibration on five fixtures separated under
-  this contract while the old contract rejected both corrections and ranked a wording edit highest;
-  the old question contract, not model weakness, explains the original flat verdicts.
+  regressive corrections are rejected even when required. `keep` rests on `change_assessment` and
+  `requirement_coverage`, not on `pct`: the live `nimble` calibration (`decisions/tests/calibration/`)
+  scored a defective correction `pct=67`, stopped only by `change=regression`, and a trivial wording
+  edit `pct=32`. The question contract alone therefore does not explain the original flat verdicts;
+  `pct` stays uninformative on that model.
 
 ## Changelog
 
@@ -77,3 +90,5 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
 | 2026-10-24 | Question contract and response validation derive from the outgoing template; category-grouped wording; exact answer-set validation | #138 |
 | 2026-10-24 | Audit writes retry the next free suffix under concurrent writers; a lost link race is not an audit failure | #138 |
 | 2026-10-25 | Probability totals validated; HTTP error bodies retained in audits; input reads preserve trailing newlines | #138 |
+| 2026-10-27 | LADR-001 and README scoring compare unrounded `value_probability`, not `pct`, to `MIN_PROBABILITY` | #149 |
+| 2026-10-27 | LADR-001 outcome from live `nimble` calibration (`pct` not a quality signal); per-mode plan threshold deferred with reopen conditions; env-var names | #156 |

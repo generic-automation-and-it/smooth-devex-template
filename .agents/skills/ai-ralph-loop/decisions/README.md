@@ -46,7 +46,7 @@ The installer sets `decisions_enabled: true` in `_smooth-devex-shared/installati
 | `SMOOTH_DEVEX_DECISIONS_BASE_URL` | `http://127.0.0.1:1234` | OpenJEV service base URL; must not embed credentials (userinfo is rejected before any request) |
 | `SMOOTH_DEVEX_DECISIONS_PATH` | `/v1/systemone` | API endpoint path |
 | `SMOOTH_DEVEX_DECISIONS_MODEL` | `openjev` | Model name to request |
-| `SMOOTH_DEVEX_DECISIONS_MIN_PROBABILITY` | `0.60` | Value-probability threshold (0-1) |
+| `SMOOTH_DEVEX_DECISIONS_MIN_PROBABILITY` | `0.60` | Value-probability threshold (0-1), shared by plan and code mode; there is no per-mode variable |
 | `SMOOTH_DEVEX_DECISIONS_MAX_ATTEMPTS` | `3` | Bounded attempts on transport or invalid-response failure |
 | `SMOOTH_DEVEX_DECISIONS_TIMEOUT` | `60` | Per-request timeout in seconds |
 | `SMOOTH_DEVEX_DECISIONS_TEMPLATE` | `<script-dir>/../templates/build.json` | Template override |
@@ -120,9 +120,12 @@ enough — include the relevant excerpt.
 ```
 success  = change_assessment.choice == "success"
 required = requirement_coverage.choice in {directly_required, implicitly_needed}
-value_ok = pct >= MIN_PROBABILITY
+value_ok = value_probability >= MIN_PROBABILITY
 keep     = success AND (required OR value_ok)
 ```
+
+`value_probability` is the unrounded `P(architectural_value=2) + P(architectural_value=3)` on a 0-1 scale;
+`pct` is that sum rounded to a percentage for display only.
 
 Required coverage bypasses the value threshold, never the correction check. An unresolved, regressive
 or insufficient-evidence edit is rejected even when a requirement demands it or architectural value is
@@ -234,6 +237,16 @@ evaluator selects the group and sends a plain `instructions` string.
 Mode is derived from the **outgoing template** (`architectural_value` → plan, `developer_value` →
 code), never from the response. Adding a question without a validation rule and a scored or printed
 field makes the contract incomplete.
+
+## Calibration
+
+Calibration checks whether a model's plan-mode answers carry signal. Fixtures with known value live in `tests/calibration/`; its `README.md` has the run commands. Run them with the plan template, then record in the pull request:
+
+- the model name, base URL and path, and the template sha256 (every audit file carries it);
+- one row per fixture with `coverage`, `change`, `pct` and `basis`, plus every audit file of the run being checked, kept as written;
+- which branch of issue #138's *Distinguishing skill vs model* the data supports for that named model.
+
+A run on another model or endpoint is a new data point, not a replication. Calibration runs are ordinary opt-in evaluations: they never gate and change no verdict.
 
 ## Disable
 

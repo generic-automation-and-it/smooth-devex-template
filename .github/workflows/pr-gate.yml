@@ -11,6 +11,7 @@ on:
       - scripts/**
       - .agents/hooks/worktask-skill-trigger.sh
       - .agents/skills/create-worktask/**
+      - .agents/skills/ai-ralph-loop/**
       - .github/actions/**
       - .github/workflows/pr-gate.yml
   pull_request:
@@ -23,6 +24,7 @@ on:
       - scripts/**
       - .agents/hooks/worktask-skill-trigger.sh
       - .agents/skills/create-worktask/**
+      - .agents/skills/ai-ralph-loop/**
       - .github/actions/**
       - .github/workflows/pr-gate.yml
   workflow_dispatch:
@@ -52,6 +54,9 @@ jobs:
 
       - name: Test skills installer
         run: bash scripts/test-install-skills.sh
+
+      - name: Test ralph-loop decision contract
+        run: python3 -B .agents/skills/ai-ralph-loop/decisions/tests/test_decision_evaluate.py
 
       - name: Restore
         run: dotnet restore
