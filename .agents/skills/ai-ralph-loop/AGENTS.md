@@ -65,8 +65,9 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
 - **Consequences:** Required corrections with low architectural value are kept. Unresolved or
   regressive corrections are rejected even when required. `keep` rests on `change_assessment` and
   `requirement_coverage`, not on `pct`: in the live `nimble` calibration
-  (`decisions/tests/calibration/`) `pct` alone does not separate a good edit from a trivial or
-  defective one, so `keep` must not rest on it; the categorical answers decided every verdict.
+  (`decisions/tests/calibration/record-nimble-20261027.md`) `pct` alone does not separate a good
+  edit from a trivial or defective one, so `keep` must not rest on it; the categorical answers
+  decided every verdict.
 
 ## Changelog
 
@@ -90,4 +91,4 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
 | 2026-10-24 | Audit writes retry the next free suffix under concurrent writers; a lost link race is not an audit failure | #138 |
 | 2026-10-25 | Probability totals validated; HTTP error bodies retained in audits; input reads preserve trailing newlines | #138 |
 | 2026-10-27 | LADR-001 and README scoring compare unrounded `value_probability`, not `pct`, to `MIN_PROBABILITY` | #149 |
-| 2026-10-27 | LADR-001 outcome from live `nimble` calibration (`pct` not a quality signal); per-mode plan threshold deferred with reopen conditions; env-var names; calibration record beside fixtures | #156, #158 |
+| 2026-10-27 | LADR-001 outcome from live `nimble` calibration (`pct` not a quality signal); per-mode plan threshold deferred with reopen conditions; env-var names; verdicts in `decisions/tests/calibration/record-nimble-20261027.md` | #156, #158 |
