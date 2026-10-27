@@ -37,6 +37,19 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the pipeline order and every s
   placeholder branch. `stack.sh list` reads that file directly (schema 1 only, refused otherwise) so
   `--stack <branch>` can find the top. A top checked out in another worktree cannot be checked out
   here, so preflight refuses it before anything is created.
+- **A branch switch that rewrites agent config fails halfway.** Agent sandboxes protect `.agents/`,
+  `.claude/`, `.codex/` and `.cursor/` (Codex reaches `.agents` through the `.codex` symlink). Git then
+  moves `HEAD` but keeps the old file, leaving a dirty tree after the ticket, branch and stack exist.
+  Preflight refuses such a switch up front; never drop that check to "get further".
+- **`state.json` is keyed by the worktask's file stem.** It sits beside `ticket.md` in
+  `.context/ai-execute-pipeline/<stem>/`. Renaming a worktask file mid-run loses its resume state, and
+  the next run creates a second ticket and PR.
+- **Batch discovery couples to `create-worktask`'s template headings.** A worktask is a `.md` with a
+  `# Task:` title and `## Execution Profile`. Renaming either heading in `WORKTASK.template.md` makes
+  `queue.sh discover` find no worktasks.
+- **A done worktask with no gaps gets no ticket or PR.** The pipeline opens the PR before
+  implementing, so running it anyway leaves an empty layer in the middle of the stack. Its gap check
+  happens read-only during the batch analysis.
 - **The review wait is one blocking script call.** Model-side sleeps or harness timers failed on
   OpenCode; keep the poll inside `wait-for-review.sh`.
 - **`agile-github-task-from-diff --body-file` is the coupling for the default ticket skill.** Its
@@ -61,4 +74,5 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the pipeline order and every s
 | 2026-10-26 | Created; gh-stack probe, ordering, empty-commit and SHA-match traps; `--body-file` coupling; Jira PR-title limit | — |
 | 2026-10-26 | stack-init cuts the branch from `origin/<trunk>`; never checks out trunk (fails in worktrees) | — |
 | 2026-10-26 | Review gate trusts bot author + `commit_id`; SHA-valued stack bases; submit refuses remote-only commits | #148 |
+| 2026-10-27 | Agent-config switch guard; `state.json` stem key; batch discovery's template coupling; no PR for gap-free done worktasks | — |
 | 2026-10-27 | Ready/review concurrency race and one-toggle retrigger; fresh-worktree stack detection via the shared gh-stack state | — |

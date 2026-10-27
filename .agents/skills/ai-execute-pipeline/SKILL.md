@@ -1,6 +1,6 @@
 ---
 name: ai-execute-pipeline
-description: 'Zero-touch delivery of ONE worktask: create a sub-ticket from the worktask (never the diff) under a required parent, open a correctly named branch and a draft PR (optionally as a gh stack layer), implement the worktask, run the Ralph loop, commit and push, mark the PR ready, optionally export Understandings to Mímisbrunnr, then wait for the AI review and auto-fix Critical/High findings until the report is clean. Trigger on "/ai-execute-pipeline", "execute pipeline", "deliver this worktask", "run the worktask pipeline". Requires an existing worktask; does not author worktasks or HLDs (use create-worktask / create-hld), merge, rebase or deploy.'
+description: 'Zero-touch delivery of ONE worktask, or of a folder of worktasks one at a time in the order its plan gives (--worktasks): create a sub-ticket from the worktask (never the diff) under a required parent, open a correctly named branch and a draft PR (optionally as a gh stack layer), implement the worktask, run the Ralph loop, commit and push, mark the PR ready, optionally export Understandings to Mímisbrunnr, then wait for the AI review and auto-fix Critical/High findings until the report is clean. Trigger on "/ai-execute-pipeline", "execute pipeline", "deliver this worktask", "deliver these worktasks", "run the worktask pipeline". Requires an existing worktask; does not author worktasks or HLDs (use create-worktask / create-hld), merge, rebase or deploy.'
 allowed-tools:
   - Bash(.agents/skills/ai-execute-pipeline/scripts/preflight.sh:*)
   - Bash(.agents/skills/ai-execute-pipeline/scripts/resolve-skill.sh:*)
@@ -9,6 +9,8 @@ allowed-tools:
   - Bash(.agents/skills/ai-execute-pipeline/scripts/pr.sh:*)
   - Bash(.agents/skills/ai-execute-pipeline/scripts/wait-for-review.sh:*)
   - Bash(.agents/skills/ai-execute-pipeline/scripts/export-understanding.sh:*)
+  - Bash(.agents/skills/ai-execute-pipeline/scripts/state.sh:*)
+  - Bash(.agents/skills/ai-execute-pipeline/scripts/queue.sh:*)
   - Bash(git pull:*)
   - Bash(python3 .agents/skills/agile-github-task-from-diff/scripts/create_github_task_from_diff.py:*)
   - Read
@@ -24,12 +26,16 @@ effort: high  # implements a worktask end to end, then triages review findings
 One invocation delivers one worktask, from a new ticket to a clean AI review. Nothing in the run needs a human.
 Add `--initialize` on the first worktask of a parent to stack every later run's PR on top of the previous one.
 Add `--stack <branch>` to layer onto a stack from a fresh worktree, or onto one you started by hand.
+Give `--worktasks <dir>` instead of `--worktask` to deliver a whole plan: every worktask runs this
+pipeline in turn, each one stacked on the previous one ([Batch mode](#batch-mode---worktasks-dir)).
+A stopped run resumes where it stopped when invoked again.
 
 ### Switches
 
 | Switch | Required | Default | Effect |
 |---|---|---|---|
-| `--worktask <path>` | **yes** | — | The worktask to deliver. The ticket and the implementation both come from it |
+| `--worktask <path>` | **one of** | — | The worktask to deliver. The ticket and the implementation both come from it |
+| `--worktasks <dir>` | **one of** | — | A folder with exactly one `*plan*.md` and the worktasks it sequences. Runs [Batch mode](#batch-mode---worktasks-dir); every other switch applies to each worktask |
 | `--parent <id>` | **yes** | — | Parent ticket (opaque: `164`, `ABC-12`, or an issue URL). The new ticket becomes its sub-item. One parent = one unit of work = one stack |
 | `--hld <path>` | no | none | HLD loaded as design context for the implementation |
 | `--initialize` | no | off | Start a new `gh stack` with this run's branch as layer 1. Later runs on the stack top detect it and add a layer — no switch needed |
@@ -49,7 +55,7 @@ draft, review poll every 30 s for up to 20 min, at most 5 review-fix rounds.
 
 | # | Step | How | Stops the run when |
 |---|---|---|---|
-| 1 | Preflight and skill resolution | `preflight.sh`, `resolve-skill.sh` | any check fails — before anything is created |
+| 1 | Resume check, preflight and skill resolution | `state.sh`, `preflight.sh`, `resolve-skill.sh` | any check fails — before anything is created |
 | 2 | Load worktask, HLD, governing `*AGENTS.md` | read | — |
 | 3 | Ticket draft from the worktask → sub-ticket under `--parent` | ticket skill | no ticket id, or the parent link is not confirmed |
 | 4 | Branch `<type>/<ticket>-<slug>` (`gh stack init`/`checkout`+`add` in stack mode) | `branch.sh` | non-zero exit |
@@ -73,14 +79,18 @@ draft, review poll every 30 s for up to 20 min, at most 5 review-fix rounds.
   export. Ask only when a script stops the run or a worktask gate needs a human.
 - **The ticket comes from the worktask, never the diff.** At step 3 the branch has no diff, or in
   stack mode it carries the *earlier layers'* work. A ticket written from it describes the wrong change.
-- **One worktask per invocation, strictly sequential, one stack per worktree.** gh-stack keeps lock
-  files under `.git/`, and a second stack in the repo makes the trunk ambiguous (gh-stack exit 6).
+- **One worktask at a time, strictly sequential, one stack per worktree.** Batch mode never runs two
+  worktasks at once, whatever the plan allows in parallel. gh-stack keeps lock files under `.git/`, and
+  a second stack in the repo makes the trunk ambiguous (gh-stack exit 6).
+- **The invocation overrides the worktask's and the plan's commit rules.** "Commits during execution:
+  not allowed", "Push: never" and "the requester reviews each uncommitted branch" do not apply to a run
+  of this skill. "Deployment: not authorized" still applies.
 - **Every shell step is a script in `scripts/`; values reach it as `AEP_*` environment variables.**
   Never inline `gh`/`git` plumbing, and never paste ticket, worktask or review text into a command.
   Scripts validate every value; untrusted text stays in files.
 - **The draft PR exists before any implementation commit.** It is marked ready only at step 11, which
   is also what starts the first AI review (the review workflow skips draft PRs).
-- **Invoking this skill authorizes exactly:** creating one ticket, one branch, one PR, its commits and
+- **Invoking this skill authorizes exactly, per worktask:** creating one ticket, one branch, one PR, its commits and
   pushes, one `gh stack init`/`add` + `submit` (with `--stack <branch>`, one `gh stack checkout` of
   its top first), marking that PR ready, one draft→ready toggle per review wait when the review did not
   start, and `ai-review --fix` commits on it. It does not authorize merging, rebasing or syncing a stack, deleting branches, force-pushing,
@@ -111,7 +121,20 @@ Without either switch and outside a stack, stacking is off and the plain path ru
 status straight away, as information and not as a question: "stack layer N+1 on `<top>`", "new stack
 (layer 1)", or "no stack initialized — plain PR". Report every `warnings` entry. One of them names
 locally tracked stacks when the current branch is in none. That is the fresh-worktree case, and
-`--stack <branch>` joins one of them.
+`--stack <branch>` joins one of them. Preflight also stops when the branch switch would rewrite files
+under `.agents/`, `.claude/`, `.codex/` or `.cursor/`: agent sandboxes protect them, so the switch would
+fail halfway after the ticket exists.
+
+**Resume.** First run `AEP_WORKTASK=<path> scripts/state.sh get`. When it holds a `branch` and a
+`status` other than `done`, this is a resume. Run preflight with `AEP_RESUME_BRANCH=<branch>` (the tree
+may be dirty, nothing is switched, and `expected_base` is the layer below). Skip every step the state
+records — step 3 when `ticket` is set, 4 when `branch` is, 5 when `pr` is — and continue after `step`.
+Use the recorded ticket, branch and PR; never create a second one.
+
+**Record progress** with `AEP_WORKTASK=<path> AEP_<FIELD>=<value> AEP_STEP=<n> scripts/state.sh set`
+as each step finishes: after 3 `AEP_TICKET`, `AEP_TICKET_URL` and `AEP_STATUS=in-progress`; after 4
+`AEP_BRANCH`; after 5 `AEP_PR`; after 6, 10 and 11 the step alone; after 13 `AEP_STATUS=done`. On any
+stop, set `AEP_STATUS=stopped`.
 
 Resolve each skill the run needs with `AEP_SKILL_NAME=<name> scripts/resolve-skill.sh`, or
 `AEP_SKILL_PATH=<path> scripts/resolve-skill.sh` when a path was given.
@@ -190,7 +213,7 @@ Stop on exit 4.
 
 Execute the worktask under its own process and the repository's workflow rules. Its acceptance
 criteria and Validation table define done. This invocation grants the worktask permission to commit
-on this branch. If a worktask gate needs a human answer, stop and report. The draft PR stays open for
+on this branch. For a batch gap fix, close only the gaps B2 found. If a worktask gate needs a human answer, stop and report. The draft PR stays open for
 the next run.
 
 ### 8–10. Commit, Ralph, commit + push
@@ -259,7 +282,7 @@ wrong findings while the OpenCode Critical/High stay open.
 
 After 5 fix rounds, stop and report what is still open.
 
-### 14. Final report
+### 14. Final report (one worktask)
 
 1. Stack status (plain — no stack initialized / new stack layer 1 / layer N on `<base>`), ticket id
    and URL, branch, PR URL and state.
@@ -268,9 +291,87 @@ After 5 fix rounds, stop and report what is still open.
 
 Report from the scripts' actual outputs, never from intent.
 
+## Batch mode (`--worktasks <dir>`)
+
+The batch is this pipeline run once per worktask, in one linear stack. It asks its questions once, up
+front, and then runs without a human until it is done or a stop condition hits.
+
+### B1. Discover
+
+```bash
+AEP_WORKTASKS=<dir> scripts/queue.sh discover
+```
+
+Prints `{"dir","plan","worktasks","warnings"}`. It needs exactly one `*plan*.md`. A worktask is any
+other `.md` with the `create-worktask` shape (a `# Task:` title and an `## Execution Profile`
+section), whatever its file name. Report the `warnings`, which name ignored files.
+
+### B2. Analyse everything before running anything
+
+Read the plan and every worktask completely. Batch mode needs the `gh stack` extension. Then decide,
+per worktask:
+
+| Action | When |
+|---|---|
+| `run` | Agent work that is not done yet |
+| `run` (gap fix) | Marked done by the plan or worktask, but a read-only check of its acceptance criteria against the current code finds a gap or a bug. Its step 7 closes only the gaps; Ralph then reviews them |
+| `done` | Marked done, and the check finds every acceptance criterion met. No ticket, branch or PR. Record the evidence in the report |
+| `human` | The executor is not the agent (human-led, requester-run, an external party) |
+
+Order the entries in one line that respects every dependency: the plan's sequence and waves, then
+the worktask numbers. Parallel work in the plan becomes consecutive stack layers. A `run` entry may
+not depend on a `human` entry. Record every PR the plan or a worktask waits on (for example "after
+#430 merges") as a `gates` entry. Match runs that started outside the batch: an existing
+`state.json`, or `.context/ai-execute-pipeline/<stem>/` artefacts plus an open PR or branch for that
+worktask. Record them with `state.sh set` so that worktask resumes instead of starting over.
+
+Check that the worktasks fit together: dependencies that exist, no contradictions between the plan
+and a worktask, no open question, and no gate a human must pass. Write the queue to
+`.context/ai-execute-pipeline/<dir-name>/queue.json`:
+
+```json
+{"plan": "00-execution-plan.md", "entries": [
+  {"worktask": "WT-01-a.md", "action": "run", "depends_on": [], "gates": [{"pr": 430}], "reason": "…"}]}
+```
+
+```bash
+AEP_WORKTASKS=<dir> AEP_QUEUE=<queue.json> scripts/queue.sh validate
+```
+
+Exit 1 lists every problem: a missing or duplicate worktask, a dependency queued later, or a `run`
+on a `human` entry. Fix the queue and validate again. Then show the order, the `done` evidence and the
+`human` entries as information, and ask **every** open question in one message. This is the only point
+where the batch asks anything. Without questions, start at once.
+
+### B3. Run
+
+Repeat until it prints `{"worktask":null}`:
+
+```bash
+AEP_WORKTASKS=<dir> AEP_QUEUE=<queue.json> scripts/queue.sh next
+AEP_QUEUE=<queue.json> AEP_WORKTASK=<worktask> scripts/queue.sh gates
+```
+
+`next` returns the first `run` entry whose `state.json` is not `done`. `gates` exits 4 while a gate PR
+is unmerged: stop the batch there and report the PR. Then run steps 1–14 for that worktask with every
+switch of this invocation. The first layer gets `--initialize`, unless the current branch is already
+a stack top or `--stack` was given. Every later layer starts on the previous layer's branch, so
+preflight adds it as the next layer. Run each worktask in a fresh subagent where the harness has
+them, otherwise in this session.
+
+Stop the batch, leaving every earlier PR as it is, when a worktask stops for any reason. That
+includes a question mid-run. A later invocation with the same switches resumes at that worktask.
+
+### B4. Batch report
+
+One row per queue entry: action, ticket, branch, PR and state, or the evidence for `done` or the reason
+for `human`. Below it, the stack (layers bottom to top) and any `done` worktask whose check found
+nothing to fix.
+
 ## Changelog
 
 | Date | Change | Ref |
 | :---- | :---- | :---- |
 | 2026-10-26 | Created: worktask-sourced ticket, draft-first PR, `--initialize` gh stack layering, Kvasir export, SHA-matched review loop | — |
+| 2026-10-27 | `--worktasks <dir>` batch mode: plan-ordered linear stack, upfront analysis and questions, gap-checked done worktasks, gate PRs; per-worktask `state.json` resume; preflight refuses an agent-config-rewriting switch | — |
 | 2026-10-27 | Switches are answers (no re-confirming `--initialize`, export or bindings); `--stack [<branch>]` joins an existing stack from any worktree; preflight reports stack status; review wait retriggers a review that never started via one draft→ready toggle | — |

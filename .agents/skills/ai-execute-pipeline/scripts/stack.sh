@@ -2,7 +2,8 @@
 # gh-stack plumbing for ai-execute-pipeline. Never run two of these at once: gh-stack serializes
 # through .git/gh-stack*.lock and a parallel call fails or races.
 #
-#   stack.sh detect   Print {"in_stack":bool,"trunk","current","top"} for the current branch.
+#   stack.sh detect   Print {"in_stack":bool,"trunk","current","top","layers","below"} for the current
+#                     branch; `below` is the layer under it (null on layer 1).
 #                     gh stack view --json exits 2 with EMPTY stdout off-stack; plain `jq .` accepts
 #                     empty input, so membership is decided by exit code AND `jq -e`. `branches` is
 #                     ordered bottom to top and each `base` is a commit SHA, not a branch name.
@@ -36,7 +37,9 @@ detect() {
     exit 3
   fi
   rm -f "$err"
-  jq -c '{in_stack:true, trunk:.trunk, current:.currentBranch, top:.branches[-1].name, layers:(.branches | length)}' <<<"$out"
+  jq -c '.currentBranch as $current | (.branches | map(.name)) as $names | ($names | index($current)) as $at
+         | {in_stack:true, trunk:.trunk, current:$current, top:$names[-1], layers:($names | length),
+            below:(if $at == null or $at == 0 then null else $names[$at - 1] end)}' <<<"$out"
 }
 
 list() {

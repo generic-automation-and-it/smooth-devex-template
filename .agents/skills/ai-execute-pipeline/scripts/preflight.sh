@@ -3,8 +3,13 @@
 #   AEP_WORKTASK (required)  AEP_PARENT (required)  AEP_HLD  AEP_INITIALIZE  AEP_LOOPS
 #   AEP_STACK  true (join the current branch's stack) | <branch> (join the stack holding <branch>)
 #   AEP_UNDERSTANDING_EXPORT  AEP_PRODUCT_NAME  AEP_INITIATIVE  AEP_EPIC_TICKET
+#   AEP_RESUME_BRANCH  the branch from state.json when resuming a stopped run: the current branch must
+#                      be it, the tree may be dirty, nothing is switched, and expected_base is the layer
+#                      below it (or trunk). Prints "resume":true.
 # Prints {"mode":"plain|stack-init|stack-add","current_branch","trunk","expected_base",
 #         "stack":{"available","in_stack","top","layers"},"warnings":[]}
+# Refuses (exit 1) a run whose branch switch would rewrite .agents/.claude/.codex/.cursor files: agent
+# sandboxes protect them, so the switch fails halfway, after the ticket and branch already exist.
 # Exit: 0 ready · 1 environment not ready · 64 bad input
 set -euo pipefail
 
@@ -22,6 +27,7 @@ initialize="${AEP_INITIALIZE:-}"
 loops="${AEP_LOOPS:-10}"
 export_flag="${AEP_UNDERSTANDING_EXPORT:-}"
 stack_flag="${AEP_STACK:-}"
+resume_branch="${AEP_RESUME_BRANCH:-}"
 
 [[ -n "$worktask" ]] || fail "--worktask is required" 64
 [[ -n "$parent" ]] || fail "--parent is required" 64
@@ -40,6 +46,8 @@ else
   stack_target="$stack_flag"
   stack_flag=true
 fi
+[[ -z "$resume_branch" ]] || git check-ref-format --branch "$resume_branch" >/dev/null 2>&1 ||
+  fail "AEP_RESUME_BRANCH '$resume_branch' is not a branch name" 64
 if is_true "$initialize" && [[ "$stack_flag" == true ]]; then
   fail "--initialize starts a new stack and --stack joins an existing one; pass only one" 64
 fi
@@ -59,9 +67,12 @@ for tool in git gh jq; do
 done
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || fail "not inside a git work tree"
 gh auth status >/dev/null 2>&1 || fail "gh is not authenticated (run: gh auth login)"
-[[ -z "$(git status --porcelain)" ]] || fail "working tree is not clean; commit or set aside changes first"
-
 current="$(git rev-parse --abbrev-ref HEAD)"
+if [[ -n "$resume_branch" ]]; then
+  [[ "$current" == "$resume_branch" ]] || fail "resuming needs '$resume_branch' checked out, but this worktree is on '$current'"
+else
+  [[ -z "$(git status --porcelain)" ]] || fail "working tree is not clean; commit or set aside changes first"
+fi
 trunk="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
 trunk="${trunk#origin/}"
 trunk="${trunk:-main}"
@@ -88,7 +99,21 @@ checked_out_elsewhere() {
 mode=plain
 expected_base="$trunk"
 stack='{"in_stack":false,"top":null,"layers":0}'
-if is_true "$initialize"; then
+if [[ -n "$resume_branch" ]]; then
+  if $has_stack_extension; then
+    state="$("$script_dir/stack.sh" detect)" || fail "could not read gh stack state"
+    if [[ "$(jq -r '.in_stack' <<<"$state")" == "true" ]]; then
+      stack="$state"
+      below="$(jq -r '.below // empty' <<<"$state")"
+      if [[ -n "$below" ]]; then
+        mode=stack-add
+        expected_base="$below"
+      else
+        mode=stack-init
+      fi
+    fi
+  fi
+elif is_true "$initialize"; then
   $has_stack_extension || fail "--initialize needs the gh stack extension (gh extension install github/gh-stack)"
   state="$("$script_dir/stack.sh" detect)" || fail "could not read gh stack state"
   [[ "$(jq -r '.in_stack' <<<"$state")" == "false" ]] || fail "--initialize given but '$current' is already in a stack; drop --initialize to add a layer"
@@ -133,7 +158,23 @@ elif $has_stack_extension; then
 fi
 stack="$(jq -c --argjson available "$has_stack_extension" '{available:$available, in_stack, top, layers}' <<<"$stack")"
 
+switch_target=""
+[[ -n "$resume_branch" ]] || case "$mode" in
+  plain|stack-init) switch_target="origin/$trunk" ;;
+  stack-add) [[ "$expected_base" == "$current" ]] || switch_target="$expected_base" ;;
+esac
+if [[ -n "$switch_target" ]]; then
+  if git rev-parse --verify --quiet "$switch_target^{commit}" >/dev/null; then
+    agent_config="$(git diff --name-only HEAD "$switch_target" -- .agents .claude .codex .cursor | head -n 20 | paste -sd ' ' -)"
+    [[ -z "$agent_config" ]] ||
+      fail "switching to '$switch_target' rewrites agent config ($agent_config); agent sandboxes block writes there, so the switch would fail halfway after the ticket exists. Land those changes on '$trunk' first, or switch this worktree to '$switch_target' outside the sandbox, then re-run"
+  else
+    warnings+=("could not compare agent config with '$switch_target' (not available locally); a sandboxed switch may fail if it differs")
+  fi
+fi
+
 jq -n -c \
   --arg mode "$mode" --arg current "$current" --arg trunk "$trunk" --arg base "$expected_base" --argjson stack "$stack" \
   --argjson warnings "$(printf '%s\n' "${warnings[@]+"${warnings[@]}"}" | jq -R . | jq -s 'map(select(length > 0))')" \
-  '{mode:$mode, current_branch:$current, trunk:$trunk, expected_base:$base, stack:$stack, warnings:$warnings}'
+  --argjson resume "$([[ -n "$resume_branch" ]] && echo true || echo false)" \
+  '{mode:$mode, current_branch:$current, trunk:$trunk, expected_base:$base, stack:$stack, resume:$resume, warnings:$warnings}'

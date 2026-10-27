@@ -33,7 +33,7 @@ STUB_GH = textwrap.dedent(r"""
       "stack submit") exit 0 ;;
       "pr view")
         if [[ -f "$STUB/pr_view_fail_once" ]]; then rm "$STUB/pr_view_fail_once"; exit 1; fi
-        cat "$STUB/pr_view.json" ;;
+        if [[ -f "$STUB/pr_$3.json" ]]; then cat "$STUB/pr_$3.json"; else cat "$STUB/pr_view.json"; fi ;;
       "pr ready") exit "$(cat "$STUB/pr_ready_rc" 2>/dev/null || echo 0)" ;;
       "api "*) [[ -f "$STUB/reviews.json" ]] && cat "$STUB/reviews.json" || exit 1 ;;
       "repo view") echo '{"nameWithOwner":"o/r"}' ;;
@@ -249,6 +249,60 @@ class PreflightTests(ScriptTestCase):
         self.assertEqual(code, 1)
         self.assertIn("not in a locally tracked stack", err)
 
+    def commit_agent_settings(self, branch):
+        self.git(self.repo, "switch", "--quiet", "-c", branch)
+        (self.repo / ".agents").mkdir(exist_ok=True)
+        (self.repo / ".agents" / "settings.json").write_text('{"local": true}\n')
+        self.git(self.repo, "add", ".")
+        self.git(self.repo, "commit", "--quiet", "-m", "chore(agents): local settings")
+
+    def test_switch_that_rewrites_agent_config_fails_before_anything_is_created(self):
+        self.commit_agent_settings("generik0/settings")
+        code, _, err = self.preflight()
+        self.assertEqual(code, 1)
+        self.assertIn("rewrites agent config (.agents/settings.json)", err)
+        self.assertNotIn("stack init", " ".join(self.calls()))
+
+    def test_switch_with_unchanged_agent_config_passes(self):
+        self.git(self.repo, "switch", "--quiet", "-c", "generik0/other")
+        (self.repo / "notes.txt").write_text("x\n")
+        self.git(self.repo, "add", ".")
+        self.git(self.repo, "commit", "--quiet", "-m", "docs: notes")
+        self.assertEqual(json.loads(self.preflight()[1])["mode"], "plain")
+
+    def test_adding_a_layer_on_the_current_top_does_not_switch(self):
+        self.stub_file("stack_installed", "")
+        self.commit_agent_settings("feat/185-b")
+        self.stack_view("feat/185-b", "feat/185-b")
+        self.assertEqual(json.loads(self.preflight()[1])["mode"], "stack-add")
+
+    def test_resume_on_its_branch_allows_a_dirty_tree_and_no_switch(self):
+        self.commit_agent_settings("feat/184-a")
+        (self.repo / "half-done.txt").write_text("x")
+        code, out, err = self.preflight(AEP_RESUME_BRANCH="feat/184-a")
+        self.assertEqual(code, 0, err)
+        state = json.loads(out)
+        self.assertEqual((state["mode"], state["expected_base"], state["resume"]), ("plain", "main", True))
+
+    def test_resume_on_another_branch_fails(self):
+        code, _, err = self.preflight(AEP_RESUME_BRANCH="feat/184-a")
+        self.assertEqual(code, 1)
+        self.assertIn("resuming needs 'feat/184-a' checked out", err)
+
+    def test_resume_of_a_stacked_layer_expects_the_layer_below(self):
+        self.stub_file("stack_installed", "")
+        self.git(self.repo, "switch", "--quiet", "-c", "feat/185-b")
+        self.stack_view("feat/185-b", "feat/184-a", "feat/185-b")
+        state = json.loads(self.preflight(AEP_RESUME_BRANCH="feat/185-b")[1])
+        self.assertEqual((state["mode"], state["expected_base"]), ("stack-add", "feat/184-a"))
+
+    def test_resume_of_stack_layer_one_expects_trunk(self):
+        self.stub_file("stack_installed", "")
+        self.git(self.repo, "switch", "--quiet", "-c", "feat/184-a")
+        self.stack_view("feat/184-a", "feat/184-a", "feat/185-b")
+        state = json.loads(self.preflight(AEP_RESUME_BRANCH="feat/184-a")[1])
+        self.assertEqual((state["mode"], state["expected_base"]), ("stack-init", "main"))
+
     def test_stack_member_that_is_not_the_top_fails(self):
         self.stub_file("stack_installed", "")
         self.git(self.repo, "switch", "--quiet", "-c", "feat/184-a")
@@ -335,7 +389,8 @@ class StackTests(ScriptTestCase):
 
     def test_detect_top_of_three_layers_with_sha_bases(self):
         self.stack_view("feat/185-b", "feat/184-a", "feat/185-b", "feat/186-c")
-        self.assertEqual(self.json_of("stack.sh", "detect")["top"], "feat/186-c")
+        state = self.json_of("stack.sh", "detect")
+        self.assertEqual((state["top"], state["layers"], state["below"]), ("feat/186-c", 3, "feat/184-a"))
 
     def test_list_without_state_is_empty(self):
         self.assertEqual(self.json_of("stack.sh", "list"), [])
@@ -567,6 +622,132 @@ class ExportUnderstandingTests(ScriptTestCase):
     def test_bad_tickets_are_rejected(self):
         code, _, _ = self.run_script("export-understanding.sh", AEP_KVASIR_DIR=self.kvasir(), AEP_TICKETS="184")
         self.assertEqual(code, 64)
+
+
+WORKTASK = "# Task: {title}\n\nProcess: link\n\n## Execution Profile\n- **Path:** Full\n\n## Instructions\n"
+
+
+class QueueTests(ScriptTestCase):
+    def setUp(self):
+        super().setUp()
+        self.folder = self.tmp / "GPA-602"
+        self.folder.mkdir()
+        (self.folder / "00-execution-plan.md").write_text("# Plan\n")
+        for name in ("WT-01-a.md", "WT-02-b.md", "add-paging.md"):
+            (self.folder / name).write_text(WORKTASK.format(title=name))
+
+    def queue(self, *entries):
+        path = self.tmp / "queue.json"
+        path.write_text(json.dumps({"plan": "00-execution-plan.md", "entries": list(entries)}))
+        return str(path)
+
+    def entry(self, name, action="run", depends_on=(), gates=()):
+        return {"worktask": name, "action": action, "depends_on": list(depends_on),
+                "gates": [{"pr": pr} for pr in gates], "reason": "r"}
+
+    def valid(self):
+        return self.queue(self.entry("WT-02-b.md", "done"), self.entry("WT-01-a.md", gates=[430]),
+                          self.entry("add-paging.md", depends_on=["WT-01-a.md"]))
+
+    def queue_cmd(self, cmd, queue=None, **env):
+        return self.run_script("queue.sh", cmd, AEP_WORKTASKS=str(self.folder), AEP_QUEUE=queue or "", **env)
+
+    def test_discover_finds_the_plan_and_create_worktask_files_by_shape(self):
+        (self.folder / "notes.md").write_text("# Notes\n")
+        state = self.json_of("queue.sh", "discover", AEP_WORKTASKS=str(self.folder))
+        self.assertTrue(state["plan"].endswith("00-execution-plan.md"))
+        self.assertEqual([Path(w).name for w in state["worktasks"]], ["WT-01-a.md", "WT-02-b.md", "add-paging.md"])
+        self.assertEqual(len(state["warnings"]), 1)
+        self.assertIn("notes.md", state["warnings"][0])
+
+    def test_discover_needs_exactly_one_plan(self):
+        (self.folder / "00-execution-plan.md").unlink()
+        self.assertEqual(self.run_script("queue.sh", "discover", AEP_WORKTASKS=str(self.folder))[0], 64)
+        (self.folder / "a-plan.md").write_text("x")
+        (self.folder / "B-PLAN.md").write_text("x")
+        code, _, err = self.run_script("queue.sh", "discover", AEP_WORKTASKS=str(self.folder))
+        self.assertEqual(code, 64)
+        self.assertIn("found 2", err)
+
+    def test_valid_queue_counts_actions(self):
+        code, out, err = self.queue_cmd("validate", self.valid())
+        self.assertEqual((code, json.loads(out)), (0, {"entries": 3, "run": 2, "done": 1, "human": 0}), err)
+
+    def test_invalid_queues_are_refused_with_every_reason(self):
+        cases = {
+            "missing from the queue": [self.entry("WT-01-a.md"), self.entry("WT-02-b.md")],
+            "appears 2 times": [self.entry("WT-01-a.md"), self.entry("WT-01-a.md"), self.entry("WT-02-b.md"),
+                                self.entry("add-paging.md")],
+            "is queued before its dependency": [self.entry("WT-01-a.md", depends_on=["WT-02-b.md"]),
+                                                self.entry("WT-02-b.md"), self.entry("add-paging.md")],
+            "depends on unknown": [self.entry("WT-01-a.md", depends_on=["nope.md"]), self.entry("WT-02-b.md"),
+                                   self.entry("add-paging.md")],
+            "depends on human-led": [self.entry("WT-02-b.md", "human"), self.entry("WT-01-a.md", depends_on=["WT-02-b.md"]),
+                                     self.entry("add-paging.md")],
+            "action must be": [self.entry("WT-01-a.md", "skip"), self.entry("WT-02-b.md"), self.entry("add-paging.md")],
+            "gate pr must be": [self.entry("WT-01-a.md", gates=["430"]), self.entry("WT-02-b.md"), self.entry("add-paging.md")],
+            "not a worktask in the folder": [self.entry("WT-01-a.md"), self.entry("WT-02-b.md"), self.entry("add-paging.md"),
+                                             self.entry("other.md")],
+        }
+        for reason, entries in cases.items():
+            with self.subTest(reason=reason):
+                code, _, err = self.queue_cmd("validate", self.queue(*entries))
+                self.assertEqual(code, 1)
+                self.assertIn(reason, err)
+
+    def test_next_skips_done_run_entries_and_ignores_done_and_human_actions(self):
+        queue = self.valid()
+        self.assertEqual(json.loads(self.queue_cmd("next", queue)[1])["worktask"], "WT-01-a.md")
+        self.run_script("state.sh", "set", AEP_WORKTASK="WT-01-a.md", AEP_STATUS="done")
+        state = json.loads(self.queue_cmd("next", queue)[1])
+        self.assertEqual((state["worktask"], state["index"], state["remaining"]), ("add-paging.md", 2, 1))
+        self.run_script("state.sh", "set", AEP_WORKTASK="add-paging.md", AEP_STATUS="done")
+        self.assertEqual(json.loads(self.queue_cmd("next", queue)[1]), {"worktask": None, "remaining": 0})
+
+    def test_gates_pass_only_when_every_pr_is_merged(self):
+        self.stub_file("pr_430.json", {"state": "MERGED"})
+        code, out, _ = self.queue_cmd("gates", self.valid(), AEP_WORKTASK="WT-01-a.md")
+        self.assertEqual((code, json.loads(out)), (0, {"gates": [{"pr": 430, "state": "MERGED"}]}))
+        self.stub_file("pr_430.json", {"state": "OPEN"})
+        code, _, err = self.queue_cmd("gates", self.valid(), AEP_WORKTASK="WT-01-a.md")
+        self.assertEqual(code, 4)
+        self.assertIn("waits for PR #430", err)
+
+    def test_entry_without_gates_passes(self):
+        code, out, _ = self.queue_cmd("gates", self.valid(), AEP_WORKTASK="add-paging.md")
+        self.assertEqual((code, json.loads(out)), (0, {"gates": []}))
+
+
+class StateTests(ScriptTestCase):
+    def state(self, cmd, **env):
+        return self.run_script("state.sh", cmd, **{"AEP_WORKTASK": ".context/GPA-602/WT-01-a.md", **env})
+
+    def test_unknown_worktask_has_empty_state(self):
+        self.assertEqual(json.loads(self.state("get")[1]), {})
+
+    def test_set_merges_fields_and_get_reads_them_back(self):
+        self.state("set", AEP_TICKET="GPA-690", AEP_TICKET_URL="https://jira.example/browse/GPA-690", AEP_STEP="3",
+                   AEP_STATUS="in-progress")
+        self.state("set", AEP_BRANCH="fix/GPA-690-a", AEP_PR="434", AEP_STEP="5")
+        self.assertEqual(json.loads(self.state("get")[1]), {
+            "ticket": "GPA-690", "ticket_url": "https://jira.example/browse/GPA-690", "status": "in-progress",
+            "step": 5, "branch": "fix/GPA-690-a", "pr": 434})
+        stored = self.repo / ".context" / "ai-execute-pipeline" / "WT-01-a" / "state.json"
+        self.assertTrue(stored.is_file())
+        self.assertEqual(list(stored.parent.glob(".state.*")), [])
+
+    def test_invalid_values_are_refused_and_nothing_is_written(self):
+        for env in ({"AEP_TICKET": "GPA 690"}, {"AEP_TICKET_URL": "http://x"}, {"AEP_BRANCH": "a..b"},
+                    {"AEP_PR": "0"}, {"AEP_STEP": "15"}, {"AEP_STATUS": "finished"}):
+            with self.subTest(env=env):
+                self.assertEqual(self.state("set", **env)[0], 64)
+        self.assertFalse((self.repo / ".context").exists())
+
+    def test_corrupt_state_is_reported(self):
+        stored = self.repo / ".context" / "ai-execute-pipeline" / "WT-01-a"
+        stored.mkdir(parents=True)
+        (stored / "state.json").write_text("[]")
+        self.assertEqual(self.state("get")[0], 1)
 
 
 class ScriptHygieneTests(unittest.TestCase):
