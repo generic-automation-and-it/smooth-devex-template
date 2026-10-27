@@ -48,8 +48,9 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
 - **Context:** Issue #138 proposed `keep = required coverage OR P(architectural_value >= positive) >=
   MIN_PROBABILITY`. That OR lets a defective correction pass whenever the evidence calls it required —
   the exact case the correction check exists to catch.
-- **Decision:** `keep = success AND (coverage in {directly_required, implicitly_needed} OR pct >=
-  MIN_PROBABILITY)`. Required coverage bypasses only the value threshold. A valid
+- **Decision:** `keep = success AND (coverage in {directly_required, implicitly_needed} OR
+  value_probability >= MIN_PROBABILITY)`, where `value_probability` is the unrounded 0-1 sum behind `pct`.
+  Required coverage bypasses only the value threshold. A valid
   `insufficient_evidence` answer is an advisory rejection, not a fallback.
 - **Consequences:** Required corrections with low architectural value are kept. Unresolved or
   regressive corrections are rejected even when required. Calibration on five fixtures separated under
@@ -77,3 +78,4 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
 | 2026-10-24 | Question contract and response validation derive from the outgoing template; category-grouped wording; exact answer-set validation | #138 |
 | 2026-10-24 | Audit writes retry the next free suffix under concurrent writers; a lost link race is not an audit failure | #138 |
 | 2026-10-25 | Probability totals validated; HTTP error bodies retained in audits; input reads preserve trailing newlines | #138 |
+| 2026-10-27 | LADR-001 and README scoring compare unrounded `value_probability`, not `pct`, to `MIN_PROBABILITY` | #149 |

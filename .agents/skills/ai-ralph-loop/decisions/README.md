@@ -120,9 +120,12 @@ enough — include the relevant excerpt.
 ```
 success  = change_assessment.choice == "success"
 required = requirement_coverage.choice in {directly_required, implicitly_needed}
-value_ok = pct >= MIN_PROBABILITY
+value_ok = value_probability >= MIN_PROBABILITY
 keep     = success AND (required OR value_ok)
 ```
+
+`value_probability` is the unrounded `P(architectural_value=2) + P(architectural_value=3)` on a 0-1 scale;
+`pct` is that sum rounded to a percentage for display only.
 
 Required coverage bypasses the value threshold, never the correction check. An unresolved, regressive
 or insufficient-evidence edit is rejected even when a requirement demands it or architectural value is
