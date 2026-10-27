@@ -33,7 +33,7 @@ This is a unified AI development experience folder that centralizes skills, prom
 | `.agents/skills/agile-github-breakdown/` | Turn a braindump or existing Feature into GitHub Feature + Task issues |
 | `.agents/skills/agile-github-task-from-diff/` | Create a GitHub Task (sub-issue) from the current git diff vs main |
 | `.agents/skills/ai-brain-dump/` | Listen-first capture session; synthesize on request |
-| `.agents/skills/ai-execute-pipeline/` | Deliver one worktask end to end — worktask-sourced ticket, draft PR, implement, Ralph loop, ready, AI-review fix loop; optional `gh stack` layering |
+| `.agents/skills/ai-execute-pipeline/` | Deliver one worktask end to end — worktask-sourced ticket, draft PR, implement, Ralph loop, ready, AI-review fix loop; optional `gh stack` layering; `--worktasks <dir>` runs a plan's worktasks in sequence |
 | `.agents/skills/ai-ralph-loop/` | Review → fix → verify the branch diff (or a plan, via `--plan`) in fresh-eyes loops until clean; ends with a fix table |
 | `.agents/skills/ai-terse/` | Reformat this turn's reply into terse, high-density output with a TL;DR |
 | `.agents/skills/ai-template-sync/` | UPSERT the smooth-devex-template agentic scaffold into an existing repo |

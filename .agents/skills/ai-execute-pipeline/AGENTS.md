@@ -26,6 +26,38 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the pipeline order and every s
   names against bases marks every layer as the top and breaks every stack of two or more layers.
 - **`gh stack submit` force-with-lease pushes every layer.** `stack.sh submit` refuses (exit 5) when a
   layer has remote-only commits; removing that check lets a stale local layer overwrite a collaborator.
+- **Marking the PR ready does not guarantee a review run.** The review workflow uses
+  `concurrency: ai-review-<pr>` with `cancel-in-progress` and skips draft payloads, so a push whose
+  `synchronize` run (payload still draft) queues after `ready_for_review` cancels it and then skips
+  itself. `wait-for-review.sh` repairs this with one draft→ready toggle per call when the head commit's
+  `statusCheckRollup` has no live review run. Never toggle repeatedly: each toggle cancels the run
+  the previous one started.
+- **The review check's name differs per repo; its workflow name does not.** It is `LEGO PR Review` in
+  gf-recipe-editor and `review / open-code-review-report` behind a reusable-workflow caller, but the
+  workflow is a "… Review Report" everywhere. Matching on the job name alone makes the retrigger toggle
+  a PR whose review is running, cancelling it. The match covers name plus workflow name.
+- **`SKIPPED` and `CANCELLED` checks are not failures.** Path filters skip most jobs on every PR, and
+  a newer run cancels an older one. Treating them as failures sends the CI fix loop after phantom
+  failures and burns the 5-round cap.
+- **A fresh worktree is never "in" a stack.** gh-stack state is shared (`<git-common-dir>/gh-stack`),
+  but `gh stack view` answers only for the current branch, and a Conductor workspace starts on a
+  placeholder branch. `stack.sh list` reads that file directly (schema 1 only, refused otherwise) so
+  `--stack <branch>` can find the top. A top checked out in another worktree cannot be checked out
+  here, so preflight refuses it before anything is created.
+- **A branch switch that rewrites agent config fails halfway.** Agent sandboxes block writes to agent
+  config, and `.claude`, `.codex` and `.cursor` all resolve to `.agents`. GPA-690 hit this on
+  `.agents/settings.json`: git moved `HEAD` but kept the old file, leaving a dirty tree after the
+  ticket, branch and stack existed.
+  Preflight refuses such a switch up front; never drop that check to "get further".
+- **`state.json` is keyed by the worktask's file stem.** It sits beside `ticket.md` in
+  `.context/ai-execute-pipeline/<stem>/`. Renaming a worktask file mid-run loses its resume state, and
+  the next run creates a second ticket and PR.
+- **Batch discovery couples to `create-worktask`'s template headings.** A worktask is a `.md` with a
+  `# Task:` title and `## Execution Profile`. Renaming either heading in `WORKTASK.template.md` makes
+  `queue.sh discover` find no worktasks.
+- **A done worktask with no gaps gets no ticket or PR.** The pipeline opens the PR before
+  implementing, so running it anyway leaves an empty layer in the middle of the stack. Its gap check
+  happens read-only during the batch analysis.
 - **The review wait is one blocking script call.** Model-side sleeps or harness timers failed on
   OpenCode; keep the poll inside `wait-for-review.sh`.
 - **`agile-github-task-from-diff --body-file` is the coupling for the default ticket skill.** Its
@@ -50,3 +82,6 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the pipeline order and every s
 | 2026-10-26 | Created; gh-stack probe, ordering, empty-commit and SHA-match traps; `--body-file` coupling; Jira PR-title limit | — |
 | 2026-10-26 | stack-init cuts the branch from `origin/<trunk>`; never checks out trunk (fails in worktrees) | — |
 | 2026-10-26 | Review gate trusts bot author + `commit_id`; SHA-valued stack bases; submit refuses remote-only commits | #148 |
+| 2026-10-27 | Review check matched by name or workflow name; SKIPPED/CANCELLED are not CI failures | — |
+| 2026-10-27 | Agent-config switch guard; `state.json` stem key; batch discovery's template coupling; no PR for gap-free done worktasks | — |
+| 2026-10-27 | Ready/review concurrency race and one-toggle retrigger; fresh-worktree stack detection via the shared gh-stack state | — |

@@ -2,10 +2,14 @@
 # gh-stack plumbing for ai-execute-pipeline. Never run two of these at once: gh-stack serializes
 # through .git/gh-stack*.lock and a parallel call fails or races.
 #
-#   stack.sh detect   Print {"in_stack":bool,"trunk","current","top"} for the current branch.
+#   stack.sh detect   Print {"in_stack":bool,"trunk","current","top","layers","below"} for the current
+#                     branch; `below` is the layer under it (null on layer 1).
 #                     gh stack view --json exits 2 with EMPTY stdout off-stack; plain `jq .` accepts
 #                     empty input, so membership is decided by exit code AND `jq -e`. `branches` is
 #                     ordered bottom to top and each `base` is a commit SHA, not a branch name.
+#   stack.sh list     Print [{"trunk","top","layers","branches"}] for every locally tracked stack.
+#                     Read from the shared .git/gh-stack state, because `gh stack view` only sees the
+#                     current branch's stack and a fresh worktree sits on a branch outside any stack.
 #   stack.sh submit   AEP_BRANCH, AEP_EXPECTED_BASE required. Runs `gh stack submit --auto` (pushes,
 #                     reuses the open PR, rewires bases), then verifies the PR's base branch. gh stack
 #                     pushes every layer with --force-with-lease against a freshly fetched lease, so it
@@ -33,7 +37,23 @@ detect() {
     exit 3
   fi
   rm -f "$err"
-  jq -c '{in_stack:true, trunk:.trunk, current:.currentBranch, top:.branches[-1].name}' <<<"$out"
+  jq -c '.currentBranch as $current | (.branches | map(.name)) as $names | ($names | index($current)) as $at
+         | {in_stack:true, trunk:.trunk, current:$current, top:$names[-1], layers:($names | length),
+            below:(if $at == null or $at == 0 then null else $names[$at - 1] end)}' <<<"$out"
+}
+
+list() {
+  local file
+  file="$(git rev-parse --path-format=absolute --git-common-dir)/gh-stack"
+  if [[ ! -f "$file" ]]; then
+    echo '[]'
+    return 0
+  fi
+  jq -c 'if .schemaVersion == 1
+         then [.stacks[] | select((.branches | length) > 0)
+               | {trunk:.trunk.branch, top:.branches[-1].branch, layers:(.branches | length), branches:[.branches[].branch]}]
+         else error("unsupported gh-stack state schema \(.schemaVersion)") end' "$file" ||
+    { echo "could not read the gh-stack state in $file" >&2; exit 3; }
 }
 
 submit() {
@@ -69,6 +89,7 @@ submit() {
 
 case "${1:-}" in
   detect) detect ;;
+  list) list ;;
   submit) submit ;;
-  *) echo "usage: stack.sh detect|submit" >&2; exit 64 ;;
+  *) echo "usage: stack.sh detect|list|submit" >&2; exit 64 ;;
 esac
