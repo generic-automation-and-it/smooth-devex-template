@@ -29,4 +29,4 @@ $D/scripts/decision-evaluate.sh --category kiss \
   --audit-file <run-dir>/decisions/CAL-trivial-wording.json
 ```
 
-Repeat per fixture with its category. Audit files belong under a gitignored `.context/` run directory, never beside the fixtures.
+The exports are the settings of the recorded `nimble` run; without them the evaluator uses its defaults (`:1234`, `openjev`, 60 seconds) and the verdicts are not comparable. Change them to calibrate another model, and record what you used. Repeat per fixture with its category. Audit files belong under a gitignored `.context/` run directory, never beside the fixtures.
