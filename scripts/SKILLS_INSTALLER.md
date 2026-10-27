@@ -95,7 +95,7 @@ match byte-for-byte (the harness holds them to each other).
 | `agile-github-breakdown` | Turns a braindump or Feature into GitHub Feature + Task issues; generally useful across consumer projects |
 | `agile-github-task-from-diff` | Creates a GitHub Task from the branch diff; generally useful across consumer projects |
 | `ai-asset-sync` | Syncs AI assets across projects; core template mechanism |
-| `ai-execute-pipeline` | Zero-touch delivery of one worktask — ticket, branch, draft PR, implement, Ralph loop, ready, review fixes; optional `gh stack` layering |
+| `ai-execute-pipeline` | Zero-touch delivery of one worktask, or a plan's folder of worktasks in sequence — ticket, branch, draft PR, implement, Ralph loop, ready, review fixes; optional `gh stack` layering |
 | `ai-template-sync` | Syncs this template into consumer repos; literal purpose of the template |
 | `ai-ralph-loop` | Review → fix → verify loop over a branch diff, or over a plan with `--plan`; generally useful across consumer projects |
 | `ai-terse` | Token compression; generally useful across consumer projects |
