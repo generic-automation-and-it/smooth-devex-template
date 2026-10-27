@@ -12,6 +12,8 @@ No fixture fixes an expected ordering; the observed verdicts are the result.
 
 ## Run
 
+Run this block from the repository root: the paths below are root-relative.
+
 ```bash
 export SMOOTH_DEVEX_DECISIONS_ENABLED=true
 export SMOOTH_DEVEX_DECISIONS_BASE_URL=http://127.0.0.1:11434
