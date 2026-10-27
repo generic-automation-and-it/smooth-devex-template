@@ -1,12 +1,12 @@
 # Plan-mode calibration record: `nimble`, 2026-10-27
 
-Verdicts of `decision-evaluate.sh` on the plan template, recorded so the claims in [LADR-001](../AGENTS.md) and the deferral of a per-mode plan threshold can be checked from the repository rather than from a pull request.
+Verdicts of `decision-evaluate.sh` on the plan template, recorded so the claims in [LADR-001](../../../AGENTS.md) and the deferral of a per-mode plan threshold can be checked from the repository rather than from a pull request.
 
 | Setting | Value |
 |---|---|
 | Model | `nimble` |
 | Endpoint | `http://127.0.0.1:11434` `/v1/systemone`, unauthenticated |
-| Template | `decisions/templates/plan.json`, sha256 `22a594eeb679f4f20362dc2c88f08bf81311a99b6af7f78c9fb4bd5419ec3f97` |
+| Template | `.agents/skills/ai-ralph-loop/decisions/templates/plan.json`, sha256 `22a594eeb679f4f20362dc2c88f08bf81311a99b6af7f78c9fb4bd5419ec3f97` |
 | Threshold | `MIN_PROBABILITY=0.6` |
 | Date | 2026-10-27 |
 
@@ -37,4 +37,4 @@ Verdicts of `decision-evaluate.sh` on the plan template, recorded so the claims 
 - `pct` does not rank quality: a defective correction scored 67 and a trivial wording edit 32, above most accepted corrections.
 - Every accepted edit was kept by `coverage_override`, and every rejected one by `change_rejected`.
 
-Reopen conditions for a per-mode plan threshold are in [AGENTS.md](../AGENTS.md) (LADR-001 and the Non-Negotiables).
+Reopen conditions for a per-mode plan threshold are in [AGENTS.md](../../../AGENTS.md) (LADR-001 and the Non-Negotiables).

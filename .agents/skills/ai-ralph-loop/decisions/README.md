@@ -240,13 +240,13 @@ field makes the contract incomplete.
 
 ## Calibration
 
-Calibration checks whether a model's plan-mode answers carry signal. Fixtures with known value live in `tests/calibration/`; its `README.md` has the run commands. Run them with the plan template, then record in the pull request:
+Calibration checks whether a model's plan-mode answers carry signal. Fixtures with known value live in `tests/calibration/`; its `README.md` has the run commands. Run them with the plan template, then write a record beside the fixtures in the shape of `tests/calibration/record-nimble-20261027.md`, and summarise it in the pull request:
 
 - the model name, base URL and path, and the template sha256 (every audit file carries it);
-- one row per fixture with `coverage`, `change`, `pct` and `basis`, plus every audit file of the run being checked, kept as written;
+- one row per audit of the run being checked, kept as written, with `coverage`, `change`, `pct` and `basis`;
 - which branch of issue #138's *Distinguishing skill vs model* the data supports for that named model.
 
-A run on another model or endpoint is a new data point, not a replication. Calibration runs are ordinary opt-in evaluations: they never gate and change no verdict.
+The record holds values only, never plan or fixture text. A run on another model or endpoint is a new data point, not a replication: name it separately rather than overwriting. Calibration runs are ordinary opt-in evaluations: they never gate and change no verdict.
 
 ## Disable
 
