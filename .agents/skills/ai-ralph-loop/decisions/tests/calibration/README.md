@@ -23,10 +23,16 @@ export SMOOTH_DEVEX_DECISIONS_TIMEOUT=120
 export SMOOTH_DEVEX_DECISIONS_TEMPLATE=.agents/skills/ai-ralph-loop/decisions/templates/plan.json
 D=.agents/skills/ai-ralph-loop/decisions
 C=$D/tests/calibration
-$D/scripts/decision-evaluate.sh --category kiss \
-  --before $C/trivial-wording/before.md --after $C/trivial-wording/after.md \
-  --evidence $C/trivial-wording/evidence.md --context "fixture:trivial-wording" \
-  --audit-file <run-dir>/decisions/CAL-trivial-wording.json
+A=.context/calibration/$(date -u +%Y%m%d-%H%M)/decisions
+mkdir -p "$A"
+for pair in trivial-wording:kiss defective-correction:potential-bug clean-code-cited-rule:clean-code; do
+  fixture=${pair%%:*}
+  category=${pair##*:}
+  $D/scripts/decision-evaluate.sh --category "$category" \
+    --before "$C/$fixture/before.md" --after "$C/$fixture/after.md" \
+    --evidence "$C/$fixture/evidence.md" --context "fixture:$fixture" \
+    --audit-file "$A/CAL-$fixture.json"
+done
 ```
 
-The exports are the settings of the recorded `nimble` run; without them the evaluator uses its defaults (`:1234`, `openjev`, 60 seconds) and the verdicts are not comparable. Change them to calibrate another model, and record what you used. Repeat per fixture with its category. Audit files belong under a gitignored `.context/` run directory, never beside the fixtures.
+The exports are the settings of the recorded `nimble` run; without them the evaluator uses its defaults (`:1234`, `openjev`, 60 seconds) and the verdicts are not comparable. Change them to calibrate another model, and record what you used. Audit files land in `$A`, under gitignored `.context/`, never beside the fixtures.

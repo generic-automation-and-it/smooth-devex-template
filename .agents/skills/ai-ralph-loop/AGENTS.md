@@ -64,10 +64,11 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
   `insufficient_evidence` answer is an advisory rejection, not a fallback.
 - **Consequences:** Required corrections with low architectural value are kept. Unresolved or
   regressive corrections are rejected even when required. `keep` rests on `change_assessment` and
-  `requirement_coverage`, not on `pct`: the live `nimble` calibration (`decisions/tests/calibration/`)
-  scored a defective correction `pct=67`, stopped only by `change=regression`, and a trivial wording
-  edit `pct=32`. The question contract alone therefore does not explain the original flat verdicts;
-  `pct` stays uninformative on that model.
+  `requirement_coverage`, not on `pct`: the live `nimble` calibration (fixtures in
+  `decisions/tests/calibration/`, verdict table in the #152 description) scored a defective
+  correction `pct=67`, stopped only by `change=regression`, and a trivial wording edit `pct=32`.
+  The question contract alone therefore does not explain the original flat verdicts; `pct` stays
+  uninformative on that model.
 
 ## Changelog
 
@@ -92,3 +93,4 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the six categories, the eviden
 | 2026-10-25 | Probability totals validated; HTTP error bodies retained in audits; input reads preserve trailing newlines | #138 |
 | 2026-10-27 | LADR-001 and README scoring compare unrounded `value_probability`, not `pct`, to `MIN_PROBABILITY` | #149 |
 | 2026-10-27 | LADR-001 outcome from live `nimble` calibration (`pct` not a quality signal); per-mode plan threshold deferred with reopen conditions; env-var names | #156 |
+| 2026-10-27 | LADR-001 calibration claim points to the #152 verdict table | #158 |
