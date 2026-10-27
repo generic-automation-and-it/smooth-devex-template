@@ -37,9 +37,10 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the pipeline order and every s
   placeholder branch. `stack.sh list` reads that file directly (schema 1 only, refused otherwise) so
   `--stack <branch>` can find the top. A top checked out in another worktree cannot be checked out
   here, so preflight refuses it before anything is created.
-- **A branch switch that rewrites agent config fails halfway.** Agent sandboxes protect `.agents/`,
-  `.claude/`, `.codex/` and `.cursor/` (Codex reaches `.agents` through the `.codex` symlink). Git then
-  moves `HEAD` but keeps the old file, leaving a dirty tree after the ticket, branch and stack exist.
+- **A branch switch that rewrites agent config fails halfway.** Agent sandboxes block writes to agent
+  config, and `.claude`, `.codex` and `.cursor` all resolve to `.agents`. GPA-690 hit this on
+  `.agents/settings.json`: git moved `HEAD` but kept the old file, leaving a dirty tree after the
+  ticket, branch and stack existed.
   Preflight refuses such a switch up front; never drop that check to "get further".
 - **`state.json` is keyed by the worktask's file stem.** It sits beside `ticket.md` in
   `.context/ai-execute-pipeline/<stem>/`. Renaming a worktask file mid-run loses its resume state, and
