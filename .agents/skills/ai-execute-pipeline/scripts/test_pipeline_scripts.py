@@ -37,6 +37,7 @@ STUB_GH = textwrap.dedent(r"""
       "pr ready") exit "$(cat "$STUB/pr_ready_rc" 2>/dev/null || echo 0)" ;;
       "api "*) [[ -f "$STUB/reviews.json" ]] && cat "$STUB/reviews.json" || exit 1 ;;
       "repo view") echo '{"nameWithOwner":"o/r"}' ;;
+      "run view") [[ -f "$STUB/run_$3.log" ]] && cat "$STUB/run_$3.log" || exit 1 ;;
       *) echo "stub gh: unhandled $*" >&2; exit 99 ;;
     esac
 """).lstrip()
@@ -455,6 +456,58 @@ class PrTests(ScriptTestCase):
     def test_rejects_a_non_ref(self):
         self.assertEqual(self.run_script("pr.sh", "view", AEP_PR="7; true")[0], 64)
 
+    def run_row(self, name, status="COMPLETED", conclusion="SUCCESS", workflow="CI", run=101):
+        return {"__typename": "CheckRun", "name": name, "workflowName": workflow, "status": status,
+                "conclusion": conclusion, "detailsUrl": f"https://github.com/o/r/actions/runs/{run}/job/9"}
+
+    def checks(self, *rows):
+        self.stub_file("pr_view.json", {"headRefOid": "abc", "statusCheckRollup": list(rows)})
+        code, out, err = self.run_script("pr.sh", "checks", AEP_PR="7")
+        return code, json.loads(out) if out else None, err
+
+    def test_checks_pass_with_skipped_cancelled_and_running_jobs(self):
+        code, report, _ = self.checks(self.run_row("build"), self.run_row("e2e", conclusion="SKIPPED"),
+                                      self.run_row("old", conclusion="CANCELLED"),
+                                      self.run_row("test", status="IN_PROGRESS", conclusion=None))
+        self.assertEqual(code, 0)
+        self.assertEqual((report["failed"], report["passed"]), ([], 3))
+        self.assertEqual(report["pending"], [{"name": "test", "workflow": "CI", "status": "IN_PROGRESS"}])
+
+    def test_failed_and_timed_out_jobs_and_failed_statuses_exit_ten(self):
+        code, report, _ = self.checks(
+            self.run_row("DotNet Test", conclusion="FAILURE", workflow="api - [CI]", run=40524354785),
+            self.run_row("slow", conclusion="TIMED_OUT", run=202),
+            {"__typename": "StatusContext", "context": "sonar", "state": "ERROR", "targetUrl": "https://sonar/x"})
+        self.assertEqual(code, 10)
+        self.assertEqual([(f["name"], f["conclusion"], f["run_id"]) for f in report["failed"]],
+                         [("DotNet Test", "FAILURE", 40524354785), ("slow", "TIMED_OUT", 202), ("sonar", "ERROR", None)])
+
+    def test_the_ai_review_is_not_counted_as_another_check(self):
+        code, report, _ = self.checks(
+            self.run_row("LEGO PR Review", conclusion="FAILURE", workflow="OpenCode Review Report"),
+            self.run_row("review / open-code-review-report", status="QUEUED", conclusion=None, workflow="PR Code Review Report"))
+        self.assertEqual((code, report["failed"], report["pending"], report["passed"]), (0, [], [], 0))
+
+    def test_failed_logs_are_written_to_files(self):
+        self.stub_file("run_101.log", "step\nerror CS1002: ; expected\n")
+        code, out, err = self.run_script("pr.sh", "failed-logs", AEP_RUN_IDS="101")
+        self.assertEqual(code, 0, err)
+        path = Path(json.loads(out)["logs"][0]["path"])
+        self.assertEqual(path, (self.repo / ".context" / "ai-execute-pipeline" / "ci" / "101.log").resolve())
+        self.assertIn("CS1002", path.read_text())
+
+    def test_unreadable_log_exits_three_and_keeps_the_readable_ones(self):
+        self.stub_file("run_101.log", "boom\n")
+        code, out, err = self.run_script("pr.sh", "failed-logs", AEP_RUN_IDS="101,202")
+        self.assertEqual(code, 3)
+        self.assertEqual([log["run_id"] for log in json.loads(out)["logs"]], [101])
+        self.assertIn("run 202", err)
+
+    def test_failed_logs_reject_bad_run_ids(self):
+        for ids in ("", "12;rm", "0", "1,,2"):
+            with self.subTest(ids=ids):
+                self.assertEqual(self.run_script("pr.sh", "failed-logs", AEP_RUN_IDS=ids)[0], 64)
+
 
 class WaitForReviewTests(ScriptTestCase):
     HEAD = "1234567890abcdef1234567890abcdef12345678"
@@ -472,8 +525,8 @@ class WaitForReviewTests(ScriptTestCase):
             self.stub_file("reviews.json", list(reviews))
         return self.run_script("wait-for-review.sh", **{"AEP_PR": "7", "AEP_POLL_INTERVAL": "0", "AEP_POLL_TIMEOUT": "0", **env})
 
-    def check(self, status, conclusion="", name="review / open-code-review-report"):
-        return {"__typename": "CheckRun", "name": name, "status": status, "conclusion": conclusion}
+    def check(self, status, conclusion="", name="review / open-code-review-report", workflow="PR Code Review Report"):
+        return {"__typename": "CheckRun", "name": name, "workflowName": workflow, "status": status, "conclusion": conclusion}
 
     def toggles(self):
         return [c for c in self.calls() if c.startswith("pr ready")]
@@ -486,7 +539,7 @@ class WaitForReviewTests(ScriptTestCase):
     def test_skipped_or_cancelled_review_run_is_not_started(self):
         self.wait(self.report("fedcba9876543210", 0, 0), AEP_START_GRACE="0",
                   checks=[self.check("COMPLETED", "SKIPPED"), self.check("COMPLETED", "CANCELLED"),
-                          self.check("IN_PROGRESS", name="build")])
+                          self.check("IN_PROGRESS", name="build", workflow="CI")])
         self.assertEqual(self.toggles(), ["pr ready 7 --undo", "pr ready 7"])
 
     def test_running_review_is_not_retriggered(self):
@@ -494,6 +547,21 @@ class WaitForReviewTests(ScriptTestCase):
                                  checks=[self.check("COMPLETED", "CANCELLED"), self.check("IN_PROGRESS")])
         self.assertEqual((code, json.loads(out)["retriggered"]), (2, False))
         self.assertEqual(self.toggles(), [])
+
+    def test_review_check_named_differently_is_found_by_its_workflow(self):
+        self.wait(self.report("fedcba9876543210", 0, 0), AEP_START_GRACE="0",
+                  checks=[self.check("IN_PROGRESS", name="LEGO PR Review", workflow="OpenCode Review Report")])
+        self.assertEqual(self.toggles(), [])
+
+    def test_review_check_name_alone_is_found(self):
+        self.wait(self.report("fedcba9876543210", 0, 0), AEP_START_GRACE="0",
+                  checks=[self.check("QUEUED", name="open-code-review-report", workflow="")])
+        self.assertEqual(self.toggles(), [])
+
+    def test_other_running_workflows_do_not_count_as_the_review(self):
+        self.wait(self.report("fedcba9876543210", 0, 0), AEP_START_GRACE="0",
+                  checks=[self.check("IN_PROGRESS", name="DotNet Test", workflow="recipe-editor-api - [CI]")])
+        self.assertEqual(self.toggles(), ["pr ready 7 --undo", "pr ready 7"])
 
     def test_review_is_retriggered_at_most_once_per_wait(self):
         self.wait(self.report("fedcba9876543210", 0, 0), AEP_START_GRACE="0", AEP_POLL_TIMEOUT="1")

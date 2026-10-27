@@ -11,7 +11,10 @@
 #   AEP_POLL_INTERVAL  optional  seconds between polls (default 30)
 #   AEP_POLL_TIMEOUT   optional  seconds before giving up (default 1200)
 #   AEP_START_GRACE    optional  seconds before the started check (default 60)
-#   AEP_REVIEW_CHECK   optional  substring of the review check-run name (default open-code-review-report)
+#   AEP_REVIEW_CHECK   optional  text in the review check's name or workflow name, matched case-, dash-
+#                                and slash-insensitively (default "review report"). Repos name the check
+#                                differently (`LEGO PR Review`, `review / open-code-review-report`), but the
+#                                workflow is a "… Review Report" in every one seen.
 # Prints {"status","critical","high","review","head","retriggered"}
 # Exit: 0 clean (no Critical/High) · 10 Critical or High present · 2 timeout · 3 unreadable report,
 #       CHANGES_REQUESTED without Critical/High counts, persistent API error, or a failed draft/ready
@@ -22,7 +25,7 @@ pr="${AEP_PR:-}"
 interval="${AEP_POLL_INTERVAL:-30}"
 timeout="${AEP_POLL_TIMEOUT:-1200}"
 grace="${AEP_START_GRACE:-60}"
-review_check="${AEP_REVIEW_CHECK:-open-code-review-report}"
+review_check="${AEP_REVIEW_CHECK:-review report}"
 marker="OpenCode CLI Code Review"
 reviewer="github-actions[bot]"
 
@@ -40,8 +43,9 @@ report_for_head() {
 
 review_started() {
   jq -e --arg check "$review_check" '
+    def norm: ascii_downcase | gsub("[-_/]+"; " ") | gsub(" +"; " ");
     [ (.statusCheckRollup // [])[]
-      | select(((.name // .context // "") | contains($check)))
+      | select(((.name // .context // "") + " " + (.workflowName // "")) | norm | contains($check | norm))
       | select(((.status // "") == "COMPLETED" and ((.conclusion // "") | IN("SKIPPED", "CANCELLED", "STALE"))) | not) ]
     | length > 0' >/dev/null
 }

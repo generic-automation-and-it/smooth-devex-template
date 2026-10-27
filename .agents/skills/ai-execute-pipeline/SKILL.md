@@ -49,7 +49,7 @@ A stopped run resumes where it stopped when invoked again.
 | `--understanding-skill <path>` | no | resolved | Kvasir skill directory, for harnesses that cannot find `mimisbrunnr-kvasir-understanding` |
 
 Always on, not switches: `--autonomous` on every `git-*` skill, `--fix` on `ai-review`, PR created as
-draft, review poll every 30 s for up to 20 min, at most 5 review-fix rounds.
+draft, review poll every 30 s for up to 20 min, at most 5 fix rounds (review and CI fixes together).
 
 ### Pipeline
 
@@ -67,7 +67,7 @@ draft, review poll every 30 s for up to 20 min, at most 5 review-fix rounds.
 | 10 | Commit + push | `git-commit-push --autonomous` | — |
 | 11 | PR description refreshed, marked **ready** | `git-commit-push-pr --ready`, `pr.sh ready` | PR still draft |
 | 12 | Understanding export (if enabled) | `export-understanding.sh` | never — reported only |
-| 13 | Wait for the head commit's review (retrigger once if it never started); fix Critical/High; repeat | `wait-for-review.sh`, `ai-review --fix` | clean, timeout, unreadable, or 5 rounds |
+| 13 | Wait for the head commit's review (retrigger once if it never started); fix Critical/High; then fix failed CI checks; repeat | `wait-for-review.sh`, `ai-review --fix`, `pr.sh checks` | clean with no failed check, timeout, unreadable, unfixable failures, or 5 rounds |
 | 14 | Final report | — | — |
 
 ## Non-Negotiables
@@ -93,10 +93,14 @@ draft, review poll every 30 s for up to 20 min, at most 5 review-fix rounds.
 - **Invoking this skill authorizes exactly, per worktask:** creating one ticket, one branch, one PR, its commits and
   pushes, one `gh stack init`/`add` + `submit` (with `--stack <branch>`, one `gh stack checkout` of
   its top first), marking that PR ready, one draft→ready toggle per review wait when the review did not
-  start, and `ai-review --fix` commits on it. It does not authorize merging, rebasing or syncing a stack, deleting branches, force-pushing,
-  or deployment.
+  start, `ai-review --fix` commits on it, and commits that fix its failed CI checks. It does not authorize merging, rebasing or syncing a stack, deleting branches, force-pushing,
+  re-running CI jobs, or deployment.
 - **Stop on a failed step and report it.** Never guess a ticket, a parent, a PR or a stack base to
   keep going.
+- **A check this environment cannot run is `not run`, never a reason to stop, wait or ask.** A sandbox
+  that blocks Docker, a build or L2 tests leaves the check to CI. Record it as `not run` with the reason
+  and continue. Never wait for CI before step 11, and never ask whether to. Step 13 reads CI after the
+  review and fixes what fails.
 
 ## Script location
 
@@ -263,7 +267,7 @@ AEP_PR=<pr> scripts/wait-for-review.sh
 
 The script blocks until the review for the PR's **current head commit** is posted. Reviews of older
 commits are ignored. At its first poll after 60 s, it checks the head commit's checks for the review
-run (`open-code-review-report`; override with `AEP_REVIEW_CHECK`). When none has started, or the only
+run (name or workflow name containing `review report`; override with `AEP_REVIEW_CHECK`). When none has started, or the only
 ones were skipped or cancelled, it converts the PR to draft and back to ready once. That sends a
 fresh `ready_for_review` event, and the output carries `"retriggered":true`; report it. The review
 workflow cancels in-progress runs per PR and skips draft payloads, so a push racing the ready event
@@ -280,13 +284,32 @@ can leave no review at all.
 picks the Copilot flow whenever a Copilot review exists on the PR, and would then fix and resolve the
 wrong findings while the OpenCode Critical/High stay open.
 
-After 5 fix rounds, stop and report what is still open.
+After a clean review (exit `0`), check the PR's other checks:
+
+```bash
+AEP_PR=<pr> scripts/pr.sh checks
+```
+
+It prints `{"head","failed","pending","passed"}` for the head commit, without the AI review itself.
+`SKIPPED` and `CANCELLED` are not failures.
+
+| Exit | Meaning | Next |
+|---|---|---|
+| `0` | Nothing failed; some checks may still be running | done. Running checks never block: list them as pending in the report |
+| `10` | One or more checks failed | `AEP_RUN_IDS=<run_id,…> scripts/pr.sh failed-logs`, read each log file, find the cause, and fix what the code can fix. `git-commit-push --autonomous`, then wait for the review again: the push gives a new head |
+
+A failure the code cannot fix (infrastructure, credentials, an outside service, a flaky test) is
+reported, not retried. Re-running jobs is not authorized. A failed check without a `run_id` comes from
+an external status: report its `url`.
+
+After 5 fix rounds, counting review and CI fixes together, stop and report what is still open.
 
 ### 14. Final report (one worktask)
 
 1. Stack status (plain — no stack initialized / new stack layer 1 / layer N on `<base>`), ticket id
    and URL, branch, PR URL and state.
-2. Ralph fix table summary, and the review outcome per round (including any retrigger).
+2. Ralph fix table summary (with every `not run` check and its reason), the review outcome per round
+   (including any retrigger), and the CI checks: fixed, unfixable with the cause, and still pending.
 3. Export outcome, and any warnings from step 1.
 
 Report from the scripts' actual outputs, never from intent.
@@ -368,10 +391,16 @@ One row per queue entry: action, ticket, branch, PR and state, or the evidence f
 for `human`. Below it, the stack (layers bottom to top) and any `done` worktask whose check found
 nothing to fix.
 
+Run `AEP_PR=<pr> scripts/pr.sh checks` again for every PR of the batch. Checks still running when a
+worktask moved on can fail later. List any late failure with its cause, but do not fix it here: a
+commit on a lower layer under the layers above it needs a rebase, which the batch is not authorized to
+do.
+
 ## Changelog
 
 | Date | Change | Ref |
 | :---- | :---- | :---- |
 | 2026-10-26 | Created: worktask-sourced ticket, draft-first PR, `--initialize` gh stack layering, Kvasir export, SHA-matched review loop | — |
+| 2026-10-27 | Step 13 fixes failed CI checks after a clean review (`pr.sh checks`, `failed-logs`; shared 5-round cap; running checks never block); unrunnable local checks are `not run`, never a reason to wait or ask; the review check is matched by name or workflow name | — |
 | 2026-10-27 | `--worktasks <dir>` batch mode: plan-ordered linear stack, upfront analysis and questions, gap-checked done worktasks, gate PRs; per-worktask `state.json` resume; preflight refuses an agent-config-rewriting switch | — |
 | 2026-10-27 | Switches are answers (no re-confirming `--initialize`, export or bindings); `--stack [<branch>]` joins an existing stack from any worktree; preflight reports stack status; review wait retriggers a review that never started via one draft→ready toggle | — |
