@@ -4,6 +4,9 @@
 #   AEP_MODE   plain | stack-init | stack-add      AEP_TRUNK   trunk branch (from preflight)
 #   AEP_TYPE   conventional type                    AEP_TICKET  ticket id (184, ABC-12)
 #   AEP_SLUG   kebab-case summary, at most 6 words
+#   AEP_BASE   stack-add only: the layer to build on (preflight's expected_base). When it is not the
+#              current branch it is checked out first with `gh stack checkout`, so a fresh worktree on
+#              an unrelated branch can join a stack (preflight already refused a top checked out elsewhere)
 # Prints {"branch","empty_commit":bool}
 # Exit: 0 ok · 1 git/gh-stack failure · 64 bad input
 set -euo pipefail
@@ -13,6 +16,7 @@ trunk="${AEP_TRUNK:-}"
 type="${AEP_TYPE:-}"
 ticket="${AEP_TICKET:-}"
 slug="${AEP_SLUG:-}"
+base="${AEP_BASE:-}"
 
 bad() { echo "branch: $1" >&2; exit 64; }
 
@@ -21,6 +25,7 @@ bad() { echo "branch: $1" >&2; exit 64; }
 [[ "$ticket" =~ ^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$ ]] || bad "AEP_TICKET '$ticket' is not a branch-safe ticket id"
 [[ "$slug" =~ ^[a-z0-9]+(-[a-z0-9]+){0,5}$ ]] || bad "AEP_SLUG '$slug' must be 1-6 lowercase kebab-case words"
 git check-ref-format --branch "$trunk" >/dev/null 2>&1 || bad "AEP_TRUNK '$trunk' is not a branch name"
+[[ -z "$base" ]] || git check-ref-format --branch "$base" >/dev/null 2>&1 || bad "AEP_BASE '$base' is not a branch name"
 
 branch="$type/$ticket-$slug"
 git check-ref-format --branch "$branch" >/dev/null 2>&1 || bad "'$branch' is not a valid branch name"
@@ -32,6 +37,13 @@ if [[ "$(git rev-parse --abbrev-ref HEAD)" != "$branch" ]]; then
   fi
   git fetch --quiet origin "$trunk"
   if [[ "$mode" == stack-add ]]; then
+    if [[ -n "$base" && "$(git rev-parse --abbrev-ref HEAD)" != "$base" ]]; then
+      gh stack checkout "$base" >&2
+      if [[ "$(git rev-parse --abbrev-ref HEAD)" != "$base" ]]; then
+        echo "branch: gh stack checkout did not switch to '$base'" >&2
+        exit 1
+      fi
+    fi
     gh stack add "$branch" >&2
   else
     git switch --quiet -c "$branch" "origin/$trunk"

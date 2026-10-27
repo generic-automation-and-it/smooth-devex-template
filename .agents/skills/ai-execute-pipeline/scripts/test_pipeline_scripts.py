@@ -29,11 +29,12 @@ STUB_GH = textwrap.dedent(r"""
         echo "x current branch is not part of a stack" >&2; exit 2 ;;
       "stack init") git switch --quiet "$3" 2>/dev/null || git switch --quiet -c "$3" ;;
       "stack add") git switch --quiet -c "$3" ;;
+      "stack checkout") git switch --quiet "$3" ;;
       "stack submit") exit 0 ;;
       "pr view")
         if [[ -f "$STUB/pr_view_fail_once" ]]; then rm "$STUB/pr_view_fail_once"; exit 1; fi
         cat "$STUB/pr_view.json" ;;
-      "pr ready") exit 0 ;;
+      "pr ready") exit "$(cat "$STUB/pr_ready_rc" 2>/dev/null || echo 0)" ;;
       "api "*) [[ -f "$STUB/reviews.json" ]] && cat "$STUB/reviews.json" || exit 1 ;;
       "repo view") echo '{"nameWithOwner":"o/r"}' ;;
       *) echo "stub gh: unhandled $*" >&2; exit 99 ;;
@@ -106,6 +107,11 @@ class ScriptTestCase(unittest.TestCase):
                     for index, name in enumerate(chain, start=1)]
         self.stub_file("stack_view.json", {"trunk": "main", "currentBranch": current, "branches": branches})
 
+    def local_stacks(self, *chains):
+        stacks = [{"trunk": {"branch": "main", "head": "0" * 40},
+                   "branches": [{"branch": name, "base": "0" * 40} for name in chain]} for chain in chains]
+        (self.repo / ".git" / "gh-stack").write_text(json.dumps({"schemaVersion": 1, "stacks": stacks}))
+
 
 class PreflightTests(ScriptTestCase):
     def preflight(self, **env):
@@ -142,6 +148,7 @@ class PreflightTests(ScriptTestCase):
         self.assertEqual(code, 0, err)
         state = json.loads(out)
         self.assertEqual((state["mode"], state["trunk"], state["expected_base"]), ("plain", "main", "main"))
+        self.assertEqual(state["stack"], {"available": False, "in_stack": False, "top": None, "layers": 0})
         self.assertEqual(state["warnings"], [])
 
     def test_plain_mode_when_not_in_a_stack(self):
@@ -182,6 +189,65 @@ class PreflightTests(ScriptTestCase):
         self.stack_view("feat/185-b", "feat/184-a", "feat/185-b")
         state = json.loads(self.preflight()[1])
         self.assertEqual((state["mode"], state["expected_base"]), ("stack-add", "feat/185-b"))
+
+    def test_plain_run_reports_locally_tracked_stacks(self):
+        self.stub_file("stack_installed", "")
+        self.local_stacks(["feat/184-a", "feat/185-b"])
+        state = json.loads(self.preflight()[1])
+        self.assertEqual((state["mode"], state["stack"]["available"], state["stack"]["in_stack"]), ("plain", True, False))
+        self.assertIn("feat/185-b", state["warnings"][0])
+        self.assertIn("--stack <branch>", state["warnings"][0])
+
+    def test_stack_and_initialize_together_are_bad_input(self):
+        code, _, err = self.preflight(AEP_INITIALIZE="true", AEP_STACK="true")
+        self.assertEqual(code, 64)
+        self.assertIn("pass only one", err)
+
+    def test_stack_value_must_be_a_branch_name(self):
+        self.assertEqual(self.preflight(AEP_STACK="a..b")[0], 64)
+
+    def test_stack_needs_the_stack_extension(self):
+        code, _, err = self.preflight(AEP_STACK="true")
+        self.assertEqual(code, 1)
+        self.assertIn("gh stack extension", err)
+
+    def test_bare_stack_off_stack_fails(self):
+        self.stub_file("stack_installed", "")
+        code, _, err = self.preflight(AEP_STACK="true")
+        self.assertEqual(code, 1)
+        self.assertIn("is not in a stack", err)
+
+    def test_bare_stack_on_the_top_adds_a_layer(self):
+        self.stub_file("stack_installed", "")
+        self.git(self.repo, "switch", "--quiet", "-c", "feat/185-b")
+        self.stack_view("feat/185-b", "feat/184-a", "feat/185-b")
+        state = json.loads(self.preflight(AEP_STACK="true")[1])
+        self.assertEqual((state["mode"], state["expected_base"]), ("stack-add", "feat/185-b"))
+        self.assertEqual(state["stack"], {"available": True, "in_stack": True, "top": "feat/185-b", "layers": 2})
+
+    def test_stack_branch_joins_a_stack_from_an_unrelated_branch(self):
+        self.stub_file("stack_installed", "")
+        self.git(self.repo, "switch", "--quiet", "-c", "workspace/placeholder")
+        self.local_stacks(["feat/184-a", "feat/185-b"])
+        state = json.loads(self.preflight(AEP_STACK="feat/184-a")[1])
+        self.assertEqual((state["mode"], state["expected_base"]), ("stack-add", "feat/185-b"))
+        self.assertEqual(state["stack"], {"available": True, "in_stack": True, "top": "feat/185-b", "layers": 2})
+
+    def test_stack_branch_whose_top_is_checked_out_elsewhere_fails(self):
+        self.stub_file("stack_installed", "")
+        self.git(self.repo, "branch", "feat/185-b")
+        self.git(self.repo, "worktree", "add", "--quiet", str(self.tmp / "other"), "feat/185-b")
+        self.local_stacks(["feat/184-a", "feat/185-b"])
+        code, _, err = self.preflight(AEP_STACK="feat/184-a")
+        self.assertEqual(code, 1)
+        self.assertIn("checked out in the worktree", err)
+        self.assertIn("other", err)
+
+    def test_stack_branch_not_in_a_local_stack_fails(self):
+        self.stub_file("stack_installed", "")
+        code, _, err = self.preflight(AEP_STACK="feat/999-x")
+        self.assertEqual(code, 1)
+        self.assertIn("not in a locally tracked stack", err)
 
     def test_stack_member_that_is_not_the_top_fails(self):
         self.stub_file("stack_installed", "")
@@ -229,6 +295,15 @@ class BranchTests(ScriptTestCase):
         self.assertIn("stack add feat/184-add-paging", self.calls())
         self.assertEqual(self.git(self.repo, "rev-parse", "HEAD"), head_before)
 
+    def test_stack_add_checks_out_the_base_layer_first(self):
+        self.git(self.repo, "branch", "feat/183-layer-one")
+        self.git(self.repo, "switch", "--quiet", "-c", "workspace/placeholder")
+        code, out, err = self.branch("stack-add", AEP_BASE="feat/183-layer-one")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)["branch"], "feat/184-add-paging")
+        stack_calls = [c for c in self.calls() if c.startswith("stack ")]
+        self.assertEqual(stack_calls, ["stack checkout feat/183-layer-one", "stack add feat/184-add-paging"])
+
     def test_jira_style_ticket_is_accepted(self):
         self.assertEqual(json.loads(self.branch("plain", AEP_TICKET="ABC-12")[1])["branch"], "feat/ABC-12-add-paging")
 
@@ -261,6 +336,14 @@ class StackTests(ScriptTestCase):
     def test_detect_top_of_three_layers_with_sha_bases(self):
         self.stack_view("feat/185-b", "feat/184-a", "feat/185-b", "feat/186-c")
         self.assertEqual(self.json_of("stack.sh", "detect")["top"], "feat/186-c")
+
+    def test_list_without_state_is_empty(self):
+        self.assertEqual(self.json_of("stack.sh", "list"), [])
+
+    def test_list_reads_every_local_stack(self):
+        self.local_stacks(["feat/184-a", "feat/185-b"], ["fix/190-c"])
+        self.assertEqual([(s["top"], s["layers"]) for s in self.json_of("stack.sh", "list")],
+                         [("feat/185-b", 2), ("fix/190-c", 1)])
 
     def test_detect_rejects_an_empty_stack(self):
         self.stub_file("stack_view.json", {"trunk": "main", "currentBranch": "a", "branches": []})
@@ -326,13 +409,55 @@ class WaitForReviewTests(ScriptTestCase):
             f"## 🤖 OpenCode CLI Code Review - Commit: `{sha[:7]}`\n\n"
             f"- Count of 🔴 Critical Issues: {critical}\n- Count of 🟠 High Priority Issues: {high}\n")}
 
-    def wait(self, *reviews, raw=None):
-        self.stub_file("pr_view.json", {"headRefOid": self.HEAD})
+    def wait(self, *reviews, raw=None, checks=None, **env):
+        self.stub_file("pr_view.json", {"headRefOid": self.HEAD, "statusCheckRollup": checks or []})
         if raw is not None:
             self.stub_file("reviews.json", raw)
         elif reviews:
             self.stub_file("reviews.json", list(reviews))
-        return self.run_script("wait-for-review.sh", AEP_PR="7", AEP_POLL_INTERVAL="0", AEP_POLL_TIMEOUT="0")
+        return self.run_script("wait-for-review.sh", **{"AEP_PR": "7", "AEP_POLL_INTERVAL": "0", "AEP_POLL_TIMEOUT": "0", **env})
+
+    def check(self, status, conclusion="", name="review / open-code-review-report"):
+        return {"__typename": "CheckRun", "name": name, "status": status, "conclusion": conclusion}
+
+    def toggles(self):
+        return [c for c in self.calls() if c.startswith("pr ready")]
+
+    def test_review_not_started_toggles_draft_and_ready_once(self):
+        code, out, _ = self.wait(self.report("fedcba9876543210", 0, 0), AEP_START_GRACE="0")
+        self.assertEqual((code, json.loads(out)), (2, {"status": "timeout", "head": self.HEAD, "retriggered": True}))
+        self.assertEqual(self.toggles(), ["pr ready 7 --undo", "pr ready 7"])
+
+    def test_skipped_or_cancelled_review_run_is_not_started(self):
+        self.wait(self.report("fedcba9876543210", 0, 0), AEP_START_GRACE="0",
+                  checks=[self.check("COMPLETED", "SKIPPED"), self.check("COMPLETED", "CANCELLED"),
+                          self.check("IN_PROGRESS", name="build")])
+        self.assertEqual(self.toggles(), ["pr ready 7 --undo", "pr ready 7"])
+
+    def test_running_review_is_not_retriggered(self):
+        code, out, _ = self.wait(self.report("fedcba9876543210", 0, 0), AEP_START_GRACE="0",
+                                 checks=[self.check("COMPLETED", "CANCELLED"), self.check("IN_PROGRESS")])
+        self.assertEqual((code, json.loads(out)["retriggered"]), (2, False))
+        self.assertEqual(self.toggles(), [])
+
+    def test_review_is_retriggered_at_most_once_per_wait(self):
+        self.wait(self.report("fedcba9876543210", 0, 0), AEP_START_GRACE="0", AEP_POLL_TIMEOUT="1")
+        self.assertEqual(self.toggles(), ["pr ready 7 --undo", "pr ready 7"])
+
+    def test_no_started_check_before_the_grace(self):
+        self.wait(self.report("fedcba9876543210", 0, 0))
+        self.assertEqual(self.toggles(), [])
+
+    def test_head_report_needs_no_started_check(self):
+        code, out, _ = self.wait(self.report(self.HEAD, 0, 0), AEP_START_GRACE="0")
+        self.assertEqual((code, json.loads(out)["retriggered"]), (0, False))
+        self.assertEqual(self.toggles(), [])
+
+    def test_failed_retrigger_exits_three(self):
+        self.stub_file("pr_ready_rc", "1")
+        code, out, err = self.wait(self.report("fedcba9876543210", 0, 0), AEP_START_GRACE="0")
+        self.assertEqual((code, json.loads(out)["status"]), (3, "error"))
+        self.assertIn("could not convert PR #7 to draft", err)
 
     def test_clean_report_for_head_exits_zero(self):
         code, out, _ = self.wait(self.report(self.HEAD, 0, 0))

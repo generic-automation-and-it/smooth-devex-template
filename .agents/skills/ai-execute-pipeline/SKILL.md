@@ -23,6 +23,7 @@ effort: high  # implements a worktask end to end, then triages review findings
 
 One invocation delivers one worktask, from a new ticket to a clean AI review. Nothing in the run needs a human.
 Add `--initialize` on the first worktask of a parent to stack every later run's PR on top of the previous one.
+Add `--stack <branch>` to layer onto a stack from a fresh worktree, or onto one you started by hand.
 
 ### Switches
 
@@ -31,7 +32,8 @@ Add `--initialize` on the first worktask of a parent to stack every later run's 
 | `--worktask <path>` | **yes** | — | The worktask to deliver. The ticket and the implementation both come from it |
 | `--parent <id>` | **yes** | — | Parent ticket (opaque: `164`, `ABC-12`, or an issue URL). The new ticket becomes its sub-item. One parent = one unit of work = one stack |
 | `--hld <path>` | no | none | HLD loaded as design context for the implementation |
-| `--initialize` | no | off | Start a new `gh stack` with this run's branch as layer 1. Later runs detect the stack and add a layer — no switch needed |
+| `--initialize` | no | off | Start a new `gh stack` with this run's branch as layer 1. Later runs on the stack top detect it and add a layer — no switch needed |
+| `--stack [<branch>]` | no | off | Add this run as a layer on an existing stack. Bare: the current branch must be the stack top. `<branch>`: any layer of a locally tracked stack — the run checks out its top first, so it works from a fresh worktree or on a stack made without this pipeline. Not with `--initialize` |
 | `--ticket-skill <name\|path>` | no | `agile-github-task-from-diff` | Skill that creates the ticket (e.g. a Jira skill). Gets the worktask-derived ticket file, never the diff |
 | `--loops <n>` | no | `10` | Loop cap passed to `ai-ralph-loop` |
 | `--understanding-export` | no | off | Export this run's durable knowledge to the Mímisbrunnr store after the PR is marked ready |
@@ -50,7 +52,7 @@ draft, review poll every 30 s for up to 20 min, at most 5 review-fix rounds.
 | 1 | Preflight and skill resolution | `preflight.sh`, `resolve-skill.sh` | any check fails — before anything is created |
 | 2 | Load worktask, HLD, governing `*AGENTS.md` | read | — |
 | 3 | Ticket draft from the worktask → sub-ticket under `--parent` | ticket skill | no ticket id, or the parent link is not confirmed |
-| 4 | Branch `<type>/<ticket>-<slug>` (`gh stack init`/`add` in stack mode) | `branch.sh` | non-zero exit |
+| 4 | Branch `<type>/<ticket>-<slug>` (`gh stack init`/`checkout`+`add` in stack mode) | `branch.sh` | non-zero exit |
 | 5 | Push + **draft** PR that closes the ticket | `git-commit-push-pr --draft` | no PR |
 | 6 | Stack: one `gh stack submit`, base verified (stack mode only) | `stack.sh submit` | base mismatch |
 | 7 | Implement the worktask | worktask's own phases | a gate needs a human |
@@ -59,11 +61,16 @@ draft, review poll every 30 s for up to 20 min, at most 5 review-fix rounds.
 | 10 | Commit + push | `git-commit-push --autonomous` | — |
 | 11 | PR description refreshed, marked **ready** | `git-commit-push-pr --ready`, `pr.sh ready` | PR still draft |
 | 12 | Understanding export (if enabled) | `export-understanding.sh` | never — reported only |
-| 13 | Wait for the head commit's review; fix Critical/High; repeat | `wait-for-review.sh`, `ai-review --fix` | clean, timeout, unreadable, or 5 rounds |
+| 13 | Wait for the head commit's review (retrigger once if it never started); fix Critical/High; repeat | `wait-for-review.sh`, `ai-review --fix` | clean, timeout, unreadable, or 5 rounds |
 | 14 | Final report | — | — |
 
 ## Non-Negotiables
 
+- **Switches are answers, not proposals.** A switch given on invocation (`--initialize`, `--stack`,
+  `--understanding-export`, `--product-name`, `--initiative`, `--epic-ticket`, …) is the user's
+  decision and the approval the workflow gates would otherwise ask for. Never ask to confirm, restate
+  for approval, or re-ask a switch or its value, and never ask whether to start or join a stack or to
+  export. Ask only when a script stops the run or a worktask gate needs a human.
 - **The ticket comes from the worktask, never the diff.** At step 3 the branch has no diff, or in
   stack mode it carries the *earlier layers'* work. A ticket written from it describes the wrong change.
 - **One worktask per invocation, strictly sequential, one stack per worktree.** gh-stack keeps lock
@@ -74,8 +81,9 @@ draft, review poll every 30 s for up to 20 min, at most 5 review-fix rounds.
 - **The draft PR exists before any implementation commit.** It is marked ready only at step 11, which
   is also what starts the first AI review (the review workflow skips draft PRs).
 - **Invoking this skill authorizes exactly:** creating one ticket, one branch, one PR, its commits and
-  pushes, one `gh stack init`/`add` + `submit`, marking that PR ready, and `ai-review --fix` commits
-  on it. It does not authorize merging, rebasing or syncing a stack, deleting branches, force-pushing,
+  pushes, one `gh stack init`/`add` + `submit` (with `--stack <branch>`, one `gh stack checkout` of
+  its top first), marking that PR ready, one draft→ready toggle per review wait when the review did not
+  start, and `ai-review --fix` commits on it. It does not authorize merging, rebasing or syncing a stack, deleting branches, force-pushing,
   or deployment.
 - **Stop on a failed step and report it.** Never guess a ticket, a parent, a PR or a stack base to
   keep going.
@@ -92,14 +100,18 @@ this `SKILL.md`. Run every script from the repository root.
 
 ```bash
 AEP_WORKTASK=<path> AEP_PARENT=<id> AEP_HLD=<path-or-empty> AEP_INITIALIZE=<true|false> \
-AEP_LOOPS=<n> AEP_UNDERSTANDING_EXPORT=<true|false> \
+AEP_STACK=<true|branch|empty> AEP_LOOPS=<n> AEP_UNDERSTANDING_EXPORT=<true|false> \
 AEP_PRODUCT_NAME=<…> AEP_INITIATIVE=<…> AEP_EPIC_TICKET=<…> scripts/preflight.sh
 ```
 
-Prints `{"mode","current_branch","trunk","expected_base","warnings"}`. `mode` is `plain`,
-`stack-init` (`--initialize`) or `stack-add` (the current branch is the top of a stack). Without
-`--initialize` and outside a stack, stacking is off and the plain path runs. Report every `warnings`
-entry to the user.
+Prints `{"mode","current_branch","trunk","expected_base","stack","warnings"}`. `mode` is `plain`,
+`stack-init` (`--initialize`), or `stack-add` (`--stack`, or the current branch is the top of a stack).
+Without either switch and outside a stack, stacking is off and the plain path runs. `stack` is
+`{"available","in_stack","top","layers"}` for the stack this run builds on. Tell the user the stack
+status straight away, as information and not as a question: "stack layer N+1 on `<top>`", "new stack
+(layer 1)", or "no stack initialized — plain PR". Report every `warnings` entry. One of them names
+locally tracked stacks when the current branch is in none. That is the fresh-worktree case, and
+`--stack <branch>` joins one of them.
 
 Resolve each skill the run needs with `AEP_SKILL_NAME=<name> scripts/resolve-skill.sh`, or
 `AEP_SKILL_PATH=<path> scripts/resolve-skill.sh` when a path was given.
@@ -142,14 +154,15 @@ link. Record its ticket id and URL, and how it links a PR to the ticket.
 ### 4. Branch
 
 ```bash
-AEP_MODE=<mode> AEP_TRUNK=<trunk> AEP_TYPE=<type> AEP_TICKET=<ticket-id> AEP_SLUG=<slug> scripts/branch.sh
+AEP_MODE=<mode> AEP_TRUNK=<trunk> AEP_BASE=<expected_base> AEP_TYPE=<type> AEP_TICKET=<ticket-id> \
+AEP_SLUG=<slug> scripts/branch.sh
 ```
 
 | Mode | Branch created by |
 |---|---|
 | `plain` | `git switch -c` from fresh `origin/<trunk>` |
 | `stack-init` | `git switch -c` from fresh `origin/<trunk>`, then adopted by `gh stack init <branch>` (trunk is never checked out — it fails in a worktree) |
-| `stack-add` | `gh stack add <branch>` on top of the current layer |
+| `stack-add` | `gh stack add <branch>` on top of `AEP_BASE`, after `gh stack checkout <base>` when this worktree is on another branch |
 
 The branch is named correctly from the start and never renamed. When the branch has no commits ahead
 of trunk (`plain`, `stack-init`), the script makes one empty `chore: start <ticket>` commit. GitHub
@@ -198,6 +211,12 @@ draft, and prints the head SHA.
 
 ### 12. Understanding export (`--understanding-export` only)
 
+`--understanding-export` is the export authorization, and `--product-name`, `--initiative` and
+`--epic-ticket` are its bindings. Use them verbatim, without confirming the export, the destination or
+any binding. Run only `export-understanding.sh` below, not Kvasir's own agent workflow. Its
+"ask a real open question" step is answered by these switches. This export also covers the workflow
+rules' Phase 8 "propose an export" step for this run.
+
 Write this run's durable claims (what the implementation established that no code or `*AGENTS.md`
 holds), one per `- ` list item. Pipe them to:
 
@@ -220,14 +239,19 @@ AEP_PR=<pr> scripts/wait-for-review.sh
 ```
 
 The script blocks until the review for the PR's **current head commit** is posted. Reviews of older
-commits are ignored.
+commits are ignored. At its first poll after 60 s, it checks the head commit's checks for the review
+run (`open-code-review-report`; override with `AEP_REVIEW_CHECK`). When none has started, or the only
+ones were skipped or cancelled, it converts the PR to draft and back to ready once. That sends a
+fresh `ready_for_review` event, and the output carries `"retriggered":true`; report it. The review
+workflow cancels in-progress runs per PR and skips draft payloads, so a push racing the ready event
+can leave no review at all.
 
 | Exit | Meaning | Next |
 |---|---|---|
 | `0` | No Critical or High | done |
 | `10` | Critical or High present | `git pull`, invoke `ai-review <pr-url>#pullrequestreview-<review> --fix --source=other`, then wait again (its commits carry the `/ai-review` trigger) |
 | `2` | No head-commit review within 20 min | stop; report the PR as awaiting review |
-| `3` | Report unreadable or GitHub unreachable | stop; report |
+| `3` | Report unreadable, GitHub unreachable, or the draft/ready toggle failed | stop; report (the PR may be left draft — the script says so) |
 
 `<review>` is the `review` id the script printed. Pin both it and `--source=other`: auto-detection
 picks the Copilot flow whenever a Copilot review exists on the PR, and would then fix and resolve the
@@ -237,8 +261,9 @@ After 5 fix rounds, stop and report what is still open.
 
 ### 14. Final report
 
-1. Mode (plain / stack layer N), ticket id and URL, branch, PR URL and state.
-2. Ralph fix table summary, and the review outcome per round.
+1. Stack status (plain — no stack initialized / new stack layer 1 / layer N on `<base>`), ticket id
+   and URL, branch, PR URL and state.
+2. Ralph fix table summary, and the review outcome per round (including any retrigger).
 3. Export outcome, and any warnings from step 1.
 
 Report from the scripts' actual outputs, never from intent.
@@ -248,3 +273,4 @@ Report from the scripts' actual outputs, never from intent.
 | Date | Change | Ref |
 | :---- | :---- | :---- |
 | 2026-10-26 | Created: worktask-sourced ticket, draft-first PR, `--initialize` gh stack layering, Kvasir export, SHA-matched review loop | — |
+| 2026-10-27 | Switches are answers (no re-confirming `--initialize`, export or bindings); `--stack [<branch>]` joins an existing stack from any worktree; preflight reports stack status; review wait retriggers a review that never started via one draft→ready toggle | — |

@@ -26,6 +26,17 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the pipeline order and every s
   names against bases marks every layer as the top and breaks every stack of two or more layers.
 - **`gh stack submit` force-with-lease pushes every layer.** `stack.sh submit` refuses (exit 5) when a
   layer has remote-only commits; removing that check lets a stale local layer overwrite a collaborator.
+- **Marking the PR ready does not guarantee a review run.** The review workflow uses
+  `concurrency: ai-review-<pr>` with `cancel-in-progress` and skips draft payloads, so a push whose
+  `synchronize` run (payload still draft) queues after `ready_for_review` cancels it and then skips
+  itself. `wait-for-review.sh` repairs this with one draft→ready toggle per call when the head commit's
+  `statusCheckRollup` has no live `open-code-review-report` run. Never toggle repeatedly: each toggle
+  cancels the run the previous one started.
+- **A fresh worktree is never "in" a stack.** gh-stack state is shared (`<git-common-dir>/gh-stack`),
+  but `gh stack view` answers only for the current branch, and a Conductor workspace starts on a
+  placeholder branch. `stack.sh list` reads that file directly (schema 1 only, refused otherwise) so
+  `--stack <branch>` can find the top. A top checked out in another worktree cannot be checked out
+  here, so preflight refuses it before anything is created.
 - **The review wait is one blocking script call.** Model-side sleeps or harness timers failed on
   OpenCode; keep the poll inside `wait-for-review.sh`.
 - **`agile-github-task-from-diff --body-file` is the coupling for the default ticket skill.** Its
@@ -50,3 +61,4 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the pipeline order and every s
 | 2026-10-26 | Created; gh-stack probe, ordering, empty-commit and SHA-match traps; `--body-file` coupling; Jira PR-title limit | — |
 | 2026-10-26 | stack-init cuts the branch from `origin/<trunk>`; never checks out trunk (fails in worktrees) | — |
 | 2026-10-26 | Review gate trusts bot author + `commit_id`; SHA-valued stack bases; submit refuses remote-only commits | #148 |
+| 2026-10-27 | Ready/review concurrency race and one-toggle retrigger; fresh-worktree stack detection via the shared gh-stack state | — |
