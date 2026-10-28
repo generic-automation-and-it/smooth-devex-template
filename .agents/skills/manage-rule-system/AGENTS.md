@@ -20,3 +20,4 @@ Read [`SKILL.md`](./SKILL.md) first — rule directory, frontmatter contract and
 | :---- | :---- | :---- |
 | 2026-06-12 | Initial | #40 |
 | 2026-10-15 | Cut to HLD shape: SKILL.md pointer + non-SKILL.md traps only | — |
+| 2026-10-28 | SKILL.md synced with `meta/rules`: Codex auto-load qualifier, `skills/` category, category-wiring pointer, Codex matrix row | — |

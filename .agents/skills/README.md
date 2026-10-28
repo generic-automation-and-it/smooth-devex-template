@@ -10,13 +10,13 @@ Skills live **flat**, one directory per skill directly under `.agents/skills/`. 
 |-------|---------|-------|
 | **agile-github-breakdown** | Turn a braindump or existing Feature into GitHub Feature + Task issues | `/agile-github-breakdown` |
 | **agile-github-task-from-diff** | Create a GitHub Task (sub-issue) from the current git diff vs main | `/agile-github-task-from-diff [--feature-issue <n> \| --noparentid]` |
-| **ai-execute-pipeline** | Deliver one worktask end to end: worktask-sourced ticket, draft PR, implement, Ralph loop, ready, AI-review fix loop | `/ai-execute-pipeline --worktask <path> --parent <id> [--initialize] [--hld <path>] [--ticket-skill <name\|path>] [--loops <n>] [--understanding-export …]` |
+| **ai-execute-pipeline** | Deliver one worktask (or a plan's ordered worktasks) end to end: worktask-sourced ticket, draft PR, implement, Ralph loop, ready, AI-review fix loop | `/ai-execute-pipeline --worktask <path> \| --worktasks <dir> --parent <id> [--initialize] [--stack [<branch>]] [--hld <path>] [--ticket-skill <name\|path>] [--loops <n>] [--understanding-export …]` |
 | **ai-brain-dump** | Listen-first capture session; synthesize on request | `/ai-brain-dump [--oktoask] [--thinking] [--oktoreaddocs] [--oktowebsearch] [--all]` |
-| **ai-ralph-loop** | Review → fix → verify code and L0/L1/L2 test coverage — or a plan via `--plan` — until clean; ends with a fix table | `/ai-ralph-loop [--loops <n>] [--scope <path\|glob>] [--plan [path]] [--notests]` |
+| **ai-ralph-loop** | Review → fix → verify code and L0/L1/L2 test coverage — or a plan via `--plan` — until clean; ends with a fix table | `/ai-ralph-loop [--loops <n>] [--scope <path\|glob>] [--plan [path]] [--spawn] [--notests] [--nodecisions]` |
 | **ai-terse** | Reformat this turn's reply into terse, high-density output with a TL;DR | `/ai-terse` |
 | **ai-template-sync** | UPSERT smooth-devex-template scaffold into an existing repo | `/ai-template-sync` |
 | **ai-asset-sync** | Dependabot-style OpenCode sync of skills/rules from `owner/repo@ref:path` | `/ai-asset-sync` |
-| **ai-understanding** | Export session knowledge as Understandings; import, publish, consume | `/ai-understanding [--export [--all]] [--import] [--publish [--portable-only]] [--consume <src>] [--path <target>] [--promote <slug>] [--index]` |
+| **ai-understanding** | Export session knowledge as Understandings; import, publish, consume | `/ai-understanding [--export [--all]] [--import] [--publish [--portable-only]] [--consume <src>] [--path <target>] [--promote <slug>] [--index] [--review]` |
 | **context-load-agents-context** | Load ancestor AGENTS.md context for a file | `/context-load-agents-context` |
 | **context-load-context** | Load domain context before implementation | `/context-load-context auth` |
 | **create-hld** | Author a design-only High-Level Design under `docs/hlds/NNN-<slug>/` | `/create-hld <kebab-slug>` |
@@ -24,7 +24,7 @@ Skills live **flat**, one directory per skill directly under `.agents/skills/`. 
 | **git-commit** | Commit with conventional format | `/git-commit [--autonomous]` |
 | **git-commit-push** | Commit and push to remote | `/git-commit-push [--autonomous]` |
 | **git-commit-push-pr** | Commit, push, and create/update PR | `/git-commit-push-pr [--autonomous]` |
-| **git-sync** | Sync with main (optionally auto-resolve conflicts) | `/git-sync` |
+| **git-sync** | Sync with main (optionally auto-resolve conflicts) | `/git-sync [--fix \| --auto-resolve] [--autonomous]` |
 | **manage-rule-system** | Create/update rule files in `.agents/rules/` | `/manage-rule-system` |
 
 ### ai-brain-dump switches
@@ -196,7 +196,7 @@ Skills are flat under `.agents/skills/`; the category lives in the folder-name p
 | Prefix | Skills |
 |--------|--------|
 | `agile-` | `agile-github-breakdown`, `agile-github-task-from-diff` |
-| `ai-` | `ai-brain-dump`, `ai-ralph-loop`, `ai-terse`, `ai-template-sync`, `ai-asset-sync`, `ai-understanding` |
+| `ai-` | `ai-brain-dump`, `ai-execute-pipeline`, `ai-ralph-loop`, `ai-terse`, `ai-template-sync`, `ai-asset-sync`, `ai-understanding` |
 | `context-` | `context-load-agents-context`, `context-load-context` |
 | `git-` | `git-commit`, `git-commit-push`, `git-commit-push-pr`, `git-sync` |
 | _(none)_ | `create-hld`, `create-worktask`, `manage-rule-system` |

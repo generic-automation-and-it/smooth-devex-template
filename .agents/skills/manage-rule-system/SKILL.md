@@ -15,12 +15,12 @@ Triggered automatically by `.agents/hooks/manage-rule-system-context.sh` (UserPr
 
 ## Rule Directory
 
-All rule files live under a single `.agents/rules/` tree, organized into category subfolders. Every `.md` file in the tree is auto-loaded by the AI tool at session start; applicability is scoped **per-file** via the `paths`/`globs`/`applyTo` frontmatter (there is no separate scoped/injected directory).
+All rule files live under a single `.agents/rules/` tree, organized into category subfolders. Claude Code, Copilot and OpenCode auto-load every `.md` file in the tree at session start; Codex does not, and loads a rule only when its scope matches the files being touched. Applicability is scoped **per-file** via the `paths`/`globs`/`applyTo` frontmatter (there is no separate scoped/injected directory).
 
 | Location | Use for |
 |----------|---------|
-| `.agents/rules/*.instructions.md` (flat) | Cross-cutting rules that don't share a category with ≥1 other rule (AI workflow, code-review false-positive guidance, project overview) |
-| `.agents/rules/<category>/` | A category folder is created when 2+ rules share a topic. Current: `backend/` (.NET / EF Core / API+Mediator / migrations / WireMock / logging), `git/` (git policy, PR standards), `meta/` (rule-file convention, AGENTS.md quality) |
+| `.agents/rules/*.instructions.md` (flat) | Cross-cutting rules that don't share a category with ≥1 other rule (AI workflow, clean code, code-review false-positive guidance) |
+| `.agents/rules/<category>/` | A category folder is created when 2+ rules share a topic. Current: `backend/` (.NET / EF Core / API+Mediator / migrations / WireMock / logging), `git/` (git policy, PR standards), `meta/` (rule-file convention, AGENTS.md quality, Understandings), `skills/` (secret handling, SkillSpector pre-PR) |
 
 To make a rule narrow to certain files, set its frontmatter scope fields (e.g. `paths: ["**/*.cs"]`); to make it always-apply, use `"**"` / `alwaysApply: true`. The folder is organizational only — it does not change loading.
 
@@ -78,7 +78,7 @@ touch .agents/rules/backend/my-rule.instructions.md        # backend category
 Then add frontmatter + content. After saving:
 
 - Add a one-line changelog entry inside the rule file's `## Changelog` table (this repo retains in-file changelogs; the AI loading note tells agents to skip the section at runtime)
-- If you created a new category folder, reflect it in root `AGENTS.md` (Rules section) and in `Project.slnx`
+- If you created a new category folder, add its row to `.github/instructions/AGENTS.md` (the rule index) and the `rules.instructions.md` category table, and list the new rule files in `Project.slnx`
 
 ## Tool Compatibility Matrix
 
@@ -87,7 +87,7 @@ Then add frontmatter + content. After saving:
 | Claude Code | `.claude/rules/` (symlink → `.agents/rules/` → `.github/instructions/`) | `paths` frontmatter | `.md` |
 | Copilot | `.github/instructions/` (**real directory** — no symlink) | `applyTo` frontmatter | `.instructions.md` |
 | Cursor | `.cursor/rules/` (symlink → `.agents/rules/` → `.github/instructions/`) | `globs` + `alwaysApply` frontmatter | `.instructions.md` |
-| Codex | `.codex/` (symlink → `.agents/`) | invokes `context-load-agents-context` skill explicitly | `AGENTS.md` |
+| Codex | `.codex/` (symlink → `.agents/`) and any `AGENTS.md` directory | invokes `context-load-agents-context` skill explicitly | `AGENTS.md` |
 
 The rule files physically live in `.github/instructions/` (a **real directory**, so Copilot's github.com-hosted agent reads them without resolving a symlink). `.agents/rules`, `.claude/rules`, and `.cursor/rules` are symlinks resolving back to it — all tools share one source of truth.
 

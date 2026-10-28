@@ -21,3 +21,4 @@ Read [`SKILL.md`](./SKILL.md) first — the `safe-sync.sh` sentinel contract, bo
 | 2026-10-15 | Mode 2: analyse commit intent on both sides before resolving | #95 |
 | 2026-10-15 | Cut to HLD shape: SKILL.md pointer + non-SKILL.md traps only | — |
 | 2026-10-16 | MERGE_ERROR (dirty tree): commit via git-commit skill, then retry once | — |
+| 2026-10-28 | `--autonomous` documented in Arguments (already forwarded to git-commit) | — |
