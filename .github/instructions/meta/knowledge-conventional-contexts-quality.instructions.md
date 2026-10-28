@@ -58,7 +58,7 @@ Apply per claim. **Every gate must pass**; a line failing any one is deleted or 
 3. **Authority.** The claim is settled and current. An open question appears only when it blocks a likely premature implementation that its owning document does not already block — by ID, one line.
 4. **Single home.** The fact lives in exactly one file. A line that also appears in a sibling `AGENTS.md` moves to their nearest common parent on its second occurrence; if one fact changing would force edits in two files, it is duplicated.
 
-Gate 1 alone keeps every restated LADR. Gates 2 and 4 are [clean-code](../clean-code.instructions.md)'s *extract on the second occurrence* and [SOLID](../solid-principles.instructions.md)'s *change cost*, applied to context.
+Gate 1 alone keeps every restated LADR. Gates 2 and 4 are [clean-code](../clean-code.instructions.md)'s *extract on the second occurrence* and [SOLID](../backend/solid-principles.instructions.md)'s *change cost*, applied to context.
 
 ## Design-Documentation Folders
 
@@ -121,3 +121,4 @@ A code or design change MUST update the `*AGENTS.md` sections it makes untrue.
 |:-----|:-------|
 | 2026-05-30 | Initial version. |
 | 2026-10-07 | Conjunctive value gate; design-folder (HLD) section; terse changelog rows; tiers L0–L2 |
+| 2026-10-28 | Fixed dead SOLID link (`../solid-principles` → `../backend/solid-principles`) |

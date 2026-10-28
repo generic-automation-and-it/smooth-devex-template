@@ -1,22 +1,38 @@
 ---
-description: 'Backend WireMock stubbing — single Aspire stub helper is the source of truth for user API stubs'
-globs: "tests/*.TestFramework.Aspire/**/*.cs"
+description: 'Backend WireMock stubbing — stub through the Aspire test-framework admin client, which is the single source of truth for stub shape'
+globs: "tests/**/*.cs"
 paths:
-  - "tests/*.TestFramework.Aspire/**/*.cs"
-applyTo: 'tests/*.TestFramework.Aspire/**/*.cs'
+  - "tests/**/*.cs"
+applyTo: 'tests/**/*.cs'
 alwaysApply: false
 ---
+
 # Backend WireMock Stubbing Rules
+
+Updated: 2026-10-28
 
 ## Scope
 
-Applies to the single remaining Aspire WireMock stub helper:
+WireMock runs as an Aspire test dependency (`wiremock/wiremock`, host port 19091), added by
+`tests/Project.TestFramework.Aspire/DistributedApplicationBuilderExtensions.cs`. Stub through the test
+framework, not the container directly:
 
-- `tests/Project.TestFramework.Aspire/WireMockUserStubsHelper.cs`
-
-> **Note (HLD-12):** `src/Project.AppHost/WireMockUserStubsHelper.cs` has been deleted. The dev AppHost no longer runs WireMock — it reads from the real upstream API directly. Only the test-framework copy remains.
+- `tests/Project.TestFramework/Fixtures/AspireFixture.cs` → `CreateWireMockAdminClient()`
+- `tests/Project.TestFramework/Fixtures/WireMockAdminClient.cs` → `ResetAsync()` and
+  `StubJsonResponseAsync(method, path, responseBody, statusCode)`
 
 ## Rules
 
-1. Keep the test-framework WireMock stub helper as the single source of truth for stub data shapes.
-2. The stub usernames and unique identifiers must match the active seed fixtures/migrations (`DemoFixtures`).
+1. `WireMockAdminClient` is the single source of truth for stub shape. A test stubs through it; it never
+   POSTs `__admin/mappings` itself.
+2. Call `ResetAsync()` before stubbing so mappings and requests do not leak between tests.
+3. Stub payloads must match the seed data the test's database actually holds — assert against the same
+   identifiers, not copies invented in the test.
+
+## Changelog
+
+> AI loading note: Skip this section during routine task execution. Use it only when updating this rule file.
+
+| Date | Change |
+|:-----|:-------|
+| 2026-10-28 | Retargeted to `WireMockAdminClient` + `AspireFixture`; scope widened to `tests/**/*.cs`; added Changelog |

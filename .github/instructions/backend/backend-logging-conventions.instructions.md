@@ -43,6 +43,9 @@ logger.LogError(ex, "Compare flow failed for agent {AgentId}", info.AgentId);
 
 ## Changelog
 
+> AI loading note: Skip this section during routine task execution. Use it only when updating this rule file.
+
 | Date | Change |
 |:-----|:-------|
 | 2026-05-30 | Initial version. |
+| 2026-10-28 | Added the standard changelog loading note |
