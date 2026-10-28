@@ -15,9 +15,11 @@ Shared xunit.v3 test fixtures and helpers reused across the L0/L1/L2 test projec
 - **`ServiceProviderFixture`** builds an isolated `IServiceCollection`/`IServiceProvider` for L0/L1 tests and routes logging to the test output via `XUnitLoggerFactory`.
 - **`XUnitLogger*`** bridges `ILogger` to xunit's `ITestOutputHelper`, with optional per-category minimum levels.
 - **`PriorityOrderer` + `[TestPriority]`** order test cases when sequencing matters; opt in with `[TestCaseOrderer(typeof(PriorityOrderer))]` on the test class.
+- **Test container addresses live in `ProjectTestEnvironment`.** The Aspire host and `AspireFixture` both read the fixed ports, container names and postgres password from it, so a probe cannot drift from the container it targets.
 
 ## Changelog
 
 | Date | Change | Ref |
 |:-----|:-------|:----|
 | 2026-05-30 | Created — lean fixtures (`ServiceProviderFixture`, `WebAppFixture<TProgram>`), xunit output logging, and test-case ordering helpers. | — |
+| 2026-10-28 | Container address constants extracted to `ProjectTestEnvironment`; fixture probe reads them | — |

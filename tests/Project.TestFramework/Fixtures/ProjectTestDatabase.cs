@@ -37,15 +37,9 @@ public sealed class ProjectTestDatabase : IAsyncDisposable
 
         string maintenanceConnectionString = aspire.CreateDatabaseConnectionString("postgres");
         Log(output, maintenanceConnectionString, $"Recreating database '{databaseName}'...");
-        await PostgreSqlDatabaseManager.RecreateDatabaseAsync(maintenanceConnectionString, databaseName);
+        await PostgreSqlDatabaseManager.RecreateDatabaseAsync(maintenanceConnectionString, databaseName, cancellationToken);
 
         string connectionString = aspire.CreateDatabaseConnectionString(databaseName);
-
-        // TODO: Run EF Core migrations here when the application DbContext is available:
-        // var services = new ServiceCollection();
-        // services.AddDbContext<ProjectDbContext>(opts => opts.UseNpgsql(connectionString));
-        // await using var provider = services.BuildServiceProvider();
-        // await provider.MigrateProjectAsync(cancellationToken);
 
         Log(output, connectionString, $"Database '{databaseName}' ready.");
 

@@ -4,10 +4,13 @@ namespace Project.TestFramework.Fixtures;
 
 public static class PostgreSqlDatabaseManager
 {
-    public static async Task DropDatabaseIfExistsAsync(string maintenanceConnectionString, string databaseName)
+    public static async Task DropDatabaseIfExistsAsync(
+        string maintenanceConnectionString,
+        string databaseName,
+        CancellationToken cancellationToken = default)
     {
         await using var connection = new NpgsqlConnection(maintenanceConnectionString);
-        await connection.OpenAsync();
+        await connection.OpenAsync(cancellationToken);
 
         string quotedDatabaseName = QuoteIdentifier(databaseName);
 
@@ -21,30 +24,36 @@ public static class PostgreSqlDatabaseManager
             connection))
         {
             terminateCommand.Parameters.AddWithValue("databaseName", databaseName);
-            await terminateCommand.ExecuteNonQueryAsync();
+            await terminateCommand.ExecuteNonQueryAsync(cancellationToken);
         }
 
         await using var dropCommand = new NpgsqlCommand(
             $"DROP DATABASE IF EXISTS {quotedDatabaseName};",
             connection);
-        await dropCommand.ExecuteNonQueryAsync();
+        await dropCommand.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    public static async Task CreateDatabaseAsync(string maintenanceConnectionString, string databaseName)
+    public static async Task CreateDatabaseAsync(
+        string maintenanceConnectionString,
+        string databaseName,
+        CancellationToken cancellationToken = default)
     {
         await using var connection = new NpgsqlConnection(maintenanceConnectionString);
-        await connection.OpenAsync();
+        await connection.OpenAsync(cancellationToken);
 
         await using var command = new NpgsqlCommand(
             $"CREATE DATABASE {QuoteIdentifier(databaseName)};",
             connection);
-        await command.ExecuteNonQueryAsync();
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    public static async Task RecreateDatabaseAsync(string maintenanceConnectionString, string databaseName)
+    public static async Task RecreateDatabaseAsync(
+        string maintenanceConnectionString,
+        string databaseName,
+        CancellationToken cancellationToken = default)
     {
-        await DropDatabaseIfExistsAsync(maintenanceConnectionString, databaseName);
-        await CreateDatabaseAsync(maintenanceConnectionString, databaseName);
+        await DropDatabaseIfExistsAsync(maintenanceConnectionString, databaseName, cancellationToken);
+        await CreateDatabaseAsync(maintenanceConnectionString, databaseName, cancellationToken);
     }
 
     private static string QuoteIdentifier(string identifier)
