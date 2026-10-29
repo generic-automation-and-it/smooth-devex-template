@@ -5,13 +5,11 @@ namespace Project.TestFramework.Aspire;
 
 internal static class DistributedApplicationBuilderExtensions
 {
-    private const string DockerDesktopGroupName = "project";
-
     internal static void AddProjectTestDependencies(this IDistributedApplicationBuilder builder)
     {
         var postgresPassword = builder.AddParameter(
             "postgres-password",
-            "LocalMachineAccessNoInterestingDataTestDev#Passw0rd!FirewallNotExposed",
+            ProjectTestEnvironment.PostgresPassword,
             secret: true);
 
         builder.AddPostgresDependency(postgresPassword);
@@ -23,11 +21,11 @@ internal static class DistributedApplicationBuilderExtensions
         this IDistributedApplicationBuilder builder,
         IResourceBuilder<ParameterResource> postgresPassword)
     {
-        var postgres = builder.AddPostgres("postgres", password: postgresPassword, port: 15432)
-            .WithContainerName("project-test-postgres")
+        var postgres = builder.AddPostgres("postgres", password: postgresPassword, port: ProjectTestEnvironment.PostgresPort)
+            .WithContainerName(ProjectTestEnvironment.PostgresContainerName)
             .WithContainerRuntimeArgs(
-                "--label", $"com.docker.compose.project={DockerDesktopGroupName}",
-                "--label", "com.docker.compose.service=project-test-postgres")
+                "--label", $"com.docker.compose.project={ProjectTestEnvironment.DockerDesktopGroupName}",
+                "--label", $"com.docker.compose.service={ProjectTestEnvironment.PostgresContainerName}")
             .WithLifetime(ContainerLifetime.Persistent);
 
         postgres.AddDatabase("app-component");
@@ -39,22 +37,22 @@ internal static class DistributedApplicationBuilderExtensions
 
     private static void AddRedisDependency(this IDistributedApplicationBuilder builder)
     {
-        builder.AddRedis("redis", port: 16379)
-            .WithContainerName("project-test-redis")
+        builder.AddRedis("redis", port: ProjectTestEnvironment.RedisPort)
+            .WithContainerName(ProjectTestEnvironment.RedisContainerName)
             .WithContainerRuntimeArgs(
-                "--label", $"com.docker.compose.project={DockerDesktopGroupName}",
-                "--label", "com.docker.compose.service=project-test-redis")
+                "--label", $"com.docker.compose.project={ProjectTestEnvironment.DockerDesktopGroupName}",
+                "--label", $"com.docker.compose.service={ProjectTestEnvironment.RedisContainerName}")
             .WithLifetime(ContainerLifetime.Persistent);
     }
 
     private static void AddWireMockDependency(this IDistributedApplicationBuilder builder)
     {
         builder.AddContainer("wiremock", "wiremock/wiremock")
-            .WithHttpEndpoint(port: 19091, targetPort: 8080)
-            .WithContainerName("project-test-wiremock")
+            .WithHttpEndpoint(port: ProjectTestEnvironment.WireMockPort, targetPort: 8080)
+            .WithContainerName(ProjectTestEnvironment.WireMockContainerName)
             .WithContainerRuntimeArgs(
-                "--label", $"com.docker.compose.project={DockerDesktopGroupName}",
-                "--label", "com.docker.compose.service=project-test-wiremock")
+                "--label", $"com.docker.compose.project={ProjectTestEnvironment.DockerDesktopGroupName}",
+                "--label", $"com.docker.compose.service={ProjectTestEnvironment.WireMockContainerName}")
             .WithLifetime(ContainerLifetime.Persistent);
     }
 }

@@ -47,7 +47,6 @@ Planned work is tracked as worktasks under `.context/work-tasks/` (gitignored, l
 | Application | `src/Project.Application/` | Vertical-slice use cases via Mediator — `Features/<Name>/`, shared code in `Common/` |
 | Infrastructure | `src/Project.Infrastructure/` | EF Core + PostgreSQL (`Persistence/`), HTTP clients (`Clients/`) |
 | Host | `src/Project.Host/` | ASP.NET Core Web API, Serilog, Scalar OpenAPI |
-| ChatHost | `src/Project.ChatHost/` | Standalone LLM microservice — owns Anthropic SDK; talks to Host via HTTP only |
 
 ## Rules
 
@@ -58,13 +57,12 @@ Read [`.github/instructions/AGENTS.md`](.github/instructions/AGENTS.md) — rule
 ## Build / Test Commands
 
 ```bash
-dotnet build Project.slnx                     # build
-dotnet test  Project.slnx                     # run all tests
-dotnet run --project src/Project.AppHost      # dev Aspire AppHost
-dotnet run --project src/Project.ChatHost     # ChatHost standalone (separate process from the API Host)
+dotnet build Project.slnx                                # build
+dotnet test  Project.slnx                                # run all tests (L1/L2 need Docker)
+dotnet run --project tests/Project.TestFramework.Aspire  # provision the test containers
 ```
 
-Target a single test project when possible (e.g. `dotnet test tests/Project.Domain.UnitTest`). **Gotcha:** the dev Aspire dashboard runs at `http://localhost:15278`; on first browser visit use the printed `/login?t=...` URL.
+Target a single test project when possible (e.g. `dotnet test tests/Project.Domain.UnitTest`). **Gotcha:** L1/L2 tests use persistent Docker containers on fixed ports — postgres `15432`, redis `16379`, wiremock `19091`. The fixture reuses running containers and starts the Aspire host only when none are reachable.
 
 ## Test Framework
 
@@ -91,3 +89,4 @@ Reviewer docs: `docs/` (index) + `docs/wiki/`. Designs, NFRs and LADRs: `docs/hl
 | :---- | :---- | :---- |
 | 2026-10-24 | Mandatory context review; value-gated edits | — |
 | 2026-10-26 | Chat Conventions: session-wide numbered statements and `Q`-numbered questions, no bullets; overrides skill output formats | — |
+| 2026-10-28 | Layout/build commands match the four `src` projects; test-container ports documented | — |

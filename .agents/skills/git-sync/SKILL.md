@@ -104,6 +104,7 @@ When resolving conflicts, use this priority order:
 
 - No arguments (default): Safe sync mode (stop on conflicts)
 - `--fix` or `--auto-resolve`: Auto-resolve conflicts mode
+- `--autonomous`: forwarded to the `git-commit` sub-skill, so a dirty-tree commit is grouped by that skill's own judgment rather than a clarification round
 
 ## On MERGE_ERROR (dirty tree): commit, then retry
 

@@ -12,7 +12,7 @@ When creating or modifying rule files in `.agents/rules/`, follow this conventio
 
 ## Rule Directory
 
-All rule files live under a single `.agents/rules/` tree. Every `.md` file in it is auto-loaded by the AI tool at session start; **applicability is scoped per-file** via the `paths`/`globs`/`applyTo` frontmatter (there is no separate injected/scoped directory).
+All rule files live under a single `.agents/rules/` tree. Claude Code, Copilot and OpenCode auto-load every `.md` file in it at session start; Codex does not, and reads a rule only when its scope matches the files being touched. **Applicability is scoped per-file** via the `paths`/`globs`/`applyTo` frontmatter (there is no separate injected/scoped directory).
 
 ### Hook-deferred rules (Claude-only token saving)
 
@@ -27,8 +27,8 @@ Rules are organized into category subfolders for navigation only — folder plac
 
 | Location | Use for |
 |----------|---------|
-| `.agents/rules/*.instructions.md` (flat) | Cross-cutting rules with no ≥2-member category (AI workflow, code-review guidance, project overview) |
-| `.agents/rules/<category>/` | A folder created when 2+ rules share a topic — currently `backend/`, `git/`, `meta/` |
+| `.agents/rules/*.instructions.md` (flat) | Cross-cutting rules with no ≥2-member category (AI workflow, clean code, code review standards) |
+| `.agents/rules/<category>/` | A folder created when 2+ rules share a topic — currently `backend/`, `git/`, `meta/`, `skills/` |
 
 See `.agents/skills/manage-rule-system/SKILL.md` for the directory contract.
 
@@ -100,6 +100,16 @@ Then add frontmatter + content. Create a `<category>/` subfolder only when 2+ ru
 | Claude Code | `.claude/rules/` (→ `.agents/rules/` → `.github/instructions/`) | `.md` | `paths` (YAML list) |
 | Copilot | `.github/instructions/` (**real directory** — no symlink) | `.instructions.md` | `applyTo`, `description` |
 | Cursor | `.cursor/rules/` (→ `.agents/rules/` → `.github/instructions/`) | `.instructions.md` | `globs`, `description`, `alwaysApply` |
-| Codex | any directory | `AGENTS.md` | none |
+| Codex | `.codex/` (→ `.agents/`) and any `AGENTS.md` directory | `AGENTS.md` | none |
 
 The rule files physically live in `.github/instructions/`, a **real directory** read natively by Copilot Coding Agent and Code Review on github.com (not Copilot Chat) — no symlink resolution required server-side. The local-agent paths `.agents/rules`, `.claude/rules`, and `.cursor/rules` are symlinks resolving back to `.github/instructions/`, so all four tools share one source of truth.
+
+## Changelog
+
+> AI loading note: Skip this section during routine task execution. Use it only when updating this rule file.
+
+| Date | Change |
+|:-----|:-------|
+| 2026-10-28 | Category list gained `skills/`; flat-rule example no longer cites `project overview` (it lives in `backend/`) |
+| 2026-10-28 | Auto-load claim qualified (Codex reads by scope, not at session start); Codex matrix row names `.codex/` |
+

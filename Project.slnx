@@ -25,6 +25,7 @@
   </Folder>
   <Folder Name="/.agents/">
     <File Path=".agents/AGENTS.md" />
+    <File Path=".agents/config.toml" />
     <File Path=".agents/hooks.json" />
     <File Path=".agents/launch.json" />
     <File Path=".agents/opencode.json" />
@@ -32,6 +33,7 @@
   </Folder>
   <Folder Name="/.agents/hooks/">
     <File Path=".agents/hooks/agentmd-create-update.sh" />
+    <File Path=".agents/hooks/code-review-standards-context.sh" />
     <File Path=".agents/hooks/knowledge-rule-enforce.sh" />
     <File Path=".agents/hooks/load-agents-context.sh" />
     <File Path=".agents/hooks/manage-rule-system-context.sh" />
@@ -43,13 +45,12 @@
     <File Path=".agents/rules/ai-workflow-rules.instructions.md" />
     <File Path=".agents/rules/clean-code.instructions.md" />
     <File Path=".agents/rules/code-review-standards.instructions.md" />
-    <File Path=".agents/rules/project-overview.instructions.md" />
-    <File Path=".agents/rules/solid-principles.instructions.md" />
   </Folder>
   <Folder Name="/.agents/rules/backend/">
     <File Path=".agents/rules/backend/api-mediator-validation.instructions.md" />
     <File Path=".agents/rules/backend/architecture-slices.instructions.md" />
     <File Path=".agents/rules/backend/backend-logging-conventions.instructions.md" />
+    <File Path=".agents/rules/backend/collection-types.instructions.md" />
     <File Path=".agents/rules/backend/external-api-clients.instructions.md" />
     <File Path=".agents/rules/backend/migrations.instructions.md" />
     <File Path=".agents/rules/backend/readonly-collections.instructions.md" />

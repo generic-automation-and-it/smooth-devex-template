@@ -17,13 +17,6 @@ public sealed class AspireFixture : IAsyncLifetime
     private const string PostgresResourceName = "postgres";
     private const string WireMockResourceName = "wiremock";
     private const string RedisResourceName = "redis";
-    private const string PostgresContainerName = "project-test-postgres";
-    private const string RedisContainerName = "project-test-redis";
-    private const string WireMockContainerName = "project-test-wiremock";
-    private const string PostgresPassword = "LocalMachineAccessNoInterestingDataTestDev#Passw0rd!FirewallNotExposed";
-    private const int PostgresPort = 15432;
-    private const int RedisPort = 16379;
-    private const int WireMockPort = 19091;
     private const int MaxEndpointCheckAttempts = 3;
 
     private static readonly SemaphoreSlim _initSemaphore = new(1, 1);
@@ -32,7 +25,6 @@ public sealed class AspireFixture : IAsyncLifetime
     private static string _sharedRedisConnectionString = string.Empty;
     private static string _sharedWireMockBaseUrl = string.Empty;
 
-    private bool _ownsSharedApp;
     private string? _postgresBaseConnectionString;
     private ITestOutputHelper? _output;
 
@@ -73,7 +65,7 @@ public sealed class AspireFixture : IAsyncLifetime
             Log("Attempting to use fixed well-known endpoints (pre-warmed containers)...");
             if (await TryUseFixedEndpointsAsync())
             {
-                Log($"Using fixed endpoints — postgres=127.0.0.1:{PostgresPort} redis=127.0.0.1:{RedisPort} wiremock=127.0.0.1:{WireMockPort}");
+                Log($"Using fixed endpoints — postgres=127.0.0.1:{ProjectTestEnvironment.PostgresPort} redis=127.0.0.1:{ProjectTestEnvironment.RedisPort} wiremock=127.0.0.1:{ProjectTestEnvironment.WireMockPort}");
                 _sharedPostgresBaseConnectionString = _postgresBaseConnectionString;
                 _sharedRedisConnectionString = RedisConnectionString;
                 _sharedWireMockBaseUrl = WireMockBaseUrl;
@@ -122,7 +114,6 @@ public sealed class AspireFixture : IAsyncLifetime
                 _sharedPostgresBaseConnectionString = _postgresBaseConnectionString;
                 _sharedRedisConnectionString = RedisConnectionString;
                 _sharedWireMockBaseUrl = WireMockBaseUrl;
-                _ownsSharedApp = true;
             }
             catch (Exception aspireEx)
             {
@@ -173,7 +164,6 @@ public sealed class AspireFixture : IAsyncLifetime
         // Containers use ContainerLifetime.Persistent and outlive any individual fixture instance,
         // so disposal is intentionally a no-op here.
         Log("DisposeAsync called — shared Aspire containers are persistent and will not be stopped.");
-        _ = _ownsSharedApp;
         return ValueTask.CompletedTask;
     }
 
@@ -214,9 +204,9 @@ public sealed class AspireFixture : IAsyncLifetime
                 await Task.Delay(TimeSpan.FromSeconds(2));
             }
 
-            _postgresBaseConnectionString = BuildConnectionString(PostgresPort, MaintenanceDatabaseName);
-            RedisConnectionString = $"127.0.0.1:{RedisPort}";
-            WireMockBaseUrl = $"http://127.0.0.1:{WireMockPort}";
+            _postgresBaseConnectionString = BuildConnectionString(ProjectTestEnvironment.PostgresPort, MaintenanceDatabaseName);
+            RedisConnectionString = $"127.0.0.1:{ProjectTestEnvironment.RedisPort}";
+            WireMockBaseUrl = $"http://127.0.0.1:{ProjectTestEnvironment.WireMockPort}";
 
             bool[] results = await Task.WhenAll(
                 TryPostgresAsync(),
@@ -243,9 +233,9 @@ public sealed class AspireFixture : IAsyncLifetime
 
     private async Task<bool> TryUsePersistentContainerEndpointsAsync()
     {
-        int? mappedPostgresPort = TryGetPublishedPort(PostgresContainerName, "5432/tcp");
-        int? mappedRedisPort = TryGetPublishedPort(RedisContainerName, "6379/tcp");
-        int? mappedWireMockPort = TryGetPublishedPort(WireMockContainerName, "8080/tcp");
+        int? mappedPostgresPort = TryGetPublishedPort(ProjectTestEnvironment.PostgresContainerName, "5432/tcp");
+        int? mappedRedisPort = TryGetPublishedPort(ProjectTestEnvironment.RedisContainerName, "6379/tcp");
+        int? mappedWireMockPort = TryGetPublishedPort(ProjectTestEnvironment.WireMockContainerName, "8080/tcp");
 
         Log($"Persistent container port discovery — postgres={mappedPostgresPort?.ToString() ?? "not found"} redis={mappedRedisPort?.ToString() ?? "not found"} wiremock={mappedWireMockPort?.ToString() ?? "not found"}");
 
@@ -345,7 +335,7 @@ public sealed class AspireFixture : IAsyncLifetime
             Port = port,
             Database = databaseName,
             Username = "postgres",
-            Password = PostgresPassword,
+            Password = ProjectTestEnvironment.PostgresPassword,
             IncludeErrorDetail = true,
             // Disable SSL to avoid negotiation hangs against the plain test postgres container.
             SslMode = SslMode.Disable

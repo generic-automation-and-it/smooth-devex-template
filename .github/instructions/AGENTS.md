@@ -17,7 +17,7 @@ Rule index. Claude Code, Copilot and OpenCode auto-load these files; **Codex doe
 | `**` | `ai-workflow-rules` · `clean-code` · `git/git-policy` · `git/pr-standards` |
 | `**/*.cs` | `code-review-standards` · `backend/project-overview` · `backend/solid-principles` · `backend/api-mediator-validation` · `backend/architecture-slices` · `backend/backend-logging-conventions` · `backend/collection-types` · `backend/external-api-clients` · `backend/readonly-collections` |
 | `src/*.Infrastructure/Persistence/Migrations/**/*.cs` | `backend/migrations` |
-| `tests/*.TestFramework.Aspire/**/*.cs` | `backend/wiremock-stubbing` |
+| `tests/**/*.cs` | `backend/wiremock-stubbing` |
 | `**/*AGENTS.md` | `meta/knowledge-conventional-contexts-quality` |
 | `**/*understanding.md` | `meta/understandings` |
 | `.agents/rules/**` | `meta/rules` |
@@ -32,6 +32,7 @@ File = `<name>.instructions.md` in this folder. Adding, renaming or rescoping a 
 | 2026-10-15 | Created: rule index for Codex; root `AGENTS.md` Rules section points here | — |
 | 2026-10-19 | `code-review-standards` applies only to C# files; Claude review-hook deferral retained | — |
 | 2026-10-24 | Git policy: workflow consent vs runtime approval; Codex prompt/never diagnosis | — |
+| 2026-10-28 | `backend/wiremock-stubbing` rescoped to `tests/**/*.cs` | — |
 
 ## Installed subset (installer-owned-rules-subset)
 

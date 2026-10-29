@@ -20,7 +20,7 @@ applying it makes the code worse.
 - **Never refactor working code to "be SOLID."** Cleanup rides inside the change's blast radius.
 - Where a principle conflicts with an ADR, the **ADR wins** — say so, do not silently comply. A
   `*Service` layer is the standard SOLID-trained instinct;
-  [`backend/architecture-slices`](backend/architecture-slices.instructions.md) organises Application
+  [`architecture-slices`](architecture-slices.instructions.md) organises Application
   as vertical-slice features, not a service layer.
 
 ## Triggers worth acting on
@@ -46,3 +46,4 @@ DI, named constructor, decorator). Do not invent a new abstraction family on fir
 | Date | Change |
 |:-----|:-------|
 | 2026-09-13 | Copied from gf-dynamic-pallet-position; retargeted Service-layer ban to architecture-slices. |
+| 2026-10-28 | Fixed dead architecture-slices link (`backend/backend/…` → same-folder path). |
