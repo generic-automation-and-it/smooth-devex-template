@@ -60,6 +60,10 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the pipeline order and every s
   happens read-only during the batch analysis.
 - **The review wait is one blocking script call.** Model-side sleeps or harness timers failed on
   OpenCode; keep the poll inside `wait-for-review.sh`.
+- **Batch mode tempts one subagent per worktask; the fork loses the run's context and the user's view.**
+  A fresh agent does not carry the worktask, HLD and `*AGENTS.md` loaded at step 2, and its edits never
+  appear in the orchestrator's transcript. Primary-session execution is the default for that reason —
+  never restore a default subagent run to speed the queue up.
 - **`agile-github-task-from-diff --body-file` is the coupling for the default ticket skill.** Its
   diff path exits "Nothing to create" on a fresh branch and, on a stacked layer, describes earlier
   layers' work. Renaming or dropping `--body-file` breaks step 3 silently.
@@ -85,3 +89,4 @@ Read [`SKILL.md`](./SKILL.md) first — switches, the pipeline order and every s
 | 2026-10-27 | Review check matched by name or workflow name; SKIPPED/CANCELLED are not CI failures | — |
 | 2026-10-27 | Agent-config switch guard; `state.json` stem key; batch discovery's template coupling; no PR for gap-free done worktasks | — |
 | 2026-10-27 | Ready/review concurrency race and one-toggle retrigger; fresh-worktree stack detection via the shared gh-stack state | — |
+| 2026-11-10 | Batch-mode subagent trap: cold context, invisible edits; primary session is the default | — |
