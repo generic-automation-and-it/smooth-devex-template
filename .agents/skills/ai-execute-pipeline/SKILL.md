@@ -29,6 +29,7 @@ Add `--stack <branch>` to layer onto a stack from a fresh worktree, or onto one 
 Give `--worktasks <dir>` instead of `--worktask` to deliver a whole plan: every worktask runs this
 pipeline in turn, each one stacked on the previous one ([Batch mode](#batch-mode---worktasks-dir)).
 A stopped run resumes where it stopped when invoked again.
+Code, docs and design are edited in the primary session; `--subagents`, off by default, lets the orchestrator hand that work off.
 
 ### Switches
 
@@ -47,6 +48,7 @@ A stopped run resumes where it stopped when invoked again.
 | `--initiative <name>` | no | none | Export binding; as above |
 | `--epic-ticket <id>` | no | none | Export binding (extra ticket on the export); as above |
 | `--understanding-skill <path>` | no | resolved | Kvasir skill directory, for harnesses that cannot find `mimisbrunnr-kvasir-understanding` |
+| `--subagents` | no | off | Let the orchestrator delegate coding, doc and design work to subagents when it judges that useful. Default off: those edits run in the primary session, and a subagent may still run builds, tests, PR-gate/CI reads and the `git-commit*` chain |
 
 Always on, not switches: `--autonomous` on every `git-*` skill, `--fix` on `ai-review`, PR created as
 draft, review poll every 30 s for up to 20 min, at most 5 fix rounds (review and CI fixes together).
@@ -61,7 +63,7 @@ draft, review poll every 30 s for up to 20 min, at most 5 fix rounds (review and
 | 4 | Branch `<type>/<ticket>-<slug>` (`gh stack init`/`checkout`+`add` in stack mode) | `branch.sh` | non-zero exit |
 | 5 | Push + **draft** PR that closes the ticket | `git-commit-push-pr --draft` | no PR |
 | 6 | Stack: one `gh stack submit`, base verified (stack mode only) | `stack.sh submit` | base mismatch |
-| 7 | Implement the worktask | worktask's own phases | a gate needs a human |
+| 7 | Implement the worktask in the primary session | worktask's own phases | a gate needs a human |
 | 8 | Commit | `git-commit --autonomous` | — |
 | 9 | Ralph loop | `ai-ralph-loop --loops <n>` | not converged, or a suite fails |
 | 10 | Commit + push | `git-commit-push --autonomous` | — |
@@ -85,6 +87,12 @@ draft, review poll every 30 s for up to 20 min, at most 5 fix rounds (review and
 - **The invocation overrides the worktask's and the plan's commit rules.** "Commits during execution:
   not allowed", "Push: never" and "the requester reviews each uncommitted branch" do not apply to a run
   of this skill. "Deployment: not authorized" still applies.
+- **Code, docs and design edits run in the primary session unless `--subagents` is given (default: off).**
+  Without the switch a subagent never edits code, docs, design or worktask files — a harness that can
+  spawn subagents is not the switch. Builds, tests, PR-gate and CI reads, and the `git-commit*` chain's
+  own sub-skill hand-off, remain allowed. `--subagents` authorizes a hand-off but does not require one —
+  the orchestrator decides per step. The worktask's own `Subagents:` Execution Profile field does not
+  override this; the invocation is authoritative here, as it is for commit rules.
 - **Every shell step is a script in `scripts/`; values reach it as `AEP_*` environment variables.**
   Never inline `gh`/`git` plumbing, and never paste ticket, worktask or review text into a command.
   Scripts validate every value; untrusted text stays in files.
@@ -217,14 +225,17 @@ Stop on exit 4.
 
 Execute the worktask under its own process and the repository's workflow rules. Its acceptance
 criteria and Validation table define done. This invocation grants the worktask permission to commit
-on this branch. For a batch gap fix, close only the gaps B2 found. If a worktask gate needs a human answer, stop and report. The draft PR stays open for
-the next run.
+on this branch. Do every code, docs and design edit here, in the primary session: a subagent may run
+a build or a test command and report its result, but it does not edit code, docs, design or worktask
+files. With `--subagents` (default off), hand a step off where the orchestrator judges that useful.
+For a batch gap fix, close only the gaps B2 found. If a worktask gate needs a human answer, stop and
+report. The draft PR stays open for the next run.
 
 ### 8–10. Commit, Ralph, commit + push
 
 1. `git-commit --autonomous`.
-2. `ai-ralph-loop --loops <n>` (it never commits). Continue only when its **Result** is
-   `converged at loop k` and its **Verify** line has no failing suite. On `cap reached`,
+2. `ai-ralph-loop --loops <n>` (never commits; add `--spawn` only with `--subagents`). Continue only
+   when its **Result** is `converged at loop k` and its **Verify** line has no failing suite. On `cap reached`,
    `stopped: verify red`, or a failing suite, stop and report — the PR stays draft and nothing more is
    pushed, so unresolved or failing work is never published as ready.
 3. `git-commit-push --autonomous`.
@@ -379,8 +390,9 @@ AEP_QUEUE=<queue.json> AEP_WORKTASK=<worktask> scripts/queue.sh gates
 is unmerged: stop the batch there and report the PR. Then run steps 1–14 for that worktask with every
 switch of this invocation. The first layer gets `--initialize`, unless the current branch is already
 a stack top or `--stack` was given. Every later layer starts on the previous layer's branch, so
-preflight adds it as the next layer. Run each worktask in a fresh subagent where the harness has
-them, otherwise in this session.
+preflight adds it as the next layer. Run every worktask in this session. With `--subagents` (default
+off), run one in a fresh subagent where the harness has them when the orchestrator judges that useful;
+otherwise in this session.
 
 Stop the batch, leaving every earlier PR as it is, when a worktask stops for any reason. That
 includes a question mid-run. A later invocation with the same switches resumes at that worktask.
@@ -404,3 +416,4 @@ do.
 | 2026-10-27 | Step 13 fixes failed CI checks after a clean review (`pr.sh checks`, `failed-logs`; shared 5-round cap; running checks never block); unrunnable local checks are `not run`, never a reason to wait or ask; the review check is matched by name or workflow name | — |
 | 2026-10-27 | `--worktasks <dir>` batch mode: plan-ordered linear stack, upfront analysis and questions, gap-checked done worktasks, gate PRs; per-worktask `state.json` resume; preflight refuses an agent-config-rewriting switch | — |
 | 2026-10-27 | Switches are answers (no re-confirming `--initialize`, export or bindings); `--stack [<branch>]` joins an existing stack from any worktree; preflight reports stack status; review wait retriggers a review that never started via one draft→ready toggle | — |
+| 2026-11-10 | `--subagents` (default off): code, docs and design edits default to the primary session; subagents default to builds, tests and PR-gate/CI reads; batch mode no longer spawns a worktask subagent by default; Ralph `--spawn` needs the switch | — |

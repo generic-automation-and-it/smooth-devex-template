@@ -10,7 +10,7 @@ Skills live **flat**, one directory per skill directly under `.agents/skills/`. 
 |-------|---------|-------|
 | **agile-github-breakdown** | Turn a braindump or existing Feature into GitHub Feature + Task issues | `/agile-github-breakdown` |
 | **agile-github-task-from-diff** | Create a GitHub Task (sub-issue) from the current git diff vs main | `/agile-github-task-from-diff [--feature-issue <n> \| --noparentid]` |
-| **ai-execute-pipeline** | Deliver one worktask (or a plan's ordered worktasks) end to end: worktask-sourced ticket, draft PR, implement, Ralph loop, ready, AI-review fix loop | `/ai-execute-pipeline --worktask <path> \| --worktasks <dir> --parent <id> [--initialize] [--stack [<branch>]] [--hld <path>] [--ticket-skill <name\|path>] [--loops <n>] [--understanding-export …]` |
+| **ai-execute-pipeline** | Deliver one worktask (or a plan's ordered worktasks) end to end: worktask-sourced ticket, draft PR, implement, Ralph loop, ready, AI-review fix loop | `/ai-execute-pipeline --worktask <path> \| --worktasks <dir> --parent <id> [--initialize] [--stack [<branch>]] [--hld <path>] [--ticket-skill <name\|path>] [--loops <n>] [--subagents] [--understanding-export …]` |
 | **ai-brain-dump** | Listen-first capture session; synthesize on request | `/ai-brain-dump [--oktoask] [--thinking] [--oktoreaddocs] [--oktowebsearch] [--all]` |
 | **ai-ralph-loop** | Review → fix → verify code and L0/L1/L2 test coverage — or a plan via `--plan` — until clean; ends with a fix table | `/ai-ralph-loop [--loops <n>] [--scope <path\|glob>] [--plan [path]] [--spawn] [--notests] [--nodecisions]` |
 | **ai-terse** | Reformat this turn's reply into terse, high-density output with a TL;DR | `/ai-terse` |
@@ -49,7 +49,10 @@ listen-first default avoids — use deliberately.
 One worktask per invocation; runs are sequential. The switch table and pipeline order live under the
 `SKILL.md` TL;DR — the authoritative copy. In brief: `--worktask` and `--parent` are required.
 `--initialize` starts a `gh stack`, and later runs detect it and add a layer. `--ticket-skill` swaps the
-ticket creator, which receives a worktask-derived ticket file, never the diff. `--understanding-export`
+ticket creator, which receives a worktask-derived ticket file, never the diff. Code, docs and design
+edits stay in the primary session unless `--subagents` is given (default: off); without it a subagent
+may still run builds, tests, PR-gate/CI reads and the `git-commit*` chain, and batch mode runs each
+worktask in the session. `--understanding-export`
 (+ `--product-name`/`--initiative`/`--epic-ticket`/`--understanding-skill`) exports to Mímisbrunnr after
 the PR is marked ready. `--autonomous` on the git skills and `--fix` on `ai-review` are always on.
 
