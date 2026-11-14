@@ -21,7 +21,7 @@
 #   SMOOTH_DEVEX_DECISIONS_ENABLED   Must be "true" to make a request; otherwise a disabled line
 #   SMOOTH_DEVEX_DECISIONS_BASE_URL  Decision endpoint base URL (default: http://127.0.0.1:1234)
 #   SMOOTH_DEVEX_DECISIONS_PATH      API path (default: /v1/systemone)
-#   SMOOTH_DEVEX_DECISIONS_MODEL     Model name (default: d3:4b)
+#   SMOOTH_DEVEX_DECISIONS_MODEL     Model name (default: openjev)
 #   SMOOTH_DEVEX_DECISIONS_MAX_ATTEMPTS  Attempts bound on transport/invalid-response failure (default: 3)
 #   SMOOTH_DEVEX_DECISIONS_TIMEOUT   Per-request timeout seconds (default: 60)
 #   SMOOTH_DEVEX_DECISIONS_API_KEY   Optional bearer token; read inside Python from os.environ and
@@ -99,7 +99,7 @@ fi
 
 BASE_URL="${SMOOTH_DEVEX_DECISIONS_BASE_URL:-http://127.0.0.1:1234}"
 API_PATH="${SMOOTH_DEVEX_DECISIONS_PATH:-/v1/systemone}"
-MODEL="${SMOOTH_DEVEX_DECISIONS_MODEL:-d3:4b}"
+MODEL="${SMOOTH_DEVEX_DECISIONS_MODEL:-openjev}"
 URL="${BASE_URL}${API_PATH}"
 
 python3 - "$CORE_MODULE" "$URL" "$MODEL" "$MAX_ATTEMPTS" "$TIMEOUT" "$AUDIT_FILE" 3<<<"$PAYLOAD_TEXT" <<'PYEOF'
