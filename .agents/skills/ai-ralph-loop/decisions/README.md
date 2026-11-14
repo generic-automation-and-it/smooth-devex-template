@@ -89,6 +89,16 @@ and records `Decision = n/a`.
    fallback line.
 6. A valid response is scored, one pipe-delimited line is printed, and a JSON audit is written.
 
+### Shared core
+
+Steps 3–5 are the shared decision core,
+`.agents/_smooth-devex-shared/decisions/decisions_core.py`, consumed by `ai-decisions` too. The
+installer copies it into each consuming skill's `decisions/lib/` so an installed skill is
+self-contained; running inside this repository, `decision-evaluate.sh` falls back to the shared source.
+Fixing request/validation/retry/audit behaviour means editing the core, never an installed copy. The
+core's optional bearer header (`SMOOTH_DEVEX_DECISIONS_API_KEY`) is not used by this layer: the ralph
+endpoint is unauthenticated and no key is passed.
+
 ### Question contract
 
 Both templates ask a category-aware `change_assessment` plus their mode's existing questions.

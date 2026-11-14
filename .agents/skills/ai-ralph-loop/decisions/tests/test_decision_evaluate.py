@@ -1143,6 +1143,12 @@ class CompatibilityContract(EvaluatorContract):
     def test_copied_global_skill_layout_works(self):
         global_dir = self.directory / "global" / "ai-ralph-loop"
         shutil.copytree(SKILL_DIR, global_dir)
+        # The installer ships the shared core into the copied skill; mirror that here so the test
+        # exercises the layout a global install actually produces.
+        core_source = SKILL_DIR.parents[1] / "_smooth-devex-shared" / "decisions" / "decisions_core.py"
+        core_target = global_dir / "decisions" / "lib" / "decisions_core.py"
+        core_target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(core_source, core_target)
         global_script = global_dir / "decisions" / "scripts" / "decision-evaluate.sh"
         server = self.serve([code_response()])
         arguments = [
