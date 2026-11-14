@@ -102,13 +102,17 @@ API_PATH="${SMOOTH_DEVEX_DECISIONS_PATH:-/v1/systemone}"
 MODEL="${SMOOTH_DEVEX_DECISIONS_MODEL:-d3:4b}"
 URL="${BASE_URL}${API_PATH}"
 
-python3 - "$CORE_MODULE" "$URL" "$MODEL" "$MAX_ATTEMPTS" "$TIMEOUT" "$AUDIT_FILE" "$PAYLOAD_TEXT" <<'PYEOF'
+python3 - "$CORE_MODULE" "$URL" "$MODEL" "$MAX_ATTEMPTS" "$TIMEOUT" "$AUDIT_FILE" 3<<<"$PAYLOAD_TEXT" <<'PYEOF'
 import importlib.util
 import json
 import os
 import sys
 
-(core_path, url, model, max_attempts, timeout, audit_file, payload_text) = sys.argv[1:8]
+(core_path, url, model, max_attempts, timeout, audit_file) = sys.argv[1:7]
+try:
+    payload_text = os.fdopen(3, encoding="utf-8").read()
+except OSError:
+    payload_text = ""
 
 
 def fail(message):
@@ -166,7 +170,7 @@ def main():
             api_key=api_key,
             audit_file=audit_file or None,
         )
-    except (core.QuestionError, core.PayloadError, core.UrlError) as error:
+    except (core.CredentialError, core.QuestionError, core.PayloadError, core.UrlError) as error:
         fail(str(error))
 
     attempts = len(result["attempts"])

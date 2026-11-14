@@ -10,6 +10,7 @@ auth, response validation against the outgoing questions, bounded retries, and a
 writes. Template rendering, mode selection and scoring belong to each caller.
 """
 
+import contextlib
 import json
 import math
 import os
@@ -33,6 +34,10 @@ class PayloadError(Exception):
 
 class UrlError(Exception):
     """The decision endpoint URL cannot be used."""
+
+
+class CredentialError(Exception):
+    """A credential value cannot be used safely."""
 
 
 def is_number(value):
@@ -202,36 +207,38 @@ def write_audit(document, audit_file):
                 json.dump(document, handle, indent=2, ensure_ascii=False)
                 handle.write("\n")
             os.link(temporary, target)
-            try:
+            with contextlib.suppress(OSError):
                 os.unlink(temporary)
-            except OSError:
-                pass
             return target
         except FileExistsError:
             if temporary and os.path.exists(temporary):
-                try:
+                with contextlib.suppress(OSError):
                     os.unlink(temporary)
-                except OSError:
-                    pass
             target = "%s-%d%s" % (base, suffix, extension)
             suffix += 1
         except Exception as error:
             if temporary and os.path.exists(temporary):
-                try:
+                with contextlib.suppress(OSError):
                     os.unlink(temporary)
-                except OSError:
-                    pass
             print("audit-write failed: %s: %s" % (type(error).__name__, error), file=sys.stderr)
             return "failed"
+
+
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects outright: urllib would replay the Authorization header to the new origin."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 
 def evaluate(payload, *, url, model, max_attempts, timeout, api_key=None, audit_file=None):
     """POST one decision request and validate the answer set against the outgoing questions.
 
     Returns a dict: `answers` (validated, or None), `attempts` (one entry per HTTP attempt),
-    `reason` (the last failure reason), `fallback` (True when no attempt validated), `request`
-    (the wire body), and `audit` (the path written, "failed", or "n/a" when no audit was asked
-    for). The API key never enters `request`, `attempts` or the audit document.
+    `reason` (the last failure reason, empty when an attempt validated), `fallback` (True when no
+    attempt validated), and `audit` (the path written, "failed", or "n/a" when no audit was asked
+    for). The API key never enters `attempts` or the audit document, and redirects are refused so it
+    is never replayed to another origin.
     """
     body = build_request(payload, model)
 
@@ -246,9 +253,14 @@ def evaluate(payload, *, url, model, max_attempts, timeout, api_key=None, audit_
 
     headers = {"Content-Type": "application/json"}
     if api_key:
+        if "\r" in api_key or "\n" in api_key:
+            raise CredentialError(
+                "API key contains a line break; set SMOOTH_DEVEX_DECISIONS_API_KEY to a single-line token"
+            )
         headers["Authorization"] = "Bearer " + api_key
 
     data = json.dumps(body).encode("utf-8")
+    opener = urllib.request.build_opener(_NoRedirectHandler)
     attempts = []
     validated = None
     last_reason = "no attempt completed"
@@ -257,7 +269,7 @@ def evaluate(payload, *, url, model, max_attempts, timeout, api_key=None, audit_
         attempt = {"attempt": attempt_number}
         try:
             request = urllib.request.Request(url, data=data, headers=headers, method="POST")
-            with urllib.request.urlopen(request, timeout=int(timeout)) as response:
+            with opener.open(request, timeout=int(timeout)) as response:
                 response_text = response.read().decode("utf-8")
             answers, reason = validate_response(response_text, body["questions"])
             attempt["response"] = response_text

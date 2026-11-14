@@ -199,6 +199,25 @@ class EndpointSafety(unittest.TestCase):
             )
         self.assertIn("must not embed credentials", str(caught.exception))
 
+    def test_api_key_with_a_line_break_is_refused_before_any_request(self):
+        payload = {"state": "x", "questions": {"pick": CHOICE_QUESTION}}
+        with self.assertRaises(core.CredentialError) as caught:
+            core.evaluate(
+                payload,
+                url="http://127.0.0.1:1",
+                model="m",
+                max_attempts=1,
+                timeout=1,
+                api_key="abc\ndef",
+            )
+        self.assertIn("line break", str(caught.exception))
+        self.assertNotIn("abc", str(caught.exception))
+
+    def test_redirect_handler_refuses_to_follow(self):
+        self.assertIsNone(
+            core._NoRedirectHandler().redirect_request(None, None, 302, "Found", {}, "http://elsewhere/")
+        )
+
     def test_invalid_url_is_refused(self):
         payload = {"state": "x", "questions": {"pick": CHOICE_QUESTION}}
         with self.assertRaises(core.UrlError):

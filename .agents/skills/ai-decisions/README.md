@@ -54,7 +54,7 @@ JSON
 | `SMOOTH_DEVEX_DECISIONS_MODEL` | `d3:4b` | Model name sent with the request |
 | `SMOOTH_DEVEX_DECISIONS_MAX_ATTEMPTS` | `3` | Bounded attempts on transport or invalid-response failure |
 | `SMOOTH_DEVEX_DECISIONS_TIMEOUT` | `60` | Per-request timeout in seconds |
-| `SMOOTH_DEVEX_DECISIONS_API_KEY` | _(unset)_ | Optional bearer token; read from the environment only, sent as `Authorization: Bearer` |
+| `SMOOTH_DEVEX_DECISIONS_API_KEY` | _(unset)_ | Optional bearer token; read from the environment only, sent as `Authorization: Bearer`. Must be a single line — a value containing CR/LF is refused with exit 1 |
 
 `SMOOTH_DEVEX_DECISIONS_TEMPLATE` and `SMOOTH_DEVEX_DECISIONS_MIN_PROBABILITY` are not read by this
 skill: questions are authored inline, and the probability threshold is ralph-loop scoring.
@@ -92,7 +92,7 @@ Exit codes:
 A response is accepted only when it answers exactly the requested questions, with the requested types, a
 choice that is one of the outgoing criteria, numeric `confidence` in `[0, 1]`, a probability for every
 outgoing criterion in `[0, 1]` summing to `1.0` within `1e-6`, and a finite `score` within the score
-question's criteria index range. Missing probabilities are invalid, not zero; a malformed total is invalid.
+question's criteria index range. Missing probabilities are invalid, not zero; a malformed total is invalid. Redirects are never followed, so the bearer header cannot be replayed to another origin.
 
 ## Shared core
 

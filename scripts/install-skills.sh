@@ -547,6 +547,23 @@ prune_tests() {
   find "$1" -type f \( -name 'test_*' -o -name '*_test.*' -o -name '*.test.*' -o -name '*.Tests.ps1' \) -exec rm -f {} +
 }
 
+# assert_real_directory BASE REL — refuse a destination whose components are links or non-directories.
+# The fan-out writes below the skills root, and a retained link at any component would redirect that
+# write into its external target (scripts/AGENTS.md: retained links are never traversed).
+assert_real_directory() {
+  local walk="$1" part
+  local IFS=/
+  for part in $2; do
+    walk="$walk/$part"
+    if [ -L "$walk" ]; then
+      die "refusing to write the shared decision core through a link: $walk"
+    fi
+    if [ -e "$walk" ] && [ ! -d "$walk" ]; then
+      die "refusing to write the shared decision core through a non-directory: $walk"
+    fi
+  done
+}
+
 # ship_decisions_core SKILLS_ROOT NAME — copy the shared decision core into a consumer's copied skill.
 # Skills are installed independently, so a consumer cannot reach .agents/_smooth-devex-shared/ at
 # runtime; each consuming skill gets the core beside its own script (see DECISIONS_CORE_CONSUMERS).
@@ -560,6 +577,7 @@ ship_decisions_core() {
     if [ ! -f "$source" ]; then
       die "shared decision core missing in source — $name cannot resolve it"
     fi
+    assert_real_directory "$skills_root/$name" "$destination"
     mkdir -p "$skills_root/$name/$destination"
     copy_wet "$source" "$skills_root/$name/$destination/decisions_core.py"
     log "Shipped shared decision core into $name"

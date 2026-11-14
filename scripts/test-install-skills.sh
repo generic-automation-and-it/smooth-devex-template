@@ -1942,6 +1942,31 @@ else
   no "per-repo -d install ships ai-decisions" "$(tail -n 5 "$scratch/err")"
 fi
 
+# 11b. A linked decisions/ directory inside a source skill is refused, never followed: the fan-out must
+# not write the shared core through a retained link into that link's external target.
+guard_src="$scratch/guard-source"
+outside="$scratch/guard-outside"
+mkdir -p "$guard_src/.agents/skills" "$guard_src/.agents/_smooth-devex-shared" "$outside"
+cp -a "$source_repo/.agents/_smooth-devex-shared/." "$guard_src/.agents/_smooth-devex-shared/"
+cp -a "$source_repo/.agents/skills/ai-decisions" "$guard_src/.agents/skills/"
+cp -a "$source_repo/.agents/skills/ai-ralph-loop" "$guard_src/.agents/skills/"
+ln -s "$outside" "$guard_src/.agents/skills/ai-decisions/decisions"
+(cd "$guard_src" && git init -q -b main && git add -A \
+  && git -c user.email=harness@example.com -c user.name=harness commit -q -m fixture)
+root="$(make_root "linked-guard" alpha)"
+st=0
+SKILLS_ROOT="$root/skills" SKILLS_REPO="$guard_src" SKILLS_BRANCH="main" \
+  SKILLS_TEST_OWNED_EXTRA="alpha" bash "$installer_sh" -s >"$scratch/out" 2>"$scratch/err" || st=$?
+if [ "$st" -ne 0 ] \
+  && grep -q "through a link" "$scratch/err" \
+  && [ ! -e "$outside/decisions_core.py" ] \
+  && [ ! -e "$outside/lib" ]; then
+  ok "linked decisions/ destination: install refuses it and writes nothing outside the skills root"
+else
+  no "linked decisions/ destination: install refuses it and writes nothing outside the skills root" \
+    "exit=$st $(tail -n 2 "$scratch/err")"
+fi
+
 # ---------------------------------------------------------------------------------------------
 
 if python3 "$repo_root/scripts/test-installer-payload.py"; then

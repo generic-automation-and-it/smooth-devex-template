@@ -73,6 +73,12 @@ class StubHandler(BaseHTTPRequestHandler):
             spec = self.server.responses.pop(0)
         else:
             spec = (500, "stub exhausted")
+        if isinstance(spec, dict) and "__redirect__" in spec:
+            self.send_response(302)
+            self.send_header("Location", spec["__redirect__"])
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if isinstance(spec, tuple):
             status, reply = spec
         else:
@@ -282,6 +288,39 @@ class NonBlockingContract(DecideContract):
         self.assertEqual(process.returncode, 0, process.stderr)
         self.assertNotIn("Traceback", process.stderr)
         self.assertTrue(self.document(process.stdout)["fallback"])
+
+
+class SecurityContract(DecideContract):
+    def test_api_key_with_a_line_break_is_a_configuration_error(self):
+        process, requests = self.run_decide(
+            [valid_response()], input_text=json.dumps(payload()), api_key="abc\ndef"
+        )
+        self.assertEqual(process.returncode, 1, process.stderr)
+        self.assertIn("line break", process.stderr)
+        self.assertNotIn("abc", process.stderr)
+        self.assertNotIn("abc", process.stdout)
+        self.assertEqual(requests, [])
+
+    def test_redirect_is_not_followed_and_the_original_endpoint_gets_every_attempt(self):
+        target = self.serve([])
+        process, requests = self.run_decide(
+            [{"__redirect__": target.url + "/v1/systemone"}, {"__redirect__": target.url + "/v1/systemone"}],
+            input_text=json.dumps(payload()),
+            max_attempts="2",
+        )
+        self.assertEqual(process.returncode, 0, process.stderr)
+        document = self.document(process.stdout)
+        self.assertTrue(document["fallback"])
+        self.assertEqual(len(requests), 2)
+        self.assertEqual(target.httpd.requests, [])
+
+    def test_payload_larger_than_an_argument_list_limit_is_accepted(self):
+        large = dict(payload(), state="x" * 200000)
+        process, requests = self.run_decide([valid_response()], input_text=json.dumps(large))
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(len(requests), 1)
+        self.assertEqual(len(requests[0]["json"]["state"]), 200000)
+        self.assertFalse(self.document(process.stdout)["fallback"])
 
 
 class UsageErrorContract(DecideContract):

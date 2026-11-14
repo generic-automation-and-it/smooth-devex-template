@@ -104,7 +104,7 @@ file, invalid JSON, unsupported question type, credentialed base URL) — no net
 | `SMOOTH_DEVEX_DECISIONS_MODEL` | `d3:4b` | Model name sent with the request |
 | `SMOOTH_DEVEX_DECISIONS_MAX_ATTEMPTS` | `3` | Attempts on transport or invalid-response failure |
 | `SMOOTH_DEVEX_DECISIONS_TIMEOUT` | `60` | Per-request timeout in seconds |
-| `SMOOTH_DEVEX_DECISIONS_API_KEY` | _(unset)_ | Optional bearer token, read from the environment only |
+| `SMOOTH_DEVEX_DECISIONS_API_KEY` | _(unset)_ | Optional bearer token, read from the environment only; must be a single line |
 
 `SMOOTH_DEVEX_DECISIONS_TEMPLATE` and `SMOOTH_DEVEX_DECISIONS_MIN_PROBABILITY` are not used here: this
 skill authors questions inline, and the probability threshold belongs to ralph-loop scoring.
@@ -117,7 +117,7 @@ skill authors questions inline, and the probability threshold belongs to ralph-l
   before any request.
 - Only `choice` and `score` exist in v1. `noul` is refused as an unsupported type.
 - The API key is read from the environment inside the script. Never put it in the payload, the URL, an
-  argument or an audit file.
+  argument or an audit file. Redirects are refused, so the header is never replayed to another origin.
 
 ## Requirements
 

@@ -616,6 +616,23 @@ function Ensure-CanonicalLink {
     Write-Info "Linked $link -> $target"
 }
 
+function Assert-RealDirectory {
+    # The fan-out writes below the skills root; a retained link at any component would redirect that
+    # write into its external target (scripts/AGENTS.md: retained links are never traversed).
+    param([string] $Base, [string] $Relative)
+    $walk = $Base
+    foreach ($part in ($Relative -split '/')) {
+        $walk = Join-Path $walk $part
+        $item = Get-Item -LiteralPath $walk -Force -ErrorAction SilentlyContinue
+        if ($item -and $item.LinkTarget) {
+            Fail "refusing to write the shared decision core through a link: $walk"
+        }
+        if ($item -and -not $item.PSIsContainer) {
+            Fail "refusing to write the shared decision core through a non-directory: $walk"
+        }
+    }
+}
+
 function Ship-DecisionsCore {
     # Copy the shared decision core into a consumer's copied skill. Skills are installed
     # independently, so a consumer cannot reach .agents/_smooth-devex-shared/ at runtime; each
@@ -627,6 +644,7 @@ function Ship-DecisionsCore {
     if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
         Fail "shared decision core missing in source - $Name cannot resolve it"
     }
+    Assert-RealDirectory -Base (Join-Path $SkillsRoot $Name) -Relative $destination
     $target = Join-Path (Join-Path $SkillsRoot $Name) $destination
     New-Item -ItemType Directory -Path $target -Force | Out-Null
     Copy-Wet -Source $source -Dest (Join-Path $target 'decisions_core.py')
