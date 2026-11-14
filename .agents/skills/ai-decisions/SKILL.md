@@ -101,7 +101,7 @@ file, invalid JSON, unsupported question type, credentialed base URL) — no net
 | `SMOOTH_DEVEX_DECISIONS_ENABLED` | _(unset)_ | Must be `true`, or the script prints a disabled line and makes no request |
 | `SMOOTH_DEVEX_DECISIONS_BASE_URL` | `http://127.0.0.1:1234` | Decision endpoint base URL; credentials in the URL are refused |
 | `SMOOTH_DEVEX_DECISIONS_PATH` | `/v1/systemone` | API path |
-| `SMOOTH_DEVEX_DECISIONS_MODEL` | `openjev` | Model name sent with the request |
+| `SMOOTH_DEVEX_DECISIONS_MODEL` | `d3:4b` | Model name sent with the request |
 | `SMOOTH_DEVEX_DECISIONS_MAX_ATTEMPTS` | `3` | Attempts on transport or invalid-response failure |
 | `SMOOTH_DEVEX_DECISIONS_TIMEOUT` | `60` | Per-request timeout in seconds |
 | `SMOOTH_DEVEX_DECISIONS_API_KEY` | _(unset)_ | Optional bearer token, read from the environment only; must be a single line |

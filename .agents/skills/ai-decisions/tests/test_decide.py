@@ -18,7 +18,8 @@ from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 SCRIPT = SKILL_DIR / "scripts" / "decide.sh"
-MODEL = "d3:4b"
+MODEL = "stub-model"
+DEFAULT_MODEL = "d3:4b"
 API_KEY = "test-key-not-a-real-credential"
 # Port 1 is privileged: nothing listens for a normal user, so the connection is refused
 # deterministically instead of racing on a released stub port.
@@ -132,16 +133,19 @@ class DecideContract(unittest.TestCase):
         self.servers.append(server)
         return server
 
-    def environment(self, server=None, enabled="true", api_key=None, max_attempts="2"):
+    def environment(self, server=None, enabled="true", api_key=None, max_attempts="2", model=MODEL):
         environment = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": os.environ.get("HOME", str(self.directory)),
             "SMOOTH_DEVEX_DECISIONS_ENABLED": enabled,
             "SMOOTH_DEVEX_DECISIONS_BASE_URL": server.url if server is not None else UNREACHABLE_BASE_URL,
-            "SMOOTH_DEVEX_DECISIONS_MODEL": MODEL,
             "SMOOTH_DEVEX_DECISIONS_MAX_ATTEMPTS": max_attempts,
             "SMOOTH_DEVEX_DECISIONS_TIMEOUT": "5",
         }
+        if model is None:
+            environment.pop("SMOOTH_DEVEX_DECISIONS_MODEL", None)
+        else:
+            environment["SMOOTH_DEVEX_DECISIONS_MODEL"] = model
         environment.pop("SMOOTH_DEVEX_DECISIONS_API_KEY", None)
         if api_key is not None:
             environment["SMOOTH_DEVEX_DECISIONS_API_KEY"] = api_key
@@ -191,6 +195,25 @@ class RequestContract(DecideContract):
         self.assertEqual(process.returncode, 0, process.stderr)
         self.assertEqual(len(requests), 1)
         self.assertEqual(requests[0]["json"]["questions"], QUESTIONS)
+
+    def test_default_model_is_used_when_the_variable_is_unset(self):
+        process, requests = self.run_decide(
+            [valid_response()], input_text=json.dumps(payload()), model=None
+        )
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(requests[0]["json"]["model"], DEFAULT_MODEL)
+        self.assertFalse(self.document(process.stdout)["fallback"])
+
+    def test_empty_model_value_uses_the_default(self):
+        process, requests = self.run_decide(
+            [valid_response()], input_text=json.dumps(payload()), model=""
+        )
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(requests[0]["json"]["model"], DEFAULT_MODEL)
+
+    def test_explicit_model_still_overrides_the_default(self):
+        process, requests = self.run_decide([valid_response()], input_text=json.dumps(payload()))
+        self.assertEqual(requests[0]["json"]["model"], MODEL)
 
     def test_bearer_header_is_sent_only_when_the_key_is_set(self):
         process, requests = self.run_decide(
