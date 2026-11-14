@@ -85,6 +85,7 @@ $script:OwnedList = @(
     'agile-github-breakdown'
     'agile-github-task-from-diff'
     'ai-asset-sync'
+    'ai-decisions'
     'ai-execute-pipeline'
     'ai-ralph-loop'
     'ai-template-sync'
@@ -248,6 +249,8 @@ function Write-DecisionsEnv {
 `$env:SMOOTH_DEVEX_DECISIONS_MIN_PROBABILITY = '0.60'
 `$env:SMOOTH_DEVEX_DECISIONS_MAX_ATTEMPTS = '3'
 `$env:SMOOTH_DEVEX_DECISIONS_TIMEOUT = '60'
+# Optional bearer token for the decision endpoint; leave unset for an unauthenticated endpoint.
+# `$env:SMOOTH_DEVEX_DECISIONS_API_KEY = ''
 "@
     # Snapshot the shell profile before appending to it — it is operator-owned.
     $backup = Backup-Inplace -Path $profilePath
@@ -424,6 +427,15 @@ function Assert-SharedRoot {
         [System.IO.FileInfo]::new($resolved).LinkTarget) {
         Fail "shared payload root cannot be materialized inside the clone: $Source"
     }
+}
+
+# Owned skills that consume the shared decision core, and where the installer places it inside each
+# copied skill. The core is single-sourced under .agents/_smooth-devex-shared/decisions/ and copied
+# beside each consumer's script, so every installed skill stays self-contained: it resolves the core
+# relative to its own script directory, in a repo install or a global one.
+$script:DecisionsCoreConsumers = @{
+    'ai-decisions'  = 'decisions/lib'
+    'ai-ralph-loop' = 'decisions/lib'
 }
 
 $script:WetStack = @()
@@ -604,6 +616,24 @@ function Ensure-CanonicalLink {
     Write-Info "Linked $link -> $target"
 }
 
+function Ship-DecisionsCore {
+    # Copy the shared decision core into a consumer's copied skill. Skills are installed
+    # independently, so a consumer cannot reach .agents/_smooth-devex-shared/ at runtime; each
+    # consuming skill gets the core beside its own script (see $script:DecisionsCoreConsumers).
+    param([string] $SkillsRoot, [string] $Name)
+    if (-not $script:DecisionsCoreConsumers.ContainsKey($Name)) { return }
+    $destination = $script:DecisionsCoreConsumers[$Name]
+    $source = Join-Path $script:TempRepo '.agents/_smooth-devex-shared/decisions/decisions_core.py'
+    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+        Write-Info "WARNING: shared decision core missing in source - $Name cannot resolve it"
+        return
+    }
+    $target = Join-Path (Join-Path $SkillsRoot $Name) $destination
+    New-Item -ItemType Directory -Path $target -Force | Out-Null
+    Copy-Wet -Source $source -Dest (Join-Path $target 'decisions_core.py')
+    Write-Info "Shipped shared decision core into $Name"
+}
+
 function Update-InstalledSkills {
     param(
         [string] $SkillsRoot,
@@ -641,6 +671,7 @@ function Update-InstalledSkills {
             Copy-Wet -Source $source -Dest $dest
             Remove-Tests -Root $dest
             Remove-SkillContext -Path $dest
+            Ship-DecisionsCore -SkillsRoot $SkillsRoot -Name $name
             Write-Info "Updated $name"
         } else {
             Write-Info "WARNING: $name not found in repo - left on disk untouched"
@@ -1349,6 +1380,7 @@ function Install-GlobalSkills {
             Copy-Wet -Source $source -Dest $dest
             Remove-Tests -Root $dest
             Remove-SkillContext -Path $dest
+            Ship-DecisionsCore -SkillsRoot (Join-Path $script:GlbRoot 'skills') -Name $name
             Write-Info "Stored global skill $name"
         } else {
             Write-Info "WARNING: skill $name not found in repo - not stored"
