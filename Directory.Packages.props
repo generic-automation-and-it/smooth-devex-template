@@ -11,25 +11,25 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.8" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="10.5.0" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.7" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.7" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.7" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.14" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.1.0" />
-    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.7" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
-    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.14" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.5.0" />
     <PackageVersion Include="Microsoft.FeatureManagement" Version="4.4.0" />
   </ItemGroup>
   <!-- App packages — opinionated stack (declared centrally; reference per project as features are built) -->
   <ItemGroup>
     <PackageVersion Include="Anthropic.SDK" Version="5.10.0" />
-    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.3.0" />
-    <PackageVersion Include="Aspire.Hosting.Redis" Version="13.3.0" />
-    <PackageVersion Include="Aspire.Hosting.Seq" Version="13.3.0" />
-    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.3.0" />
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.6.5" />
+    <PackageVersion Include="Aspire.Hosting.Redis" Version="13.6.5" />
+    <PackageVersion Include="Aspire.Hosting.Seq" Version="13.6.5" />
+    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.6.5" />
     <PackageVersion Include="Cronos" Version="0.13.0" />
     <PackageVersion Include="FlexLabs.EntityFrameworkCore.Upsert" Version="10.0.0" />
     <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.0" />
