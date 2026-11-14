@@ -253,6 +253,31 @@ accepted:
       Documented, explicit opt-in shell-profile configuration for the local decision
       client. The enable and disable procedures are visible to the operator; the
       skill does not silently establish persistence. Existing pattern confirmed by scan.
+  # --- ai-decisions: env-only API key and the loopback-stub contract tests (#170) ---
+  - id: E2
+    file: ai-decisions/scripts/decide.sh
+    reason: >-
+      "Env Variable Harvesting" on the embedded Python reading SMOOTH_DEVEX_DECISIONS_API_KEY via
+      os.environ.get. Reading the key from the runtime environment and sending it as an Authorization
+      header is the skill's entire purpose and the required pattern in
+      skill-secret-handling.instructions.md; the value never reaches argv, the URL or the audit file.
+  - id: OH1
+    file: ai-decisions/tests/test_decide.py
+    reason: >-
+      "Unvalidated Output Injection" on subprocess.run calls that drive the production Bash entrypoint.
+      Arguments are a list (shell=False) and payloads go through stdin; the environment is a filtered
+      copy of the test process's own. Running the real CLI is the test's entire purpose.
+  - id: AST4
+    file: ai-decisions/tests/test_decide.py
+    reason: >-
+      "subprocess module call" on the same bounded loopback-stub harness: it launches decide.sh to assert
+      request, bearer-header and fallback contracts. The only network is 127.0.0.1 and the key is a fake.
+  - id: TT2
+    file: ai-decisions/tests/test_decide.py
+    reason: >-
+      "Tainted flow" from the test environment into subprocess.run. The flow is the harness passing a
+      filtered environment (PATH, HOME and decision env vars, one a fake key) to the CLI under test;
+      nothing is printed, persisted or forwarded outside the test's own loopback stub.
   # --- ai-execute-pipeline: gh/git plumbing scripts and their script-test harness ---
   - id: TM1
     file: ai-execute-pipeline/scripts/branch.sh

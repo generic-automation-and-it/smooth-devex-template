@@ -49,8 +49,8 @@ directories are created only for the categories that run. A rules-only or hooks-
 In this repository `.claude` and `.codex` are symlinks to `.agents`, so all paths resolve to the
 same tree and the first match is the real one.
 
-**2. Reconcile the manifest — for the owned skills only.** The installer manages exactly sixteen skills:
-`agile-github-breakdown`, `agile-github-task-from-diff`, `ai-asset-sync`, `ai-execute-pipeline`, `ai-ralph-loop`, `ai-template-sync`,
+**2. Reconcile the manifest — for the owned skills only.** The installer manages exactly seventeen skills:
+`agile-github-breakdown`, `agile-github-task-from-diff`, `ai-asset-sync`, `ai-decisions`, `ai-execute-pipeline`, `ai-ralph-loop`, `ai-template-sync`,
 `ai-terse`, `context-load-agents-context`, `context-load-context`, `create-hld`, `create-worktask`,
 `git-commit`, `git-commit-push`, `git-commit-push-pr`, `git-sync`, `manage-rule-system`.
 The catalogue is the **owned union** of what the clone source offers and what is already on disk.
@@ -95,6 +95,7 @@ match byte-for-byte (the harness holds them to each other).
 | `agile-github-breakdown` | Turns a braindump or Feature into GitHub Feature + Task issues; generally useful across consumer projects |
 | `agile-github-task-from-diff` | Creates a GitHub Task from the branch diff; generally useful across consumer projects |
 | `ai-asset-sync` | Syncs AI assets across projects; core template mechanism |
+| `ai-decisions` | Harness-agnostic call to the local decision model; consumes the shared decision core with `ai-ralph-loop` |
 | `ai-execute-pipeline` | Zero-touch delivery of one worktask, or a plan's folder of worktasks in sequence — ticket, branch, draft PR, implement, Ralph loop, ready, review fixes; optional `gh stack` layering |
 | `ai-template-sync` | Syncs this template into consumer repos; literal purpose of the template |
 | `ai-ralph-loop` | Review → fix → verify loop over a branch diff, or over a plan with `--plan`; generally useful across consumer projects |
@@ -172,8 +173,9 @@ switches).
 
 **6. Refresh `_smooth-devex-shared`** (when the source ships one, and the skills category runs). That folder holds cross-cutting,
 repo-owned payload — currently `setup/scripts/` (the agent setup scripts every tool selection
-needs) and `templates/` (the `AGENTS.md` scaffolding and worktask templates several skills
-reference) — plus the installer's own `installation.json`. It is not a skill and never appears in the
+needs), `templates/` (the `AGENTS.md` scaffolding and worktask templates several skills reference) and
+`decisions/` (the shared decision core, also copied into each consuming skill's `decisions/lib/`) —
+plus the installer's own `installation.json`. It is not a skill and never appears in the
 manifest, but any installed skill that calls a shared script is broken without it — so it refreshes
 on every run, whatever the flags say. Its contents are reconciled rather than merged: an entry the
 source no longer has is removed, except `installation.json` itself, which is this script's own state.
@@ -397,7 +399,7 @@ back the folder up first.
 
 The installer ships `.agents/skills/` (owned set only), the owned `.github/instructions/` rule
 tree (into `<agent-root>/rules/`), the owned `.agents/hooks/` subset, plus the cross-cutting, repo-owned
-`.agents/_smooth-devex-shared/` payload (currently `setup/scripts/` + `templates/`). It does **not**
+`.agents/_smooth-devex-shared/` payload (currently `setup/scripts/` + `templates/` + `decisions/`). It does **not**
 carry anything else: local skills and unowned hooks stay in this repo.
 
 A consumer that runs the one-liner into an empty repo gets the owned skills, rules, and hooks plus

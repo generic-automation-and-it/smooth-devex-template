@@ -24,7 +24,8 @@
 # Repo-specific notes (smooth-devex-template, where this lives):
 #   - The shared folder is `_smooth-devex-shared` (per-repo, never `_mimisbrunnr-shared`).
 #   - The source tree ships `.agents/_smooth-devex-shared/` (cross-cutting, repo-owned payload:
-#     currently setup/scripts), so the refresh, symlink, and sweep cases run against the real thing.
+#     setup scripts, templates and the shared decision core), so the refresh, symlink and sweep cases
+#     run against the real thing.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -109,6 +110,20 @@ if [ "$bash_hooks" = "$ps1_hooks" ] && [ -n "$bash_hooks" ]; then
 else
   no "cross-port: bash OWNED_HOOKS and ps1 \$script:OwnedHooks agree" \
     "bash='$(printf '%s\n' "$bash_hooks" | paste -sd ',' -)' ps1='$(printf '%s\n' "$ps1_hooks" | paste -sd ',' -)'"
+fi
+
+# Same static parity gate for the shared-core fan-out map. A divergent consumer list would ship the
+# core into a skill in one port and not the other, which no runtime case would catch on this gate.
+bash_consumers="$(awk '/^DECISIONS_CORE_CONSUMERS=\($/,/^\)$/' "$installer_sh" \
+  | grep -oE "^[[:space:]]+[a-z0-9-]+:[a-z0-9./-]+" | tr -d ' ' | sort)"
+ps1_consumers="$(awk '/\$script:DecisionsCoreConsumers = @\{$/,/^\}$/' "$installer_ps1" \
+  | sed -E "s/^[[:space:]]*'([a-z0-9-]+)'[[:space:]]*=[[:space:]]*'([a-z0-9./-]+)'[[:space:]]*\$/\1:\2/" \
+  | grep -E '^[a-z0-9-]+:[a-z0-9./-]+$' | sort)"
+if [ "$bash_consumers" = "$ps1_consumers" ] && [ -n "$bash_consumers" ]; then
+  ok "cross-port: shared decision core consumers agree ($(printf '%s\n' "$bash_consumers" | paste -sd ',' -))"
+else
+  no "cross-port: shared decision core consumers agree" \
+    "bash='$(printf '%s\n' "$bash_consumers" | paste -sd ',' -)' ps1='$(printf '%s\n' "$ps1_consumers" | paste -sd ',' -)'"
 fi
 
 # A fresh scratch agent root carrying $2 named skills, one SKILL.md each. Echoes the agent root;
@@ -867,6 +882,9 @@ for s in $bash_owned; do
   [ -L "$ghome/.codex/skills/$s" ] || gok=0
   [ "$(readlink "$ghome/.codex/skills/$s")" = "$groot/skills/$s" ] || gok=0
 done
+# The shared decision core fans out into every consuming skill stored globally.
+[ -f "$groot/skills/ai-decisions/decisions/lib/decisions_core.py" ] || gok=0
+[ -f "$groot/skills/ai-ralph-loop/decisions/lib/decisions_core.py" ] || gok=0
 [ -f "$ghome/.codex/skills/.system/cfg.md" ] || gok=0
 [ -L "$ghome/.codex/skills/.system" ] && gok=0
 for r in code-review-standards.instructions.md git/git-policy.instructions.md \
@@ -1877,6 +1895,76 @@ if [ "$gok" = "1" ]; then
   ok "codex AGENTS.md created by the installer: removed outright by codex:false and by --uninstall (even after a re-run), recreated by true"
 else
   no "codex AGENTS.md created by the installer: removed outright by codex:false and by --uninstall (even after a re-run), recreated by true" "agents=$([ -e "$agents" ] && tr '\n' '|' <"$agents" | cut -c1-160 || echo absent)"
+fi
+
+
+# ---------------------------------------------------------------------------------------------
+# 11. shared decision core: ai-decisions is owned and every consumer resolves its copied core
+# ---------------------------------------------------------------------------------------------
+
+# 11a. A per-repo install with -d ships ai-decisions, copies the shared core beside each consuming
+# script (byte-for-byte), prunes the skill's repo-only tests, and documents the optional API key in
+# the shell profile. The installed decide.sh then runs against a dead endpoint: exit 0 with a
+# fallback line proves it resolved its own copied core, not the checkout's.
+dhome="$scratch/decisions-home"
+mkdir -p "$dhome"
+root="$(make_root "decisions" alpha)"
+dprofile=""
+case "$(uname -s)" in
+  Darwin) dprofile="$dhome/.zshrc" ;;
+  *)      dprofile="$dhome/.bashrc" ;;
+esac
+if HOME="$dhome" SKILLS_ROOT="$root/skills" SKILLS_REPO="$source_repo" SKILLS_BRANCH="$source_branch" \
+  SKILLS_TEST_OWNED_EXTRA="alpha" bash "$installer_sh" -d >"$scratch/out" 2>"$scratch/err"; then
+  gok=1
+  [ -f "$root/skills/ai-decisions/SKILL.md" ] || gok=0
+  [ -x "$root/skills/ai-decisions/scripts/decide.sh" ] || gok=0
+  [ -f "$root/skills/ai-decisions/decisions/lib/decisions_core.py" ] || gok=0
+  [ -f "$root/skills/ai-ralph-loop/decisions/lib/decisions_core.py" ] || gok=0
+  cmp -s "$source_repo/.agents/_smooth-devex-shared/decisions/decisions_core.py" \
+    "$root/skills/ai-decisions/decisions/lib/decisions_core.py" || gok=0
+  cmp -s "$source_repo/.agents/_smooth-devex-shared/decisions/decisions_core.py" \
+    "$root/skills/ai-ralph-loop/decisions/lib/decisions_core.py" || gok=0
+  [ -e "$root/skills/ai-decisions/tests" ] && gok=0
+  grep -q "SMOOTH_DEVEX_DECISIONS_ENABLED=true" "$dprofile" || gok=0
+  grep -q "SMOOTH_DEVEX_DECISIONS_API_KEY" "$dprofile" || gok=0
+  fallback_line="$(printf '%s' '{"state": "decide", "questions": {"q": {"type": "choice", "instructions": "pick", "criteria": {"a": "x", "b": "y"}}}}' \
+    | SMOOTH_DEVEX_DECISIONS_ENABLED=true SMOOTH_DEVEX_DECISIONS_BASE_URL="http://127.0.0.1:1" \
+      SMOOTH_DEVEX_DECISIONS_MAX_ATTEMPTS=1 SMOOTH_DEVEX_DECISIONS_TIMEOUT=1 \
+      bash "$root/skills/ai-decisions/scripts/decide.sh" 2>/dev/null || true)"
+  printf '%s' "$fallback_line" | grep -q '"fallback": true' || gok=0
+  if [ "$gok" = "1" ]; then
+    ok "per-repo -d: ai-decisions owned, shared core copied into each consumer, tests pruned, API key documented, installed decide.sh resolves its copied core"
+  else
+    no "per-repo -d: ai-decisions owned, shared core copied into each consumer, tests pruned, API key documented, installed decide.sh resolves its copied core" "$(tail -n 5 "$scratch/err")"
+  fi
+else
+  no "per-repo -d install ships ai-decisions" "$(tail -n 5 "$scratch/err")"
+fi
+
+# 11b. A linked decisions/ directory inside a source skill is refused, never followed: the fan-out must
+# not write the shared core through a retained link into that link's external target.
+guard_src="$scratch/guard-source"
+outside="$scratch/guard-outside"
+mkdir -p "$guard_src/.agents/skills" "$guard_src/.agents/_smooth-devex-shared" "$outside"
+cp -a "$source_repo/.agents/_smooth-devex-shared/." "$guard_src/.agents/_smooth-devex-shared/"
+cp -a "$source_repo/.agents/skills/ai-decisions" "$guard_src/.agents/skills/"
+cp -a "$source_repo/.agents/skills/ai-ralph-loop" "$guard_src/.agents/skills/"
+ln -s "$outside" "$guard_src/.agents/skills/ai-decisions/decisions"
+(cd "$guard_src" && git init -q -b main && git add -A \
+  && git -c user.email=harness@example.com -c user.name=harness commit -q -m fixture)
+root="$(make_root "linked-guard" alpha)"
+st=0
+SKILLS_ROOT="$root/skills" SKILLS_REPO="$guard_src" SKILLS_BRANCH="main" \
+  SKILLS_TEST_OWNED_EXTRA="alpha" bash "$installer_sh" -s >"$scratch/out" 2>"$scratch/err" || st=$?
+if [ "$st" -ne 0 ] \
+  && grep -q "through a link" "$scratch/err" \
+  && [ ! -e "$outside/decisions_core.py" ] \
+  && [ ! -e "$outside/lib" ]; then
+  ok "linked decisions/ destination: install refuses it and writes nothing outside the skills root"
+else
+  no "linked decisions/ destination: install refuses it and writes nothing outside the skills root" \
+    "exit=$st $(tail -n 2 "$scratch/err")"
 fi
 
 # ---------------------------------------------------------------------------------------------

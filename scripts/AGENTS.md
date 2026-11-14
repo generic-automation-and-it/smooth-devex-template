@@ -67,8 +67,8 @@ Installer tests must pin every agent-home override, including `CLAUDE_HOME`: cha
 does not sandbox a run when the invoking shell supplies a different tool configuration directory.
 
 A small hardcoded **owned set** (`OWNED_LIST` in `install-skills.sh`, `$script:OwnedList` in
-`install-skills.ps1`) scopes the installer to sixteen skills: `agile-github-breakdown`,
-`agile-github-task-from-diff`, `ai-asset-sync`, `ai-execute-pipeline`, `ai-ralph-loop`, `ai-template-sync`, `ai-terse`,
+`install-skills.ps1`) scopes the installer to seventeen skills: `agile-github-breakdown`,
+`agile-github-task-from-diff`, `ai-asset-sync`, `ai-decisions`, `ai-execute-pipeline`, `ai-ralph-loop`, `ai-template-sync`, `ai-terse`,
 `context-load-agents-context`, `context-load-context`, `create-hld`, `create-worktask`, `git-commit`,
 `git-commit-push`, `git-commit-push-pr`, `git-sync`, `manage-rule-system`. Everything
 else in `.agents/skills/` is treated as local and never enters a consumer's manifest, even when a
@@ -143,8 +143,10 @@ Two known gaps:
 - **PowerShell runtime coverage is limited to the payload suite.** Run it explicitly with
   `python3 scripts/test-installer-payload.py --port all`; CI's wider installer harness remains Bash-only.
 - **The `_smooth-devex-shared/` payload is scoped, not comprehensive.** Only cross-cutting,
-  repo-owned items live there (`setup/scripts/`, `templates/`). Skills, rules, and hooks are
-  separate categories; adding a shared dependency does not add it to a global skill install.
+  repo-owned items live there (`setup/scripts/`, `templates/`, `decisions/`). The decision core is the
+  one shared dependency that does reach a skill: `DECISIONS_CORE_CONSUMERS` copies it into each
+  consuming skill's `decisions/lib/`, because installed skills are otherwise self-contained. Skills,
+  rules and hooks remain separate categories.
 
 ## Changelog
 
@@ -179,3 +181,4 @@ Two known gaps:
 | 2026-10-21 | Reapplied #111/#113 payload contract; pwsh 7.2 floor; root-link guards/shared-root preflight; canonical links follow pruned payload; tests pin agent-home overrides | #110, #112, #130 |
 | 2026-10-24 | Codex: migrate legacy commit/push prompts; preserve leading force-push restriction and operator-owned files | — |
 | 2026-10-26 | `ai-execute-pipeline` added to the owned set (sixteen skills) | — |
+| 2026-11-14 | Shared payload gains `decisions/`; core ships into consuming skills | #170 |

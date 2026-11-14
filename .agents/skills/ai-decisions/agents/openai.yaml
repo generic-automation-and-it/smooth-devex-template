@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI Decisions"
+  short_description: "Ask the local decision model to weigh options, rate a change or give a second opinion"
+  default_prompt: "Decide this with the local decision model: author a state and choice/score questions, run scripts/decide.sh, and report the validated answers (or the fallback) without treating them as a verdict over evidence."

@@ -89,6 +89,16 @@ and records `Decision = n/a`.
    fallback line.
 6. A valid response is scored, one pipe-delimited line is printed, and a JSON audit is written.
 
+### Shared core
+
+Steps 3–5 are the shared decision core,
+`.agents/_smooth-devex-shared/decisions/decisions_core.py`, consumed by `ai-decisions` too. The
+installer copies it into each consuming skill's `decisions/lib/` so an installed skill is
+self-contained; running inside this repository, `decision-evaluate.sh` falls back to the shared source.
+Fixing request/validation/retry/audit behaviour means editing the core, never an installed copy. The
+core's optional bearer header (`SMOOTH_DEVEX_DECISIONS_API_KEY`) is not used by this layer: the ralph
+endpoint is unauthenticated and no key is passed.
+
 ### Question contract
 
 Both templates ask a category-aware `change_assessment` plus their mode's existing questions.
@@ -208,7 +218,7 @@ directory. They never include environment dumps or authentication headers.
 |-----------|------|--------|--------------|
 | Disabled | 0 | disabled line | Never calls the script |
 | Missing/invalid argument or unreadable input file | 1 | nothing | Records `Decision = n/a`, continues |
-| Base URL embeds credentials | 1 | nothing | Records `n/a`, continues; use an unauthenticated endpoint |
+| Base URL invalid or embeds credentials | 1 | nothing | Records `n/a`, continues; use a plain http(s) URL without credentials |
 | Template missing, malformed or obsolete | 0 | fallback line + stderr | Records `n/a`, continues |
 | Transport failure, HTTP 4xx/5xx, or invalid response after all attempts | 0 | one fallback line + stderr | Records `n/a` (`fallback=true`), continues; HTTP status/body retained in the audit |
 | Valid answer that rejects the fix | 0 | verdict line | Records `reject`; the fix is **not** undone |

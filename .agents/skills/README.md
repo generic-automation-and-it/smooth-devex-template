@@ -16,6 +16,7 @@ Skills live **flat**, one directory per skill directly under `.agents/skills/`. 
 | **ai-terse** | Reformat this turn's reply into terse, high-density output with a TL;DR | `/ai-terse` |
 | **ai-template-sync** | UPSERT smooth-devex-template scaffold into an existing repo | `/ai-template-sync` |
 | **ai-asset-sync** | Dependabot-style OpenCode sync of skills/rules from `owner/repo@ref:path` | `/ai-asset-sync` |
+| **ai-decisions** | Ask the local decision model to weigh, rate, choose or give a second opinion over caller-authored `choice`/`score` questions | `/ai-decisions` |
 | **ai-understanding** | Export session knowledge as Understandings; import, publish, consume | `/ai-understanding [--export [--all]] [--import] [--publish [--portable-only]] [--consume <src>] [--path <target>] [--promote <slug>] [--index] [--review]` |
 | **context-load-agents-context** | Load ancestor AGENTS.md context for a file | `/context-load-agents-context` |
 | **context-load-context** | Load domain context before implementation | `/context-load-context auth` |
@@ -153,6 +154,7 @@ A harness that honours skill `effort` applies it on invocation; a harness with a
 | **ai-template-sync** | medium | `sync.sh` does the copy/compare; the agent only picks flags, runs the rules-layout pre-flight and builds the conflict table |
 | **ai-brain-dump** | medium | Listen-first capture — `high` would be re-paid on every turn of a long session. Deep reasoning happens downstream, in the skills its output feeds (`ai-understanding`, `agile-github-breakdown`, `create-hld`, `create-worktask`) |
 | **ai-asset-sync** | high | AI-merge of local vs upstream skills/rules + chore PR |
+| **ai-decisions** | medium | Authors the state/questions contract and reads back validated answers; plumbing is script-driven |
 | **ai-execute-pipeline** | high | Implements a worktask, then triages Ralph and AI-review findings; plumbing is script-driven |
 | **ai-ralph-loop** | high | Each loop triages reviewer findings against code and context, then fixes and verifies — judgment repeated up to the loop cap |
 | **ai-understanding** | high | Judging what qualifies as transferable knowledge + merge/promotion decisions |
@@ -199,7 +201,7 @@ Skills are flat under `.agents/skills/`; the category lives in the folder-name p
 | Prefix | Skills |
 |--------|--------|
 | `agile-` | `agile-github-breakdown`, `agile-github-task-from-diff` |
-| `ai-` | `ai-brain-dump`, `ai-execute-pipeline`, `ai-ralph-loop`, `ai-terse`, `ai-template-sync`, `ai-asset-sync`, `ai-understanding` |
+| `ai-` | `ai-brain-dump`, `ai-decisions`, `ai-execute-pipeline`, `ai-ralph-loop`, `ai-terse`, `ai-template-sync`, `ai-asset-sync`, `ai-understanding` |
 | `context-` | `context-load-agents-context`, `context-load-context` |
 | `git-` | `git-commit`, `git-commit-push`, `git-commit-push-pr`, `git-sync` |
 | _(none)_ | `create-hld`, `create-worktask`, `manage-rule-system` |

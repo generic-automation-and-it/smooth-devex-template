@@ -33,6 +33,10 @@
 #
 # --evidence and --audit-file are required whenever decisions are enabled. Enabled callers written
 # before issue #138 must add both; a missing flag is a usage error, never a fabricated verdict.
+#
+# The HTTP request, response validation, retry and audit-writing work lives in the shared decision
+# core (.agents/_smooth-devex-shared/decisions/decisions_core.py); this script owns template
+# rendering, category wording, mode selection and ralph scoring.
 
 set -euo pipefail
 
@@ -159,21 +163,27 @@ TIMEOUT="${SMOOTH_DEVEX_DECISIONS_TIMEOUT:-60}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE_FILE="${SMOOTH_DEVEX_DECISIONS_TEMPLATE:-$SCRIPT_DIR/../templates/build.json}"
 
+CORE_MODULE="$SCRIPT_DIR/../lib/decisions_core.py"
+if [ ! -f "$CORE_MODULE" ]; then
+  CORE_MODULE="$SCRIPT_DIR/../../../../_smooth-devex-shared/decisions/decisions_core.py"
+fi
+if [ ! -f "$CORE_MODULE" ]; then
+  echo "decision-evaluate: shared decision core not found beside the installed skill or in .agents/_smooth-devex-shared/decisions/; re-run the skills installer" >&2
+  echo "value=fallback|pct=0|keep=false|confidence=0|fallback=true|audit=failed"
+  exit 0
+fi
+
 URL="${BASE_URL}${API_PATH}"
 
-python3 - "$TEMPLATE_FILE" "$BEFORE_CODE" "$AFTER_CODE" "$EVIDENCE_TEXT" "$CONTEXT_STR" "$CATEGORY" "$URL" "$MODEL" "$MAX_ATTEMPTS" "$TIMEOUT" "$MIN_PROB" "$AUDIT_FILE" <<'PYEOF'
+python3 - "$CORE_MODULE" "$TEMPLATE_FILE" "$BEFORE_CODE" "$AFTER_CODE" "$EVIDENCE_TEXT" "$CONTEXT_STR" "$CATEGORY" "$URL" "$MODEL" "$MAX_ATTEMPTS" "$TIMEOUT" "$MIN_PROB" "$AUDIT_FILE" <<'PYEOF'
 import hashlib
+import importlib.util
 import json
-import math
-import os
 import re
 import sys
-import tempfile
-import urllib.error
-import urllib.parse
-import urllib.request
 
 (
+    core_path,
     template_file,
     before_code,
     after_code,
@@ -186,7 +196,7 @@ import urllib.request
     timeout_raw,
     min_prob_raw,
     audit_file,
-) = sys.argv[1:13]
+) = sys.argv[1:14]
 
 max_attempts = int(max_attempts_raw)
 timeout = int(timeout_raw)
@@ -198,10 +208,10 @@ MODE_REQUIRED_QUESTIONS = {
 }
 REQUIRED_COVERAGE = {"directly_required", "implicitly_needed"}
 CHANGE_OUTCOMES = {"success", "unresolved", "regression", "insufficient_evidence"}
-PROBABILITY_TOTAL_TOLERANCE = 1e-6
 
 mode = None
 template_sha = None
+core = None
 
 
 class TemplateError(Exception):
@@ -212,12 +222,13 @@ def stderr(message):
     print("decision-evaluate: " + message, file=sys.stderr)
 
 
-def is_number(value):
-    return (
-        isinstance(value, (int, float))
-        and not isinstance(value, bool)
-        and math.isfinite(float(value))
-    )
+def load_core(path):
+    spec = importlib.util.spec_from_file_location("decisions_core", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("shared decision core not loadable: " + path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def render(template_text, values):
@@ -231,81 +242,6 @@ def render(template_text, values):
 def first_label(criteria_entry):
     label = re.split(r"\s+[—-]\s+", criteria_entry, maxsplit=1)[0].strip()
     return re.sub(r"\s+", "_", label).lower()
-
-
-def validate_answer(answer, question):
-    if not isinstance(answer, dict):
-        return None
-
-    question_type = question["type"]
-    if answer.get("type") != question_type:
-        return None
-
-    confidence = answer.get("confidence")
-    if not is_number(confidence) or not 0.0 <= float(confidence) <= 1.0:
-        return None
-
-    probabilities = answer.get("probabilities")
-    if not isinstance(probabilities, dict):
-        return None
-
-    for value in probabilities.values():
-        if not is_number(value) or not 0.0 <= float(value) <= 1.0:
-            return None
-    total = sum(float(value) for value in probabilities.values())
-    if abs(total - 1.0) > PROBABILITY_TOTAL_TOLERANCE:
-        return None
-
-    if question_type == "choice":
-        criteria_keys = list(question["criteria"].keys())
-        if set(probabilities.keys()) != set(criteria_keys):
-            return None
-        if answer.get("choice") not in criteria_keys:
-            return None
-    else:
-        criteria_keys = [str(index) for index in range(len(question["criteria"]))]
-        if set(probabilities.keys()) != set(criteria_keys):
-            return None
-        score = answer.get("score")
-        if not is_number(score):
-            return None
-        if not 0.0 <= float(score) <= len(criteria_keys) - 1:
-            return None
-
-    return answer
-
-
-def validate_response(response_text, questions):
-    try:
-        result = json.loads(response_text)
-    except Exception:
-        return None, "response is not valid JSON"
-
-    if not isinstance(result, dict):
-        return None, "response is not a JSON object"
-
-    answers = result.get("answers")
-    if not isinstance(answers, dict):
-        return None, "response has no answers object"
-
-    expected = set(questions.keys())
-    actual = set(answers.keys())
-    if actual != expected:
-        missing = ", ".join(sorted(expected - actual)) or "none"
-        unexpected = ", ".join(sorted(actual - expected)) or "none"
-        return None, "answer set does not match requested questions (missing: %s; unexpected: %s)" % (
-            missing,
-            unexpected,
-        )
-
-    validated = {}
-    for name, question in questions.items():
-        answer = validate_answer(answers.get(name), question)
-        if answer is None:
-            return None, "answer %r failed %s validation" % (name, question["type"])
-        validated[name] = answer
-
-    return validated, ""
 
 
 def compute_result(answers, questions):
@@ -406,52 +342,6 @@ def fallback_result(reason):
     }
 
 
-def write_audit(document):
-    if not audit_file:
-        return "failed"
-    try:
-        directory = os.path.dirname(os.path.abspath(audit_file))
-        os.makedirs(directory, exist_ok=True)
-    except Exception as error:
-        stderr("audit-write failed: %s: %s" % (type(error).__name__, error))
-        return "failed"
-
-    base, extension = os.path.splitext(audit_file)
-    target = audit_file
-    suffix = 2
-    while True:
-        temporary = None
-        try:
-            if os.path.isdir(target):
-                raise OSError("audit path is a directory: %s" % target)
-            descriptor, temporary = tempfile.mkstemp(prefix=".audit-", dir=directory)
-            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-                json.dump(document, handle, indent=2, ensure_ascii=False)
-                handle.write("\n")
-            os.link(temporary, target)
-            try:
-                os.unlink(temporary)
-            except OSError:
-                pass
-            return target
-        except FileExistsError:
-            if temporary and os.path.exists(temporary):
-                try:
-                    os.unlink(temporary)
-                except OSError:
-                    pass
-            target = "%s-%d%s" % (base, suffix, extension)
-            suffix += 1
-        except Exception as error:
-            if temporary and os.path.exists(temporary):
-                try:
-                    os.unlink(temporary)
-                except OSError:
-                    pass
-            stderr("audit-write failed: %s: %s" % (type(error).__name__, error))
-            return "failed"
-
-
 def audit_document(state, questions, attempts, result):
     return {
         "schema_version": 1,
@@ -473,14 +363,14 @@ def audit_document(state, questions, attempts, result):
     }
 
 
-def emit_fallback(reason, state=None, questions=None, attempts=None):
+def emit_fallback(core, reason, state=None, questions=None, attempts=None):
     stderr("evaluation unavailable: " + reason)
     result = fallback_result(reason)
-    audit_status = write_audit(audit_document(state, questions, attempts or [], result))
+    audit_status = core.write_audit(audit_document(state, questions, attempts or [], result), audit_file)
     print(result_line(result, audit_status))
 
 
-def load_questions():
+def load_questions(core):
     global mode, template_sha
 
     try:
@@ -543,21 +433,12 @@ def load_questions():
                     "question %r has no instructions for category group %r" % (name, category_group)
                 )
             question["instructions"] = variants[category_group]
-        if not isinstance(question.get("instructions"), str) or not question["instructions"]:
-            raise TemplateError("question %r has no instructions" % name)
-
-        question_type = question.get("type")
-        criteria = question.get("criteria")
-        if question_type == "choice":
-            if not isinstance(criteria, dict) or not criteria:
-                raise TemplateError("choice question %r has no criteria object" % name)
-        elif question_type == "score":
-            if not isinstance(criteria, list) or len(criteria) < 2:
-                raise TemplateError("score question %r needs at least two criteria" % name)
-        else:
-            raise TemplateError("question %r has unsupported type %r" % (name, question_type))
-
         questions[name] = question
+
+    try:
+        core.validate_questions(questions)
+    except core.QuestionError as error:
+        raise TemplateError(str(error))
 
     if mode == "plan" and set(questions["change_assessment"]["criteria"].keys()) != CHANGE_OUTCOMES:
         raise TemplateError("change_assessment criteria must be success, unresolved, regression, insufficient_evidence")
@@ -574,69 +455,40 @@ def load_questions():
 
 
 def main():
+    global core
     try:
-        state, questions = load_questions()
-    except TemplateError as error:
-        emit_fallback("template error: %s" % error)
+        core = load_core(core_path)
+    except Exception as error:
+        print("decision-evaluate: evaluation unavailable: %s" % error, file=sys.stderr)
+        print("value=fallback|pct=0|keep=false|confidence=0|fallback=true|audit=failed")
         return
 
     try:
-        parsed_url = urllib.parse.urlsplit(url)
-    except ValueError:
-        stderr("invalid base URL; use a plain http(s) URL without credentials")
+        state, questions = load_questions(core)
+    except TemplateError as error:
+        emit_fallback(core, "template error: %s" % error)
+        return
+
+    try:
+        evaluation = core.evaluate(
+            {"state": state, "questions": questions},
+            url=url,
+            model=model,
+            max_attempts=max_attempts,
+            timeout=timeout,
+            api_key=None,
+            audit_file=None,
+        )
+    except core.UrlError as error:
+        stderr(str(error))
         sys.exit(1)
-    if parsed_url.username is not None or parsed_url.password is not None:
-        stderr("base URL must not embed credentials; use an unauthenticated local endpoint")
-        sys.exit(1)
 
-    payload = {"model": model, "state": state, "questions": questions}
-    data = json.dumps(payload).encode("utf-8")
-    attempts = []
-    validated = None
-    last_reason = "no attempt completed"
-
-    for attempt_number in range(1, max_attempts + 1):
-        attempt = {"attempt": attempt_number}
-        try:
-            request = urllib.request.Request(
-                url,
-                data=data,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            with urllib.request.urlopen(request, timeout=timeout) as response:
-                response_text = response.read().decode("utf-8")
-            answers, reason = validate_response(response_text, questions)
-            attempt["response"] = response_text
-            if answers is not None:
-                attempt["status"] = "valid"
-                attempt["answers"] = answers
-                attempts.append(attempt)
-                validated = answers
-                break
-            attempt["status"] = "invalid_response"
-            attempt["reason"] = reason
-            last_reason = reason
-        except urllib.error.HTTPError as error:
-            body = ""
-            try:
-                body = error.read().decode("utf-8", errors="replace")
-            except Exception:
-                body = ""
-            attempt["status"] = "http_error"
-            attempt["http_status"] = error.code
-            attempt["response"] = body
-            attempt["error"] = "HTTP %s: %s" % (error.code, error.reason)
-            last_reason = attempt["error"]
-        except Exception as error:
-            attempt["status"] = "transport_error"
-            attempt["error"] = "%s: %s" % (type(error).__name__, error)
-            last_reason = attempt["error"]
-        attempts.append(attempt)
-
+    attempts = evaluation["attempts"]
+    validated = evaluation["answers"]
     if validated is None:
         emit_fallback(
-            "no valid response after %d attempt(s): %s" % (len(attempts), last_reason),
+            core,
+            "no valid response after %d attempt(s): %s" % (len(attempts), evaluation["reason"]),
             state=state,
             questions=questions,
             attempts=attempts,
@@ -647,6 +499,7 @@ def main():
         result = compute_result(validated, questions)
     except Exception as error:
         emit_fallback(
+            core,
             "evaluation error: %s: %s" % (type(error).__name__, error),
             state=state,
             questions=questions,
@@ -654,12 +507,17 @@ def main():
         )
         return
 
-    audit_status = write_audit(audit_document(state, questions, attempts, result))
+    audit_status = core.write_audit(audit_document(state, questions, attempts, result), audit_file)
     print(result_line(result, audit_status))
 
 
 try:
     main()
+except SystemExit:
+    raise
 except Exception as error:
-    emit_fallback("unexpected evaluator error: %s: %s" % (type(error).__name__, error))
+    if core is None:
+        print("value=fallback|pct=0|keep=false|confidence=0|fallback=true|audit=failed")
+    else:
+        emit_fallback(core, "unexpected evaluator error: %s: %s" % (type(error).__name__, error))
 PYEOF

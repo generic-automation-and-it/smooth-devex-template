@@ -75,6 +75,7 @@ OWNED_LIST=(
   agile-github-breakdown
   agile-github-task-from-diff
   ai-asset-sync
+  ai-decisions
   ai-execute-pipeline
   ai-ralph-loop
   ai-template-sync
@@ -88,6 +89,15 @@ OWNED_LIST=(
   git-commit-push-pr
   git-sync
   manage-rule-system
+)
+
+# Owned skills that consume the shared decision core, and where the installer places it inside each
+# copied skill. The core is single-sourced under .agents/_smooth-devex-shared/decisions/ and copied
+# beside each consumer's script, so every installed skill stays self-contained: it resolves the core
+# relative to its own script directory, in a repo install or a global one.
+DECISIONS_CORE_CONSUMERS=(
+  ai-decisions:decisions/lib
+  ai-ralph-loop:decisions/lib
 )
 
 # Rules the installer is allowed to carry across, as paths relative to .github/instructions/.
@@ -227,6 +237,8 @@ export SMOOTH_DEVEX_DECISIONS_MODEL=openjev
 export SMOOTH_DEVEX_DECISIONS_MIN_PROBABILITY=0.60
 export SMOOTH_DEVEX_DECISIONS_MAX_ATTEMPTS=3
 export SMOOTH_DEVEX_DECISIONS_TIMEOUT=60
+# Optional bearer token for the decision endpoint; leave unset for an unauthenticated endpoint.
+# export SMOOTH_DEVEX_DECISIONS_API_KEY=
 ENVEOF
   log "Wrote decision env vars to $profile"
 }
@@ -535,6 +547,43 @@ prune_tests() {
   find "$1" -type f \( -name 'test_*' -o -name '*_test.*' -o -name '*.test.*' -o -name '*.Tests.ps1' \) -exec rm -f {} +
 }
 
+# assert_real_directory BASE REL — refuse a destination whose components are links or non-directories.
+# The fan-out writes below the skills root, and a retained link at any component would redirect that
+# write into its external target (scripts/AGENTS.md: retained links are never traversed).
+assert_real_directory() {
+  local walk="$1" part
+  local IFS=/
+  for part in $2; do
+    walk="$walk/$part"
+    if [ -L "$walk" ]; then
+      die "refusing to write the shared decision core through a link: $walk"
+    fi
+    if [ -e "$walk" ] && [ ! -d "$walk" ]; then
+      die "refusing to write the shared decision core through a non-directory: $walk"
+    fi
+  done
+}
+
+# ship_decisions_core SKILLS_ROOT NAME — copy the shared decision core into a consumer's copied skill.
+# Skills are installed independently, so a consumer cannot reach .agents/_smooth-devex-shared/ at
+# runtime; each consuming skill gets the core beside its own script (see DECISIONS_CORE_CONSUMERS).
+ship_decisions_core() {
+  local skills_root="$1" name="$2" entry consumer destination
+  local source="$INSTALL_TMP/repo/.agents/_smooth-devex-shared/decisions/decisions_core.py"
+  for entry in "${DECISIONS_CORE_CONSUMERS[@]}"; do
+    consumer="${entry%%:*}"
+    [ "$consumer" = "$name" ] || continue
+    destination="${entry#*:}"
+    if [ ! -f "$source" ]; then
+      die "shared decision core missing in source — $name cannot resolve it"
+    fi
+    assert_real_directory "$skills_root/$name" "$destination"
+    mkdir -p "$skills_root/$name/$destination"
+    copy_wet "$source" "$skills_root/$name/$destination/decisions_core.py"
+    log "Shipped shared decision core into $name"
+  done
+}
+
 # ---------------------------------------------------------------------------
 # 5. Update installed skills from the repo
 # ---------------------------------------------------------------------------
@@ -669,6 +718,7 @@ for s in data.get('skills', []):
         copy_wet "$INSTALL_TMP/repo/.agents/skills/$name" "$skills_root/$name"
         prune_tests "$skills_root/$name"
         strip_skill_context "$skills_root/$name"
+        ship_decisions_core "$skills_root" "$name"
         log "Updated $name"
       else
         log "WARNING: $name not found in repo — left on disk untouched"
@@ -1379,6 +1429,7 @@ for s in json.load(sys.stdin).get('skills', []):
       copy_wet "$INSTALL_TMP/repo/.agents/skills/$name" "$GLB_ROOT/skills/$name"
       prune_tests "$GLB_ROOT/skills/$name"
       strip_skill_context "$GLB_ROOT/skills/$name"
+      ship_decisions_core "$GLB_ROOT/skills" "$name"
       log "Stored global skill $name"
     else
       log "WARNING: skill $name not found in repo — not stored"
