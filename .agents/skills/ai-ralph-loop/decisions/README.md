@@ -218,7 +218,7 @@ directory. They never include environment dumps or authentication headers.
 |-----------|------|--------|--------------|
 | Disabled | 0 | disabled line | Never calls the script |
 | Missing/invalid argument or unreadable input file | 1 | nothing | Records `Decision = n/a`, continues |
-| Base URL embeds credentials | 1 | nothing | Records `n/a`, continues; use an unauthenticated endpoint |
+| Base URL invalid or embeds credentials | 1 | nothing | Records `n/a`, continues; use a plain http(s) URL without credentials |
 | Template missing, malformed or obsolete | 0 | fallback line + stderr | Records `n/a`, continues |
 | Transport failure, HTTP 4xx/5xx, or invalid response after all attempts | 0 | one fallback line + stderr | Records `n/a` (`fallback=true`), continues; HTTP status/body retained in the audit |
 | Valid answer that rejects the fix | 0 | verdict line | Records `reject`; the fix is **not** undone |

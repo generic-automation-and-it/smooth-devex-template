@@ -625,8 +625,7 @@ function Ship-DecisionsCore {
     $destination = $script:DecisionsCoreConsumers[$Name]
     $source = Join-Path $script:TempRepo '.agents/_smooth-devex-shared/decisions/decisions_core.py'
     if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
-        Write-Info "WARNING: shared decision core missing in source - $Name cannot resolve it"
-        return
+        Fail "shared decision core missing in source - $Name cannot resolve it"
     }
     $target = Join-Path (Join-Path $SkillsRoot $Name) $destination
     New-Item -ItemType Directory -Path $target -Force | Out-Null

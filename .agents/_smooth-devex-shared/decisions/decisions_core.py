@@ -266,6 +266,7 @@ def evaluate(payload, *, url, model, max_attempts, timeout, api_key=None, audit_
                 attempt["answers"] = answers
                 attempts.append(attempt)
                 validated = answers
+                last_reason = ""
                 break
             attempt["status"] = "invalid_response"
             attempt["reason"] = reason
@@ -305,6 +306,5 @@ def evaluate(payload, *, url, model, max_attempts, timeout, api_key=None, audit_
         "attempts": attempts,
         "reason": last_reason,
         "fallback": validated is None,
-        "request": body,
         "audit": audit_status,
     }

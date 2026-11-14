@@ -558,8 +558,7 @@ ship_decisions_core() {
     [ "$consumer" = "$name" ] || continue
     destination="${entry#*:}"
     if [ ! -f "$source" ]; then
-      log "WARNING: shared decision core missing in source — $name cannot resolve it"
-      return 0
+      die "shared decision core missing in source — $name cannot resolve it"
     fi
     mkdir -p "$skills_root/$name/$destination"
     copy_wet "$source" "$skills_root/$name/$destination/decisions_core.py"

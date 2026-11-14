@@ -173,8 +173,9 @@ switches).
 
 **6. Refresh `_smooth-devex-shared`** (when the source ships one, and the skills category runs). That folder holds cross-cutting,
 repo-owned payload — currently `setup/scripts/` (the agent setup scripts every tool selection
-needs) and `templates/` (the `AGENTS.md` scaffolding and worktask templates several skills
-reference) — plus the installer's own `installation.json`. It is not a skill and never appears in the
+needs), `templates/` (the `AGENTS.md` scaffolding and worktask templates several skills reference) and
+`decisions/` (the shared decision core, also copied into each consuming skill's `decisions/lib/`) —
+plus the installer's own `installation.json`. It is not a skill and never appears in the
 manifest, but any installed skill that calls a shared script is broken without it — so it refreshes
 on every run, whatever the flags say. Its contents are reconciled rather than merged: an entry the
 source no longer has is removed, except `installation.json` itself, which is this script's own state.
@@ -398,7 +399,7 @@ back the folder up first.
 
 The installer ships `.agents/skills/` (owned set only), the owned `.github/instructions/` rule
 tree (into `<agent-root>/rules/`), the owned `.agents/hooks/` subset, plus the cross-cutting, repo-owned
-`.agents/_smooth-devex-shared/` payload (currently `setup/scripts/` + `templates/`). It does **not**
+`.agents/_smooth-devex-shared/` payload (currently `setup/scripts/` + `templates/` + `decisions/`). It does **not**
 carry anything else: local skills and unowned hooks stay in this repo.
 
 A consumer that runs the one-liner into an empty repo gets the owned skills, rules, and hooks plus

@@ -181,3 +181,4 @@ Two known gaps:
 | 2026-10-21 | Reapplied #111/#113 payload contract; pwsh 7.2 floor; root-link guards/shared-root preflight; canonical links follow pruned payload; tests pin agent-home overrides | #110, #112, #130 |
 | 2026-10-24 | Codex: migrate legacy commit/push prompts; preserve leading force-push restriction and operator-owned files | — |
 | 2026-10-26 | `ai-execute-pipeline` added to the owned set (sixteen skills) | — |
+| 2026-11-14 | Shared payload gains `decisions/`; core ships into consuming skills | #170 |

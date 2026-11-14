@@ -112,6 +112,20 @@ else
     "bash='$(printf '%s\n' "$bash_hooks" | paste -sd ',' -)' ps1='$(printf '%s\n' "$ps1_hooks" | paste -sd ',' -)'"
 fi
 
+# Same static parity gate for the shared-core fan-out map. A divergent consumer list would ship the
+# core into a skill in one port and not the other, which no runtime case would catch on this gate.
+bash_consumers="$(awk '/^DECISIONS_CORE_CONSUMERS=\($/,/^\)$/' "$installer_sh" \
+  | grep -oE "^[[:space:]]+[a-z0-9-]+:[a-z0-9./-]+" | tr -d ' ' | sort)"
+ps1_consumers="$(awk '/\$script:DecisionsCoreConsumers = @\{$/,/^\}$/' "$installer_ps1" \
+  | sed -E "s/^[[:space:]]*'([a-z0-9-]+)'[[:space:]]*=[[:space:]]*'([a-z0-9./-]+)'[[:space:]]*\$/\1:\2/" \
+  | grep -E '^[a-z0-9-]+:[a-z0-9./-]+$' | sort)"
+if [ "$bash_consumers" = "$ps1_consumers" ] && [ -n "$bash_consumers" ]; then
+  ok "cross-port: shared decision core consumers agree ($(printf '%s\n' "$bash_consumers" | paste -sd ',' -))"
+else
+  no "cross-port: shared decision core consumers agree" \
+    "bash='$(printf '%s\n' "$bash_consumers" | paste -sd ',' -)' ps1='$(printf '%s\n' "$ps1_consumers" | paste -sd ',' -)'"
+fi
+
 # A fresh scratch agent root carrying $2 named skills, one SKILL.md each. Echoes the agent root;
 # the skills root under test is <agent>/skills. Manifest helpers below take this agent root.
 make_root() {

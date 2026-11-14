@@ -20,6 +20,9 @@ SKILL_DIR = Path(__file__).resolve().parents[1]
 SCRIPT = SKILL_DIR / "scripts" / "decide.sh"
 MODEL = "d3:4b"
 API_KEY = "test-key-not-a-real-credential"
+# Port 1 is privileged: nothing listens for a normal user, so the connection is refused
+# deterministically instead of racing on a released stub port.
+UNREACHABLE_BASE_URL = "http://127.0.0.1:1"
 
 QUESTIONS = {
     "keep": {
@@ -123,12 +126,12 @@ class DecideContract(unittest.TestCase):
         self.servers.append(server)
         return server
 
-    def environment(self, server, enabled="true", api_key=None, max_attempts="2"):
+    def environment(self, server=None, enabled="true", api_key=None, max_attempts="2"):
         environment = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": os.environ.get("HOME", str(self.directory)),
             "SMOOTH_DEVEX_DECISIONS_ENABLED": enabled,
-            "SMOOTH_DEVEX_DECISIONS_BASE_URL": server.url,
+            "SMOOTH_DEVEX_DECISIONS_BASE_URL": server.url if server is not None else UNREACHABLE_BASE_URL,
             "SMOOTH_DEVEX_DECISIONS_MODEL": MODEL,
             "SMOOTH_DEVEX_DECISIONS_MAX_ATTEMPTS": max_attempts,
             "SMOOTH_DEVEX_DECISIONS_TIMEOUT": "5",
@@ -220,6 +223,8 @@ class RequestContract(DecideContract):
         self.assertEqual(audit["request"]["questions"], QUESTIONS)
         self.assertEqual(audit["attempts"][0]["status"], "valid")
         self.assertEqual(set(audit["result"]["answers"]), set(QUESTIONS))
+        self.assertFalse(audit["result"]["fallback"])
+        self.assertEqual(audit["result"]["reason"], "")
 
 
 class NonBlockingContract(DecideContract):
@@ -266,15 +271,12 @@ class NonBlockingContract(DecideContract):
         self.assertEqual(document["attempts"], 2)
 
     def test_transport_failure_falls_back_without_a_traceback(self):
-        server = self.serve([])
-        server.close()
-        self.servers.remove(server)
         process = subprocess.run(
             ["bash", str(SCRIPT)],
             input=json.dumps(payload()),
             capture_output=True,
             text=True,
-            env=self.environment(server, max_attempts="2"),
+            env=self.environment(),
             timeout=30,
         )
         self.assertEqual(process.returncode, 0, process.stderr)
@@ -332,12 +334,11 @@ class UsageErrorContract(DecideContract):
         self.assertEqual(server.httpd.requests, [])
 
     def test_unknown_option_is_a_usage_error(self):
-        server = self.serve([])
         process = subprocess.run(
             ["bash", str(SCRIPT), "--nope"],
             capture_output=True,
             text=True,
-            env=self.environment(server),
+            env=self.environment(),
             timeout=30,
         )
         self.assertEqual(process.returncode, 1)

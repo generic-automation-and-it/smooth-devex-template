@@ -59,8 +59,10 @@ JSON
 `SMOOTH_DEVEX_DECISIONS_TEMPLATE` and `SMOOTH_DEVEX_DECISIONS_MIN_PROBABILITY` are not read by this
 skill: questions are authored inline, and the probability threshold is ralph-loop scoring.
 
-The installer writes the shared `SMOOTH_DEVEX_DECISIONS_*` block to your shell profile (with the API key
-line commented out — set it only if your endpoint requires auth). Re-run the installer to refresh it.
+The installer writes the shared `SMOOTH_DEVEX_DECISIONS_*` block to your shell profile the first time it
+installs, with the API key line commented out — uncomment and set it only if your endpoint requires
+auth. The block is skipped once present, so a profile from an older install keeps its existing lines:
+add the API key line there by hand.
 
 ## Output
 
