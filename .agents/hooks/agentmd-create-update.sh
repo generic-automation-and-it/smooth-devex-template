@@ -1,30 +1,13 @@
-#!/bin/bash
-# Hook: Enforce quality rules + template when creating or updating an AGENTS.md file
-# Event: UserPromptSubmit
-# Triggers: "update agent.md" / "update agents.md",
-#           "create agent.md" / "create agents.md",
-#           "create an agent.md" / "create an agents.md" (case insensitive)
-# Prints the AGENTS.md quality rule itself — the rule is the single source; this hook carries no copy.
+#!/usr/bin/env bash
 
-PROMPT=$(jq -r '.prompt // empty')
-[ -z "$PROMPT" ] && exit 0
+set -euo pipefail
 
-echo "$PROMPT" | grep -qiE '(update|create( an?)?)\s+agents?\.md' || exit 0
+prompt=$(jq -r '.prompt? | select(type == "string")' 2>/dev/null) || exit 0
+[ -n "$prompt" ] || exit 0
+first_line=$(printf '%s\n' "$prompt" | sed -n '/[^[:space:]]/{p;q;}')
 
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-RULE_FILE="${REPO_ROOT}/.agents/rules/meta/knowledge-conventional-contexts-quality.instructions.md"
-[ -f "$RULE_FILE" ] || exit 0
-
-printf '<context-auto-loaded>\n\n## Context: .agents/rules/meta/knowledge-conventional-contexts-quality.instructions.md\n'
-cat "$RULE_FILE"
-cat <<'EOF2'
-
-## Template to use
-Base new AGENTS.md files on .agents/templates/TEMPLATE_AGENTS.md (root CLAUDE.md/AGENTS.md exempt).
-An HLD folder (docs/hlds/NNN-*/) uses the create-hld template and the rule's Design-Documentation Folders section instead.
-
-Proceed: read the referenced file (if it exists), apply the structure, enforce every Value Gate, and output the complete AGENTS.md content.
-</context-auto-loaded>
-EOF2
-
-exit 0
+if printf '%s\n' "$first_line" | grep -Eiq \
+    '^[[:space:]]*(please[[:space:]]+)?(create|update|edit|revise)[[:space:]]+((a|an)[[:space:]]+)?"?([[:alnum:]_./-]*agents?\.md)"?([[:space:]:,;!?]|$)'; then
+    agent_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+    printf 'The user requested AGENTS.md authoring. Invoke the agentmd-create-update skill: load %s/skills/agentmd-create-update/SKILL.md and follow its shared authoring reference. This hook only routes the request.\n' "$agent_root"
+fi

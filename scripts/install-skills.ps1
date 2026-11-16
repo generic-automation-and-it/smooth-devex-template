@@ -82,6 +82,7 @@ $ErrorActionPreference = 'Stop'
 # If a skill you want to distribute lands here, add it to this list and to the harness's owned
 # set in test-install-skills.sh. Anything else stays local.
 $script:OwnedList = @(
+    'agentmd-create-update'
     'agile-github-breakdown'
     'agile-github-task-from-diff'
     'ai-asset-sync'
@@ -135,6 +136,7 @@ $script:OwnedRules = @(
 # the installer can register a hook by its own event. Mirrors OWNED_HOOKS in install-skills.sh
 # (harness-held byte-for-byte).
 $script:OwnedHooks = @(
+    'agentmd-create-update.sh'
     'manage-rule-system-context.sh'
     'worktask-skill-trigger.sh'
 )

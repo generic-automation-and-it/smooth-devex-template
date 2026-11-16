@@ -28,7 +28,7 @@ Glob `**/*{DOMAIN}*AGENTS.md`. Prioritize: exact domain match (e.g. `auth` → `
 ⚠️ CONTEXT REQUIRED - No functional context found for [domain]
 
 Options:
-A) Create new [DOMAIN]_AGENTS.md using TEMPLATE_AGENTS.md structure
+A) Author new [DOMAIN]_AGENTS.md if useful local guidance warrants it
 B) Search codebase more broadly for relevant AGENTS.md files
 C) Provide file path(s) manually to load
 D) BYPASS - Proceed without context (not recommended)
@@ -38,9 +38,16 @@ Respond with A, B, C, D, or type file paths directly
 
 ### 4. Context Creation (If Requested)
 
-1. Create a new AGENTS.md from `.agents/templates/TEMPLATE_AGENTS.md`, placed near the domain's code
-2. Report the created path, noting it's a minimal template to be populated during Phase 8 (Bragi)
-3. Load it and proceed to Phase 1
+Read and follow the shared [AGENTS.md authoring workflow](references/agentmd/authoring.md), also used
+by `agentmd-create-update`. It owns evidence loading, template selection, the quality rule and
+creation/update checks. Do not create an empty scaffold merely to unblock this phase.
+
+Load the authored file and proceed to Phase 1. If the authoring Value Gate finds no useful local
+delta, report that result and return to the remaining context-loading options.
+
+The reference directory is a link into `.agents/_smooth-devex-shared/agentmd/` in this repository.
+Both installers bundle its contents, rule and template in this skill; resolve the link relative to
+this `SKILL.md`, so creation does not require a sibling skill or repository-local `.agents/` tree.
 
 ### 5. Report Context Status
 

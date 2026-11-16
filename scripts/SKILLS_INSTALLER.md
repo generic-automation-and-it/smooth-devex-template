@@ -49,7 +49,8 @@ directories are created only for the categories that run. A rules-only or hooks-
 In this repository `.claude` and `.codex` are symlinks to `.agents`, so all paths resolve to the
 same tree and the first match is the real one.
 
-**2. Reconcile the manifest — for the owned skills only.** The installer manages exactly seventeen skills:
+**2. Reconcile the manifest — for the owned skills only.** The installer manages exactly eighteen skills:
+`agentmd-create-update`,
 `agile-github-breakdown`, `agile-github-task-from-diff`, `ai-asset-sync`, `ai-decisions`, `ai-execute-pipeline`, `ai-ralph-loop`, `ai-template-sync`,
 `ai-terse`, `context-load-agents-context`, `context-load-context`, `create-hld`, `create-worktask`,
 `git-commit`, `git-commit-push`, `git-commit-push-pr`, `git-sync`, `manage-rule-system`.
@@ -92,6 +93,7 @@ match byte-for-byte (the harness holds them to each other).
 
 | Skill | Why owned here |
 |---|---|
+| `agentmd-create-update` | Harness-neutral AGENTS.md creation/update; shared authoring with `context-load-context` |
 | `agile-github-breakdown` | Turns a braindump or Feature into GitHub Feature + Task issues; generally useful across consumer projects |
 | `agile-github-task-from-diff` | Creates a GitHub Task from the branch diff; generally useful across consumer projects |
 | `ai-asset-sync` | Syncs AI assets across projects; core template mechanism |
@@ -161,10 +163,10 @@ an existing operator index → the subset section is appended once, never rewrit
 never delete — an operator's own rules are never swept. Skipped entirely unless `-r` (or no
 switches).
 
-**5. Update the owned hooks (`-h`).** The two `OWNED_HOOKS` files copy from the source's
+**5. Update the owned hooks (`-h`).** The three `OWNED_HOOKS` files copy from the source's
 `.agents/hooks/` into `<agent-root>/hooks/`, kept executable (exec bit preserved per owned file,
 never a wildcard over the directory). A hook is owned iff an owned skill's `SKILL.md` references
-it *and* its implementation ships with it (`manage-rule-system-context.sh`,
+it *and* its implementation ships with it (`agentmd-create-update.sh`, `manage-rule-system-context.sh`,
 `worktask-skill-trigger.sh`); `load-agents-context.sh` stays local because it requires a different
 registration event (`PostToolUse` rather than `UserPromptSubmit`).
 Overwrite, never delete. Hook *registration* (`settings.json`) is deliberately out of scope —
@@ -174,7 +176,8 @@ switches).
 **6. Refresh `_smooth-devex-shared`** (when the source ships one, and the skills category runs). That folder holds cross-cutting,
 repo-owned payload — currently `setup/scripts/` (the agent setup scripts every tool selection
 needs), `templates/` (the `AGENTS.md` scaffolding and worktask templates several skills reference) and
-`decisions/` (the shared decision core, also copied into each consuming skill's `decisions/lib/`) —
+`decisions/` (the shared decision core, also copied into each consuming skill's `decisions/lib/`) and
+`agentmd/` (authoring guidance linked by `agentmd-create-update` and `context-load-context`) —
 plus the installer's own `installation.json`. It is not a skill and never appears in the
 manifest, but any installed skill that calls a shared script is broken without it — so it refreshes
 on every run, whatever the flags say. Its contents are reconciled rather than merged: an entry the
@@ -399,7 +402,7 @@ back the folder up first.
 
 The installer ships `.agents/skills/` (owned set only), the owned `.github/instructions/` rule
 tree (into `<agent-root>/rules/`), the owned `.agents/hooks/` subset, plus the cross-cutting, repo-owned
-`.agents/_smooth-devex-shared/` payload (currently `setup/scripts/` + `templates/` + `decisions/`). It does **not**
+`.agents/_smooth-devex-shared/` payload (currently `setup/scripts/` + `templates/` + `decisions/` + `agentmd/`). It does **not**
 carry anything else: local skills and unowned hooks stay in this repo.
 
 A consumer that runs the one-liner into an empty repo gets the owned skills, rules, and hooks plus
@@ -413,7 +416,8 @@ the owned set still need a manual copy of those files alongside the install.
 | `ai-execute-pipeline` | `git`, `gh` (authenticated) and `jq`; the owned `git-commit*`, `ai-ralph-loop` and default ticket skill `agile-github-task-from-diff`; `ai-review` (owned by another repository; installed separately); the `gh stack` extension for stack mode; `mimisbrunnr-kvasir-understanding` for `--understanding-export` |
 | `create-hld` | `.agents/rules/meta/` rules used by `hld-agents-rules.sh` |
 | `manage-rule-system` | the rules themselves if you want to manage them via this skill |
-| `context-load-context` / `context-load-agents-context` | `.agents/rules/` for the context files to reference |
+| `agentmd-create-update` / `context-load-context` | No manual authoring dependencies: `references/agentmd/` links to the shared workflow, canonical quality rule and template in the source; the bundled `rules/` subtree preserves the quality rule's live citation dependencies. Both installers materialize the complete directory inside each skill, including global and skills-only installs. Target-repository rules/templates take precedence when present. The optional hook requires Bash and jq; per-repo registration is manual, global Codex registration is automatic. |
+| `context-load-agents-context` | `.agents/rules/` for the context files to reference |
 | `git-commit` / `git-commit-push` / `git-commit-push-pr` | the `git/git-policy` rule (ships); `git-commit-push-pr` also needs `gh` and reads the repo's `.github/pull_request_template.md` |
 | `agile-github-breakdown` / `agile-github-task-from-diff` | `gh` authenticated against the target repo; task-from-diff links into a GitHub Project unless run with `--noparentid` |
 

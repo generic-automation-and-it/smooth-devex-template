@@ -24,6 +24,15 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - '.agents/skills/**'
+      - '.agents/_smooth-devex-shared/agentmd/**'
+      - '.agents/_smooth-devex-shared/templates/TEMPLATE_AGENTS.md'
+      - '.github/instructions/meta/knowledge-conventional-contexts-quality.instructions.md'
+      - '.github/instructions/clean-code.instructions.md'
+      - '.github/instructions/code-review-standards.instructions.md'
+      - '.github/instructions/backend/architecture-slices.instructions.md'
+      - '.github/instructions/backend/collection-types.instructions.md'
+      - '.github/instructions/backend/readonly-collections.instructions.md'
+      - '.github/instructions/backend/solid-principles.instructions.md'
       - '.github/workflows/skill-scan.yml'
       - '.github/scripts/skillspector-report.py'
       - '.github/skillspector-baseline.yml'
@@ -31,6 +40,15 @@ on:
     branches: [main]
     paths:
       - '.agents/skills/**'
+      - '.agents/_smooth-devex-shared/agentmd/**'
+      - '.agents/_smooth-devex-shared/templates/TEMPLATE_AGENTS.md'
+      - '.github/instructions/meta/knowledge-conventional-contexts-quality.instructions.md'
+      - '.github/instructions/clean-code.instructions.md'
+      - '.github/instructions/code-review-standards.instructions.md'
+      - '.github/instructions/backend/architecture-slices.instructions.md'
+      - '.github/instructions/backend/collection-types.instructions.md'
+      - '.github/instructions/backend/readonly-collections.instructions.md'
+      - '.github/instructions/backend/solid-principles.instructions.md'
       - '.github/workflows/skill-scan.yml'
       - '.github/scripts/skillspector-report.py'
       - '.github/skillspector-baseline.yml'

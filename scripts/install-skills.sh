@@ -72,6 +72,7 @@ SKILLS_BRANCH="${SKILLS_BRANCH-main}"
 # If a skill you want to distribute lands here, add it to this list and to the harness's owned
 # set in test-install-skills.sh. Anything else stays local.
 OWNED_LIST=(
+  agentmd-create-update
   agile-github-breakdown
   agile-github-task-from-diff
   ai-asset-sync
@@ -133,14 +134,16 @@ OWNED_RULES=(
 #
 #   manage-rule-system-context.sh referenced by manage-rule-system (delegates into the owned skill)
 #   worktask-skill-trigger.sh     referenced by create-worktask (self-contained router)
+#   agentmd-create-update.sh     referenced by agentmd-create-update (self-contained router)
 #
 # load-agents-context.sh is referenced by ai-template-sync and its implementation now ships
 # (context-load-agents-context is owned), but it is a PostToolUse hook and -g registers hooks under
 # UserPromptSubmit only — registering it there would fire it on the wrong event. It stays local until
 # the installer can register a hook by its own event. The rest (slnx-docs-sync.py,
-# agentmd-create-update.sh, code-review-standards-context.sh, knowledge-rule-enforce.sh) is
+# code-review-standards-context.sh, knowledge-rule-enforce.sh) is
 # template-local and stays.
 OWNED_HOOKS=(
+  agentmd-create-update.sh
   manage-rule-system-context.sh
   worktask-skill-trigger.sh
 )

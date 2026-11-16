@@ -8,6 +8,7 @@ Skills live **flat**, one directory per skill directly under `.agents/skills/`. 
 
 | Skill | Purpose | Usage |
 |-------|---------|-------|
+| **agentmd-create-update** | Create or update verified AGENTS.md context; shared authoring with the context-loader | `/agentmd-create-update <path>` or `$agentmd-create-update <path>` |
 | **agile-github-breakdown** | Turn a braindump or existing Feature into GitHub Feature + Task issues | `/agile-github-breakdown` |
 | **agile-github-task-from-diff** | Create a GitHub Task (sub-issue) from the current git diff vs main | `/agile-github-task-from-diff [--feature-issue <n> \| --noparentid]` |
 | **ai-execute-pipeline** | Deliver one worktask (or a plan's ordered worktasks) end to end: worktask-sourced ticket, draft PR, implement, Ralph loop, ready, AI-review fix loop | `/ai-execute-pipeline --worktask <path> \| --worktasks <dir> --parent <id> [--initialize] [--stack [<branch>]] [--hld <path>] [--ticket-skill <name\|path>] [--loops <n>] [--subagents] [--understanding-export …]` |
@@ -154,6 +155,7 @@ A harness that honours skill `effort` applies it on invocation; a harness with a
 | **ai-template-sync** | medium | `sync.sh` does the copy/compare; the agent only picks flags, runs the rules-layout pre-flight and builds the conflict table |
 | **ai-brain-dump** | medium | Listen-first capture — `high` would be re-paid on every turn of a long session. Deep reasoning happens downstream, in the skills its output feeds (`ai-understanding`, `agile-github-breakdown`, `create-hld`, `create-worktask`) |
 | **ai-asset-sync** | high | AI-merge of local vs upstream skills/rules + chore PR |
+| **agentmd-create-update** | high | Evidence-based authoring and per-claim context quality judgement |
 | **ai-decisions** | medium | Authors the state/questions contract and reads back validated answers; plumbing is script-driven |
 | **ai-execute-pipeline** | high | Implements a worktask, then triages Ralph and AI-review findings; plumbing is script-driven |
 | **ai-ralph-loop** | high | Each loop triages reviewer findings against code and context, then fixes and verifies — judgment repeated up to the loop cap |
@@ -204,7 +206,7 @@ Skills are flat under `.agents/skills/`; the category lives in the folder-name p
 | `ai-` | `ai-brain-dump`, `ai-decisions`, `ai-execute-pipeline`, `ai-ralph-loop`, `ai-terse`, `ai-template-sync`, `ai-asset-sync`, `ai-understanding` |
 | `context-` | `context-load-agents-context`, `context-load-context` |
 | `git-` | `git-commit`, `git-commit-push`, `git-commit-push-pr`, `git-sync` |
-| _(none)_ | `create-hld`, `create-worktask`, `manage-rule-system` |
+| _(none)_ | `agentmd-create-update`, `create-hld`, `create-worktask`, `manage-rule-system` |
 
 A skill's folder name MUST equal its `name:` frontmatter (this is the slash-command name). When adding a skill, pick the prefix of its category and keep the folder one level under `.agents/skills/`.
 

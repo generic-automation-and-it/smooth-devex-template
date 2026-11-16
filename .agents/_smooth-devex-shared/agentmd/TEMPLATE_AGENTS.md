@@ -1,0 +1,1 @@
+../templates/TEMPLATE_AGENTS.md

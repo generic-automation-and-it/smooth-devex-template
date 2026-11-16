@@ -1,0 +1,4 @@
+interface:
+  display_name: "Create or Update AGENTS.md"
+  short_description: "Author verified, value-gated agent context"
+  default_prompt: "Use $agentmd-create-update to create or update the requested AGENTS.md context."

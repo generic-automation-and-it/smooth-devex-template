@@ -33,13 +33,14 @@ documentation: [`scripts/SKILLS_INSTALLER.md`](../../scripts/SKILLS_INSTALLER.md
 
 ## Owned set
 
-Ships **exactly seventeen** skills. Anything else in this template's `.agents/skills/` — `ai-brain-dump`
+Ships **exactly eighteen** skills. Anything else in this template's `.agents/skills/` — `ai-brain-dump`
 and `ai-understanding` — is **local** and never enters a consumer's manifest. Skills owned by other
 repositories (the `mimisbrunnr-*` set plus `ai-review`, `git-commit-review-push`, etc., owned by
 `smooth-ai-product-context-memory`) install via that repository's own installer.
 
 | ID | Type | Does | Why important / unique |
 |---|---|---|---|
+| `agentmd-create-update` | skill | Creates or updates verified AGENTS.md context using shared authoring guidance | Harness-neutral authoring; shares rule and template handling with `context-load-context` |
 | `ai-asset-sync` | skill | Dependabot-style sync of AI assets from `owner/repo@ref:path`; AI-merges, opens chore PR on diff | Only auto-update path for consumer repos |
 | `ai-decisions` | skill | Calls the local decision model over caller-authored `state` + `choice`/`score` questions; returns validated answers or a non-blocking fallback | Only harness-agnostic decision-model surface; shared core with `ai-ralph-loop` |
 | `ai-execute-pipeline` | skill | Delivers one worktask end to end: worktask-sourced sub-ticket, draft PR first, implement, Ralph loop, ready, SHA-matched AI-review fix loop; `--initialize` stacks later runs with `gh stack`, `--stack <branch>` joins an existing stack; `--worktasks <dir>` delivers a whole plan as one stack, resumable | Only zero-touch worktask → reviewed-PR path |
@@ -63,6 +64,7 @@ repositories (the `mimisbrunnr-*` set plus `ai-review`, `git-commit-review-push`
 | `meta/rules.instructions.md` | rule | Rule lifecycle convention for `manage-rule-system` | Required ref; defines rule format itself |
 | `manage-rule-system-context.sh` | hook | `UserPromptSubmit`: injects rule skill on rule-file mentions | Else skill never auto-fires |
 | `worktask-skill-trigger.sh` | hook | Shared Claude/Codex router for imperative worktask requests | Only auto-trigger for worktask workflow |
+| `agentmd-create-update.sh` | hook | Shared Claude/Codex router for imperative AGENTS.md authoring requests | Routes to the owned skill instead of duplicating authoring instructions |
 
 ## Scope
 
