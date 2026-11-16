@@ -197,7 +197,7 @@ if [ ! -f "$manifest" ]; then no "first run creates installation.json"; exit 1; 
 # SKILLS_TEST_OWNED_EXTRA). An unowned skill like ai-brain-dump is in source but NOT in
 # the catalogue - the contract this case pins.
 names=" $(manifest_names "$root") "
-for expected in alpha beta ai-terse create-hld agile-github-breakdown context-load-context git-sync; do
+for expected in alpha beta agentmd-create-update ai-terse create-hld agile-github-breakdown context-load-context git-sync; do
   case "$names" in
     *" $expected "*) ;;
     *) no "first run lists source skills as well as those on disk" "$expected missing from: $names"; exit 1 ;;
@@ -729,6 +729,7 @@ printf '#!/bin/sh\n' >"$root/hooks/operator.sh"
 chmod 644 "$root/hooks/operator.sh"
 run_sh "$root" -h >/dev/null 2>&1
 if [ -f "$root/hooks/worktask-skill-trigger.sh" ] \
+  && [ -x "$root/hooks/agentmd-create-update.sh" ] \
   && [ -f "$root/hooks/manage-rule-system-context.sh" ] \
   && [ -x "$root/hooks/worktask-skill-trigger.sh" ] \
   && [ ! -e "$root/hooks/load-agents-context.sh" ] \

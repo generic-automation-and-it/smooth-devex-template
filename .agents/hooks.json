@@ -16,6 +16,14 @@
         "hooks": [
           {
             "type": "command",
+            "command": ".agents/hooks/agentmd-create-update.sh"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": ".agents/hooks/worktask-skill-trigger.sh"
           }
         ]

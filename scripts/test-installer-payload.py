@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -197,6 +198,68 @@ class InstallerPayloadTests(unittest.TestCase):
                 self.run_installer(port, case, "-g")
                 self.assert_payload(case[2])
                 self.assertTrue((Path(case[4]["CODEX_HOME"]) / "skills/alpha").is_symlink())
+
+    def test_agentmd_authoring_is_bundled_in_both_skills(self):
+        source = self.copy_source("agentmd")
+        names = ("agentmd-create-update", "context-load-context")
+        shared_path = Path(".agents/_smooth-devex-shared/agentmd")
+        shutil.copytree(REPO / shared_path, source / shared_path, symlinks=True)
+        template_path = Path(".agents/_smooth-devex-shared/templates/TEMPLATE_AGENTS.md")
+        shutil.copy2(REPO / template_path, source / template_path)
+        for resource in (REPO / shared_path).rglob("*"):
+            if resource.is_symlink() and resource.is_file():
+                original = resource.resolve()
+                target = source / original.relative_to(REPO)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(original, target)
+        for name in names:
+            skill_path = Path(".agents/skills") / name
+            shutil.copytree(REPO / skill_path, source / skill_path, symlinks=True)
+        hook_path = Path(".agents/hooks/agentmd-create-update.sh")
+        shutil.copy2(REPO / hook_path, source / hook_path)
+        self.commit_source(source)
+
+        for port in PORTS:
+            for global_install in (False, True):
+                with self.subTest(port=port, global_install=global_install):
+                    mode = "global" if global_install else "repo"
+                    case = self.prepare(port, "agentmd-" + mode, global_install=global_install)
+                    case[4]["SKILLS_REPO"] = str(source)
+                    self.run_installer(port, case, *("-g", "-s", "-h") if global_install else ("-s", "-h"))
+                    installed_root = case[2] if global_install else case[1]
+                    manifest = json.loads(case[3].read_text())
+                    self.assertTrue(all(
+                        any(s["name"] == name and s["installed"] for s in manifest["skills"])
+                        for name in names
+                    ))
+                    for name in names:
+                        skill = installed_root / "skills" / name
+                        references = skill / "references/agentmd"
+                        self.assertFalse(references.is_symlink())
+                        for resource in ("authoring.md", "rules/meta/knowledge-conventional-contexts-quality.instructions.md", "TEMPLATE_AGENTS.md"):
+                            bundled = references / resource
+                            self.assertFalse(bundled.is_symlink())
+                            self.assertEqual(bundled.read_text(), (source / shared_path / resource).read_text())
+                        self.assertFalse((skill / "AGENTS.md").exists())
+                        for document in references.rglob("*.md"):
+                            body = re.sub(r"```.*?```|~~~.*?~~~", "", document.read_text(), flags=re.S)
+                            for link in re.findall(r"\]\(([^)]+)\)", body):
+                                if "://" in link or link.startswith("#"):
+                                    continue
+                                target = (document.parent / link.split("#")[0]).resolve()
+                                self.assertTrue(target.is_file(), f"{document}: missing {link}")
+                                self.assertTrue(target.is_relative_to(references.resolve()), f"{document}: external {link}")
+                    self.assertFalse((installed_root / "rules/meta").exists())
+                    hook = installed_root / "hooks/agentmd-create-update.sh"
+                    self.assertTrue(os.access(hook, os.X_OK))
+                    result = subprocess.run(
+                        ["bash", str(hook)], cwd=case[0], input='{"prompt": "create agents.md"}',
+                        capture_output=True, text=True, check=True, timeout=5,
+                    )
+                    self.assertIn(str(installed_root / "skills/agentmd-create-update/SKILL.md"), result.stdout)
+                    if global_install:
+                        hooks = json.loads((Path(case[4]["CODEX_HOME"]) / "hooks.json").read_text())
+                        self.assertIn(str(hook), json.dumps(hooks))
 
     def test_global_codex_rules_migrate_legacy_prompts(self):
         for port in PORTS:

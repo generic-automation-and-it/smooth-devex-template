@@ -10,6 +10,18 @@ on:
       - tests/**
       - scripts/**
       - .agents/hooks/worktask-skill-trigger.sh
+      - .agents/hooks/agentmd-create-update.sh
+      - .agents/_smooth-devex-shared/agentmd/**
+      - .agents/_smooth-devex-shared/templates/TEMPLATE_AGENTS.md
+      - .agents/skills/agentmd-create-update/**
+      - .agents/skills/context-load-context/**
+      - .github/instructions/meta/knowledge-conventional-contexts-quality.instructions.md
+      - .github/instructions/clean-code.instructions.md
+      - .github/instructions/code-review-standards.instructions.md
+      - .github/instructions/backend/architecture-slices.instructions.md
+      - .github/instructions/backend/collection-types.instructions.md
+      - .github/instructions/backend/readonly-collections.instructions.md
+      - .github/instructions/backend/solid-principles.instructions.md
       - .agents/skills/create-worktask/**
       - .agents/skills/ai-ralph-loop/**
       - .github/actions/**
@@ -23,6 +35,18 @@ on:
       - tests/**
       - scripts/**
       - .agents/hooks/worktask-skill-trigger.sh
+      - .agents/hooks/agentmd-create-update.sh
+      - .agents/_smooth-devex-shared/agentmd/**
+      - .agents/_smooth-devex-shared/templates/TEMPLATE_AGENTS.md
+      - .agents/skills/agentmd-create-update/**
+      - .agents/skills/context-load-context/**
+      - .github/instructions/meta/knowledge-conventional-contexts-quality.instructions.md
+      - .github/instructions/clean-code.instructions.md
+      - .github/instructions/code-review-standards.instructions.md
+      - .github/instructions/backend/architecture-slices.instructions.md
+      - .github/instructions/backend/collection-types.instructions.md
+      - .github/instructions/backend/readonly-collections.instructions.md
+      - .github/instructions/backend/solid-principles.instructions.md
       - .agents/skills/create-worktask/**
       - .agents/skills/ai-ralph-loop/**
       - .github/actions/**
@@ -51,6 +75,9 @@ jobs:
 
       - name: Test worktask routing
         run: python3 scripts/test-worktask-routing.py
+
+      - name: Test AGENTS.md routing
+        run: python3 scripts/test-agentmd-routing.py
 
       - name: Test skills installer
         run: bash scripts/test-install-skills.sh

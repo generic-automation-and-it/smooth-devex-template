@@ -30,6 +30,7 @@ This is a unified AI development experience folder that centralizes skills, prom
 | `.agents/opencode.json` | OpenCode v2 project config (read via root `opencode.json` symlink) — `instructions` globs load every `.github/instructions/**` rule (OpenCode ignores `applyTo`, so all rules apply every session), `permissions` (ordered, **last match wins**), deny list in `experimental.policies` as `action: "permission"` + `shell:<cmd>` (`tool.use` is documented but not implemented). Mirror `settings.json` permission edits here. **Unverified delivery:** on 2.0.29 `opencode run --standalone` still ignores `instructions` (relative and absolute entries; `AGENTS.md` control loads) — do not assume rules reach OpenCode until a token probe passes |
 | `.agents/hooks.json` | Codex hook registrations (read via `.codex/hooks.json`); project and hook trust are required before they run |
 | `.agents/skills/` | Executable skills (multi-file workflows) — flat dirs, category-prefixed folder names |
+| `.agents/skills/agentmd-create-update/` | Harness-neutral AGENTS.md authoring; shared workflow with the context-loader |
 | `.agents/skills/agile-github-breakdown/` | Turn a braindump or existing Feature into GitHub Feature + Task issues |
 | `.agents/skills/agile-github-task-from-diff/` | Create a GitHub Task (sub-issue) from the current git diff vs main |
 | `.agents/skills/ai-brain-dump/` | Listen-first capture session; synthesize on request |
@@ -145,6 +146,7 @@ ls -la | grep -E '(\.claude|\.codex|\.cursor|opencode\.json)'
 
 | Date | Change | Reason |
 | :---- | :---- | :---- |
+| 2026-11-16 | Owned AGENTS.md authoring skill; shared workflow; Claude/Codex router | — |
 | 2026-07-23 | Changed Codex `approval_policy` from `unless-allow-listed` to `never` to resolve configuration load error. | #54 |
 | 2026-05-30 | Initial version. | |
 | 2026-06-10 | Registered orphaned `UserPromptSubmit` hooks (`worktask-create.sh`, `agentmd-create-update.sh`, `knowledge-rule-enforce.sh`) in `settings.json` — they existed on disk but never fired. | #32 |

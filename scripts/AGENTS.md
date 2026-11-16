@@ -67,7 +67,7 @@ Installer tests must pin every agent-home override, including `CLAUDE_HOME`: cha
 does not sandbox a run when the invoking shell supplies a different tool configuration directory.
 
 A small hardcoded **owned set** (`OWNED_LIST` in `install-skills.sh`, `$script:OwnedList` in
-`install-skills.ps1`) scopes the installer to seventeen skills: `agile-github-breakdown`,
+`install-skills.ps1`) scopes the installer to eighteen skills: `agentmd-create-update`, `agile-github-breakdown`,
 `agile-github-task-from-diff`, `ai-asset-sync`, `ai-decisions`, `ai-execute-pipeline`, `ai-ralph-loop`, `ai-template-sync`, `ai-terse`,
 `context-load-agents-context`, `context-load-context`, `create-hld`, `create-worktask`, `git-commit`,
 `git-commit-push`, `git-commit-push-pr`, `git-sync`, `manage-rule-system`. Everything
@@ -133,6 +133,10 @@ writer recomputes from disk each run — never read it as a control, and never a
 `python3 scripts/test-worktask-routing.py` verifies the worktask prompt router's positive/negative
 behavior (requires Bash and jq). It runs in the PR gate for hook/skill and script changes.
 
+`python3 scripts/test-agentmd-routing.py` verifies AGENTS.md routing, silence on non-requests and
+hook-relative skill resolution. The payload suite verifies standalone shared authoring references
+for both skills through Bash and PowerShell, including skills-only and global installs.
+
 The harness is wired into `.github/workflows/pr-gate.yml` (`Test skills installer`). It deliberately
 exercises the manifest reconciliation, the agent-root search, and the shared-payload refresh; the clone/copy path is exercised against the
 checkout itself (`SKILLS_REPO` pointed at this repo, `SKILLS_BRANCH` at the current branch), so no
@@ -143,15 +147,18 @@ Two known gaps:
 - **PowerShell runtime coverage is limited to the payload suite.** Run it explicitly with
   `python3 scripts/test-installer-payload.py --port all`; CI's wider installer harness remains Bash-only.
 - **The `_smooth-devex-shared/` payload is scoped, not comprehensive.** Only cross-cutting,
-  repo-owned items live there (`setup/scripts/`, `templates/`, `decisions/`). The decision core is the
-  one shared dependency that does reach a skill: `DECISIONS_CORE_CONSUMERS` copies it into each
+  repo-owned items live there (`setup/scripts/`, `templates/`, `decisions/`, `agentmd/`). The decision core
+  reaches skills through `DECISIONS_CORE_CONSUMERS`, which copies it into each
   consuming skill's `decisions/lib/`, because installed skills are otherwise self-contained. Skills,
-  rules and hooks remain separate categories.
+  rules and hooks remain separate categories. `agentmd/` uses source reference-directory links;
+  the existing copy path materializes its workflow, linked rule dependency tree and linked template inside both
+  consuming skills. Do not add a second authoring copy/fan-out path.
 
 ## Changelog
 
 | Date | Change | Ref |
 | :---- | :---- | :---- |
+| 2026-11-16 | Owned AGENTS.md authoring; bundled rule citations; router/payload regressions | — |
 | 2026-10-24 | Worktask routing regressions wired into PR gate | — |
 | 2026-10-15 | Initial: `install-skills.{sh,ps1}` + harness + docs | — |
 | 2026-10-16 | Agent-root layout: manifest + cross-cutting payload at `<agent-root>/_smooth-devex-shared/` (ships `setup/scripts/`, `templates/`), canonical symlinks, legacy-manifest fresh start; harness covers refresh/sweep/links/legacy | — |
